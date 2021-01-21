@@ -1,0 +1,10 @@
+- [ ] check the simulation implementation.
+- [X] verify implementation.
+    - [X] cost.
+    - [X] model.
+    - [X] main_algo.
+        - [X] decompose update function for simpler testing.
+- [X] complete algorithm.
+- [X] Testing software.
+- [ ] link testing with github to perform auto testing.
+- [ ] shifting and update tests.
