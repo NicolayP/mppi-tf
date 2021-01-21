@@ -4,6 +4,7 @@
     - [X] model.
     - [X] main_algo.
         - [X] decompose update function for simpler testing.
+    - [ ] test shif and init see also [#3](/../../issues/1)
 - [X] complete algorithm.
 - [X] Testing software.
 - [ ] link testing with github to perform auto testing.
