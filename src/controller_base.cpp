@@ -15,6 +15,7 @@ using namespace tensorflow::ops;
 
 ControllerBase::ControllerBase () :
                 m_root(tensorflow::Scope::NewRootScope()),
+                m_sess(m_root),
                 m_k(0), m_tau(0), m_s_dim(0), m_a_dim(0), m_dt(0),
                 m_mass(0)
 {}
@@ -26,10 +27,12 @@ ControllerBase::ControllerBase (const int k,
                                 const int s_dim,
                                 const int a_dim):
                 m_root(tensorflow::Scope::NewRootScope()),
+                m_sess(m_root),
                 m_k(k), m_tau(tau), m_s_dim(s_dim), m_a_dim(a_dim), m_dt(dt),
                 m_mass(mass),
                 m_sigma(DT_FLOAT, TensorShape({a_dim, a_dim})),
-                m_goal(DT_FLOAT, TensorShape({s_dim, 1})) {
+                m_goal(DT_FLOAT, TensorShape({s_dim, 1})),
+                m_U(DT_FLOAT, TensorShape({m_tau, a_dim, 1})) {
 
     vector<float> sig;
     vector<float> goal;
@@ -76,10 +79,12 @@ ControllerBase::ControllerBase (Scope root,
                                 const int s_dim,
                                 const int a_dim):
                 m_root(root),
+                m_sess(m_root),
                 m_k(k), m_tau(tau), m_s_dim(s_dim), m_a_dim(a_dim), m_dt(dt),
                 m_mass(mass),
                 m_sigma(DT_FLOAT, TensorShape({a_dim, a_dim})),
-                m_goal(DT_FLOAT, TensorShape({s_dim, 1})) {
+                m_goal(DT_FLOAT, TensorShape({s_dim, 1})),
+                m_U(DT_FLOAT, TensorShape({m_tau, a_dim, 1})) {
 
     vector<float> sig;
     vector<float> goal;
@@ -122,10 +127,16 @@ bool ControllerBase::setActions(vector<Tensor> actions) {
 
 }
 
-void ControllerBase::next(Tensor x) {
-    /*TF_CHECK_OK(sess.Run({{mStateInput, x}, {mActionInput, mU}},
+vector<float> ControllerBase::next(vector<float> x) {
+    Tensor s(DT_FLOAT, TensorShape({m_s_dim, 1}));
+    copy_n(x.begin(), x.size(), s.flat<float>().data());
+    TF_CHECK_OK(m_sess.Run({{mStateInput, s}, {mActionInput, m_U}},
                          {mUpdate, mNext},
-                         &out_tensor));*/
+                         &out_tensor));
+    m_U = out_tensor[0];
+    float* u = out_tensor[1].flat<float>().data();
+    vector<float> act = {u, u + out_tensor[1].NumElements()};
+    return act;
 
 }
 
@@ -157,14 +168,14 @@ Output ControllerBase::mWeightedNoise(Scope scope, Input weights, Input noises) 
                {0});
 }
 
-Output ControllerBase::mNoiseGenGraph(Scope scope, Input mean, Input sigma) {
+Output ControllerBase::mNoiseGenGraph(Scope scope, Input sigma) {
     // Generate Random noise for the rollouts, shape [k, tau, a_dim, 1]
     auto rng = RandomNormal(scope.WithOpName("random_number_generation"),
                             {m_k, m_tau, m_a_dim, 1},
                             DT_FLOAT,
                             RandomNormal::Seed(1.));
 
-    return BatchMatMulV2(scope.WithOpName("Scaling"), m_sigma, rng);
+    return BatchMatMulV2(scope.WithOpName("Scaling"), sigma, rng);
 
 }
 
@@ -186,7 +197,7 @@ Output ControllerBase::mBuildUpdateGraph(Scope scope, Input cost, Input noises) 
     auto weights = mWeights(scope, exp, nabla); // Shape [K, 1]
     auto weighted_noise = mWeightedNoise(scope, weights, noises);
 
-    return AddV2(scope, m_a_in, weighted_noise);
+    return AddV2(scope, mActionInput, weighted_noise);
 }
 
 Output ControllerBase::mBuildModelGraph(Scope model_scope,
@@ -235,38 +246,52 @@ Output ControllerBase::mBuildModelGraph(Scope model_scope,
     return AddV2(path_cost_scope, cost, m_cost.mBuildFinalStepCostGraph(final_cost_scope, next_state));
 }
 
-Output ControllerBase::mBuildGraph() {
-    auto model_scope(m_root.NewSubScope("Model_scope"));
-    auto cost_scope(m_root.NewSubScope("Cost_scope"));
-    auto weight_scope(m_root.NewSubScope("Weight_scope"));
-    auto rand_scop(m_root.NewSubScope("Noise_generation"));
+void ControllerBase::mBuildGraph() {
 
     // Input placeholder for the state and the action sequence.
-    m_s_in = Placeholder(m_root.WithOpName("state_input"),
+    mStateInput = Placeholder(m_root.WithOpName("state_input"),
                          DT_FLOAT,
                          Placeholder::Shape({m_s_dim, 1}));
 
-    m_a_in = Placeholder(m_root.WithOpName("action_sequence"),
+    mActionInput = Placeholder(m_root.WithOpName("action_sequence"),
                          DT_FLOAT,
                          Placeholder::Shape({m_tau, m_a_dim, 1}));
-    //auto tmp = ExpandDims(m_root, m_a_in, {-1});
+    //auto tmp = ExpandDims(m_root, mActionInput, {-1});
     // TODO: Will be used at some point to see the generated trajectories.
     // auto states = Fill(m_root, {m_k, m_tau, m_s_dim, 1}, 0.f);
-    auto noises = mNoiseGenGraph(rand_scop, m_a_in, m_sigma); //shape [k, tau, a_dim, 1]
+    auto noises = mNoiseGenGraph(m_root.NewSubScope("Noise_generation"),
+                                 m_sigma); //shape [k, tau, a_dim, 1]
 
     // Build the model and cost graph, returns a tensor of shape [K, 1, 1]
-    auto cost = mBuildModelGraph(model_scope, cost_scope, m_s_in, m_a_in, noises);
+    auto cost = mBuildModelGraph(m_root.NewSubScope("Model_scope"),
+                                 m_root.NewSubScope("Cost_scope"),
+                                 mStateInput,
+                                 mActionInput,
+                                 noises);
     /* Compute the min of the cost for numerical stability. (I.e at least one
         sample with a none 0 weight. */
-    auto update = mBuildUpdateGraph(weight_scope, cost, noises);
+    auto update = mBuildUpdateGraph(m_root.NewSubScope("Weight_scope"),
+                                    cost,
+                                    noises);
 
-    return update;
+    mNext = mGetNew(m_root.NewSubScope("Next_actions"), update, 1);
+
+    Scope shift_scope(m_root.NewSubScope("Shift_action"));
+    auto init = mInit0(shift_scope, 1);
+    mUpdate = mShift(shift_scope, update, init, 1);
+}
+
+Output ControllerBase::mInit0(Scope scope, int nb) {
+    return Fill(scope, {nb, m_a_dim, 1}, 0.f);
 }
 
 Output ControllerBase::mShift(Scope scope, Input current, Input init, int nb) {
     // Todo error if nb > m_tau
     initializer_list<Input> list_init;
-    auto remain = Slice(scope.WithOpName("Shift"), current, {nb, 0, 0}, {m_tau-nb, -1, -1});
+    auto remain = Slice(scope.WithOpName("Shift"),
+                        current,
+                        {nb, 0, 0},
+                        {m_tau-nb, -1, -1});
     list_init = {remain, init};
     InputList newlist(list_init);
     return Concat(scope.WithOpName("Init"), newlist, 0);
@@ -275,88 +300,6 @@ Output ControllerBase::mShift(Scope scope, Input current, Input init, int nb) {
 // Shape [tau, a_dim]
 Output ControllerBase::mGetNew(Scope scope, Input current, int nb) {
     return Slice(scope.WithOpName("Next"), current, {0, 0, 0}, {nb, -1, -1});
-}
-
-void ControllerBase::test() {
-    // Input Tensor.
-    Tensor s_tens(DT_FLOAT, TensorShape({m_s_dim, 1}));
-
-    vector<float> s;
-    for (int i=0; i < m_s_dim; i++) {
-        s.push_back(float(i));
-    }
-    copy_n(s.begin(), s.size(), s_tens.flat<float>().data());
-
-    Tensor a_tens(DT_FLOAT, TensorShape({m_tau, m_a_dim, 1}));
-
-    vector<float> a;
-    for (int i=0; i < m_tau*m_a_dim; i++) {
-        a.push_back(float(i));
-    }
-    copy_n(a.begin(), a.size(), a_tens.flat<float>().data());
-
-    auto in_s = Identity(m_root, m_s_in);
-    auto in_a = Identity(m_root, m_a_in);
-
-    ClientSession mSess(m_root);
-    vector<Tensor> outTensor;
-    TF_CHECK_OK(mSess.Run({{m_s_in, s_tens}, {m_a_in, a_tens}},
-                          {in_s, in_a, test_res0},
-                          &outTensor));
-
-    cout << "0: " << outTensor[0].DebugString(100) << endl;
-    cout << "1: " << outTensor[1].DebugString(100) << endl;
-    cout << "2: " << outTensor[2].DebugString(100) << endl;
-
-}
-
-void ControllerBase::run() {
-    // Input Tensor.
-    Tensor s_tens(DT_FLOAT, TensorShape({m_s_dim, 1}));
-
-    vector<float> s;
-    for (int i=0; i < m_s_dim; i++) {
-        s.push_back(float(i));
-    }
-    copy_n(s.begin(), s.size(), s_tens.flat<float>().data());
-
-    Tensor a_tens(DT_FLOAT, TensorShape({m_tau, m_a_dim, 1}));
-
-    vector<float> a;
-    for (int i=0; i < m_tau*m_a_dim; i++) {
-        a.push_back(float(i));
-    }
-    copy_n(a.begin(), a.size(), a_tens.flat<float>().data());
-
-    ClientSession mSess(m_root);
-    vector<Tensor> outTensor;
-    TF_CHECK_OK(mSess.Run({{m_s_in, s_tens}, {m_a_in, a_tens}},
-                          {test_res0
-                           /*test_res1,
-                           test_res2,
-                           test_res3,
-                           test_res4,
-                           test_res5,
-                           test_res6
-                           test_res7,
-                           test_res8,
-                           test_res9,
-                           test_res10*/
-                       },
-                          &outTensor));
-    cout << "0: " << outTensor[0].DebugString(100) << endl;
-    /*cout << "1: " << outTensor[1].DebugString(100) << endl;
-    cout << "2: " << outTensor[2].DebugString(100) << endl;
-    cout << "3 " << outTensor[3].DebugString(100) << endl;
-    cout << "4: " << outTensor[4].DebugString(100) << endl;
-    cout << "5: " << outTensor[5].DebugString(100) << endl;
-    cout << "6: " << outTensor[6].DebugString(100) << endl;
-    cout << "7: " << outTensor[7].DebugString(100) << endl;
-    cout << "8: " << outTensor[8].DebugString(100) << endl;
-    cout << "9: " << outTensor[9].DebugString(100) << endl;
-    cout << "10: " << outTensor[10].DebugString(100) << endl;*/
-
-
 }
 
 Status ControllerBase::mLogGraph() {

@@ -14,8 +14,9 @@ using namespace tensorflow::ops;
 
 class ControllerBaseTest : public ::testing::Test {
 protected:
-    ControllerBaseTest () : root(Scope::NewRootScope()), sess(root),
-                            k(5), tau(3), a_dim(2) {
+    ControllerBaseTest () : root(Scope::NewRootScope()),
+                            k(5), tau(3), a_dim(2),
+                            cont(root, k, tau, 0.01, 1., 4, a_dim){
         c = Tensor(DT_FLOAT, TensorShape({k, 1, 1}));
         n = Tensor(DT_FLOAT, TensorShape({k, tau, a_dim, 1}));
         a = Tensor(DT_FLOAT, TensorShape({tau, a_dim, 1}));
@@ -33,11 +34,10 @@ protected:
         copy_n(noise.begin(), noise.size(), n.flat<float>().data());
         copy_n(action.begin(), action.size(), a.flat<float>().data());
 
-        cont = ControllerBase(root, k, tau, 0.01, 1., 4, a_dim);
+
     }
 
     Scope root;
-    ClientSession sess;
     int k, tau, a_dim;
     Tensor c, n, a;
     ControllerBase cont;
@@ -93,6 +93,7 @@ TEST_F(ControllerBaseTest, testDataPrep) {
     auto a2 = cont.mPrepareAction(root, actions, 2);
     auto n2 = cont.mPrepareNoise(root, noises, 2);
 
+    ClientSession sess(root);
     TF_CHECK_OK(sess.Run({a0, n0, a1, n1, a2, n2}, &o));
 
     test_tensor(o[0], exp_a0, act_dim);
@@ -150,6 +151,7 @@ TEST_F(ControllerBaseTest, testUpdate) {
     auto w_n = cont.mWeightedNoise(root.NewSubScope("wn"), w, noises);
     auto sum_w = Sum(root, w, {0});
 
+    ClientSession sess(root);
     TF_CHECK_OK(sess.Run({cost, noises, b, e_arg, e, nab, w, w_n, sum_w}, &o));
 
     test_tensor(o[2], beta, beta_dim, "beta");
@@ -180,6 +182,7 @@ TEST_F(ControllerBaseTest, testNew) {
     auto n2 = cont.mGetNew(root, in, 2);
     auto n3 = cont.mGetNew(root, in, 3);
 
+    ClientSession sess(root);
     TF_CHECK_OK(sess.Run({in,
                          n0, n1, n2, n3
                      }, &o));
@@ -210,12 +213,11 @@ TEST_F(ControllerBaseTest, testShiftAndInit) {
 
     Status log = utile::logGraph(root);
 
+    ClientSession sess(root);
     TF_CHECK_OK(sess.Run({in,
                          n0, n1
                      }, &o));
 
-    cout << o[1].DebugString(100) << endl;
-    cout << o[2].DebugString(100) << endl;
     test_tensor(o[1], exp1, dim, "0");
     test_tensor(o[2], exp2, dim, "1");
 }
