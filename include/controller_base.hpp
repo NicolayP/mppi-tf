@@ -189,7 +189,8 @@ public:
 
     tensorflow::Output mShift(tensorflow::Scope scope,
                               tensorflow::Input current,
-                              tensorflow::Input init);
+                              tensorflow::Input init,
+                              int nb=1);
 
     tensorflow::Output mGetNew(tensorflow::Scope scope,
                                tensorflow::Input current,

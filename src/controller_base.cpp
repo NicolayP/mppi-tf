@@ -263,9 +263,10 @@ Output ControllerBase::mBuildGraph() {
     return update;
 }
 
-Output ControllerBase::mShift(Scope scope, Input current, Input init) {
+Output ControllerBase::mShift(Scope scope, Input current, Input init, int nb) {
+    // Todo error if nb > m_tau
     initializer_list<Input> list_init;
-    auto remain = Slice(scope.WithOpName("Shift"), current, {1, 0}, {-1, -1});
+    auto remain = Slice(scope.WithOpName("Shift"), current, {nb, 0, 0}, {m_tau-nb, -1, -1});
     list_init = {remain, init};
     InputList newlist(list_init);
     return Concat(scope.WithOpName("Init"), newlist, 0);
@@ -273,7 +274,7 @@ Output ControllerBase::mShift(Scope scope, Input current, Input init) {
 
 // Shape [tau, a_dim]
 Output ControllerBase::mGetNew(Scope scope, Input current, int nb) {
-    return Slice(scope.WithOpName("Next"), current, {0, 0}, {nb, -1});
+    return Slice(scope.WithOpName("Next"), current, {0, 0, 0}, {nb, -1, -1});
 }
 
 void ControllerBase::test() {

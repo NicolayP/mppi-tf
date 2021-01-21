@@ -49,13 +49,15 @@ protected:
 
         TensorShape shape(computed.shape());
 
-        ASSERT_EQ(shape.dims(), dims.size());
+        ASSERT_EQ(shape.dims(), dims.size()) << name << " Shape error at index : ";
 
         for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator>
                  it(shape.begin(), dims.begin());
              it.first != shape.end();
              ++it.first, ++it.second) {
-            ASSERT_EQ((*(it.first)).size, (*it.second));
+            ASSERT_EQ((*(it.first)).size, (*it.second)) << name
+                                                        << " Dimension size error at index : "
+                                                         << it.second - dims.begin();
         }
 
         int el = computed.NumElements();
@@ -162,8 +164,60 @@ TEST_F(ControllerBaseTest, testUpdate) {
 
 }
 
-TEST_F(ControllerBaseTest, testSiftAndInit) {
-    
+TEST_F(ControllerBaseTest, testNew) {
+    vector<Tensor> o;
+    vector<float> next0 = {};
+    vector<int> nextDim0 = {0, 2, 1};
+    vector<float> next1 = {1, 0.5};
+    vector<int> nextDim1 = {1, 2, 1};
+    vector<float> next2 = {1, 0.5, 2.3, 4.5};
+    vector<int> nextDim2 = {2, 2, 1};
+    vector<float> next3 = {1., 0.5, 2.3, 4.5, 2.1, -0.4};
+    vector<int> nextDim3 = {3, 2, 1};
+    auto in = Identity(root, a);
+    auto n0 = cont.mGetNew(root, in, 0);
+    auto n1 = cont.mGetNew(root, in, 1);
+    auto n2 = cont.mGetNew(root, in, 2);
+    auto n3 = cont.mGetNew(root, in, 3);
+
+    TF_CHECK_OK(sess.Run({in,
+                         n0, n1, n2, n3
+                     }, &o));
+    test_tensor(o[1], next0, nextDim0, "0");
+    test_tensor(o[2], next1, nextDim1, "1");
+    test_tensor(o[3], next2, nextDim2, "2");
+    test_tensor(o[4], next3, nextDim3, "3");
+}
+
+TEST_F(ControllerBaseTest, testShiftAndInit) {
+    vector<Tensor> o;
+    vector<float> init1 = {1, 0.5};
+    vector<int> dim = {3, 2, 1};
+    vector<float> init2 = {1, 0.5, 2.3, 4.5};
+
+    Tensor i1(DT_FLOAT, TensorShape({1, 2, 1}));
+    Tensor i2(DT_FLOAT, TensorShape({2, 2, 1}));
+
+    copy_n(init1.begin(), init1.size(), i1.flat<float>().data());
+    copy_n(init2.begin(), init2.size(), i2.flat<float>().data());
+
+    vector<float> exp1 = {2.3, 4.5, 2.1, -0.4, 1., 0.5};
+    vector<float> exp2 = {2.1, -0.4, 1., 0.5, 2.3, 4.5};
+
+    auto in = Identity(root, a);
+    auto n0 = cont.mShift(root, in, i1, 1);
+    auto n1 = cont.mShift(root, in, i2, 2);
+
+    Status log = utile::logGraph(root);
+
+    TF_CHECK_OK(sess.Run({in,
+                         n0, n1
+                     }, &o));
+
+    cout << o[1].DebugString(100) << endl;
+    cout << o[2].DebugString(100) << endl;
+    test_tensor(o[1], exp1, dim, "0");
+    test_tensor(o[2], exp2, dim, "1");
 }
 
 TEST_F(ControllerBaseTest, testAll) {
