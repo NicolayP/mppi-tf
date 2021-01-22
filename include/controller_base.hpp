@@ -75,9 +75,19 @@ public:
     ~ControllerBase ();
 
     /* ------------ Methods ------------- */
+
+    /*
+     * Retruns the next action to apply to the plant.
+     * Input:
+     * ------
+     *  - std::vector<float> x the new state. Should be of size s_dim.
+     *
+     * Output:
+     * -------
+     *  - std::vector<float> next, the next action to apply, size a_dim.
+     *
+     */
     std::vector<float> next (std::vector<float> x);
-    bool setActions (std::vector<tensorflow::Tensor> actions);
-    tensorflow::Status logGraph ();
 
     /*
      * Computes the minimal value in the tensor cost
@@ -222,14 +232,46 @@ public:
                                           tensorflow::Input cost,
                                           tensorflow::Input noises);
 
+    /*
+     * Shifts the input sequence by nb and inits the new actions with init
+     * Input:
+     * ------
+     *  - tensorflow::Scope scope, the scope in the computational graph
+     *  - tensorflow::Input current, the current action sequence.
+     *          Shape [Tau, a_dim, 1]
+     *  - tensorflow::Input init, the newest action, Shape [x, a_dim, 1]
+     *  - int nb, the number of actions to be shifted.
+     *
+     * Output:
+     * -------
+     *  - tensorflow::Output next, the new action sequence.
+     *          Shape [Tau-nb+x, a_dim, 1], with structure {Current[Tau-nb, :, :], Init}
+     *
+     */
     tensorflow::Output mShift (tensorflow::Scope scope,
                                tensorflow::Input current,
                                tensorflow::Input init,
                                int nb=1);
 
+    /*
+     * Extract nb actions from the action sequence.
+     * Input:
+     * ------
+     *  - tensorflow::Scope scope, the scope in the computational graph
+     *  - tensorflow::Input current, the current action sequence.
+     *          Shape [Tau, a_dim, 1]
+     *  - int nb, the number of actions to extract.
+     *
+     * Output:
+     * -------
+     *  - tensorflow::Output next_action, the action to be applied on the plant.
+     *          Shape [nb, a_dim, 1]
+     *
+     */
     tensorflow::Output mGetNew (tensorflow::Scope scope,
                                 tensorflow::Input current,
                                 int nb);
+
      /*
       * Builds the entire computational graph.
       * Input:
@@ -282,8 +324,32 @@ public:
     tensorflow::Output mNoiseGenGraph (tensorflow::Scope scope,
                                        tensorflow::Input sigma);
 
-    tensorflow::Output mInit0 (tensorflow::Scope, int nb);
 
+    /*
+     * Initalizes a new action sequence subset filled with 0 of size nb
+     * Input:
+     * ------
+     *  - tensorflow::Scope scope, the scope in the computational graph.
+     *  - int nb, the number of actions to initalize.
+     *
+     * Output:
+     * -------
+     *  - tensorflow::Output action_seq. Shape [nb, a_dim, 1]
+     *
+     */
+    tensorflow::Output mInit0 (tensorflow::Scope scope, int nb);
+
+    /*
+     * Logs the computational graph to a tensorboard readable file.
+     * Input:
+     * ------
+     *  - None
+     *
+     * Output:
+     * -------
+     *  - None
+     *
+     */
     tensorflow::Status mLogGraph ();
     /* ------------ Attributes ---------- */
 };

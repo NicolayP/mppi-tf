@@ -123,9 +123,6 @@ ControllerBase::ControllerBase (Scope root,
 
 ControllerBase::~ControllerBase() {}
 
-bool ControllerBase::setActions(vector<Tensor> actions) {
-
-}
 
 vector<float> ControllerBase::next(vector<float> x) {
     Tensor s(DT_FLOAT, TensorShape({m_s_dim, 1}));
