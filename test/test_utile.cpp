@@ -32,6 +32,32 @@ protected:
     float m;
     float dt;
 
+
+    void test_tensor (Tensor computed,
+                      vector<float>& expected,
+                      vector<int>& dims, string name="") {
+        float* data = computed.flat<float>().data();
+
+        TensorShape shape(computed.shape());
+
+        ASSERT_EQ(shape.dims(), dims.size()) << name << " Shape error at index : ";
+
+        for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator>
+                 it(shape.begin(), dims.begin());
+             it.first != shape.end();
+             ++it.first, ++it.second) {
+            ASSERT_EQ((*(it.first)).size, (*it.second)) << name
+                                                        << " Dimension size error at index : "
+                                                         << it.second - dims.begin();
+        }
+
+        int el = computed.NumElements();
+
+        for (int i=0; i < el; i++) {
+            EXPECT_FLOAT_EQ(data[i], expected[i]) << name << " State error at index : " << i;
+        }
+    }
+
 };
 
 TEST_F(UtileTest, blockDiagTest1) {
@@ -50,35 +76,8 @@ TEST_F(UtileTest, blockDiagTest1) {
 
     TF_CHECK_OK(sess.Run({out_a, out_b}, &o));
 
-    float* a = o[0].flat<float>().data();
-    float* b = o[1].flat<float>().data();
-
-    TensorShape shape_a(o[0].shape()), shape_b(o[1].shape());
-
-    ASSERT_EQ(shape_a.dims(), 2);
-    ASSERT_EQ(shape_b.dims(), 2);
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_a.begin(), dim_a.begin());
-         it.first != shape_a.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_b.begin(), dim_b.begin());
-         it.first != shape_b.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-
-    for (int i=0; i < n*2*n*2; i++) {
-        EXPECT_FLOAT_EQ(a[i], exp_a[i]) << "State error at index : " << i;
-    }
-
-    for (int i=0; i < n*2*n; i++) {
-        EXPECT_FLOAT_EQ(b[i], exp_b[i]) << "Action error at index : " << i;
-    }
-
+    test_tensor(o[0], exp_a, dim_a, "a");
+    test_tensor(o[1], exp_b, dim_b, "b");
 }
 
 TEST_F(UtileTest, blockDiagTest2) {
@@ -103,34 +102,8 @@ TEST_F(UtileTest, blockDiagTest2) {
 
     TF_CHECK_OK(sess.Run({out_a, out_b}, &o));
 
-    float* a = o[0].flat<float>().data();
-    float* b = o[1].flat<float>().data();
-
-    TensorShape shape_a(o[0].shape()), shape_b(o[1].shape());
-
-    ASSERT_EQ(shape_a.dims(), 2);
-    ASSERT_EQ(shape_b.dims(), 2);
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_a.begin(), dim_a.begin());
-         it.first != shape_a.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_b.begin(), dim_b.begin());
-         it.first != shape_b.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-
-    for (int i=0; i < n*2*n*2; i++) {
-        EXPECT_FLOAT_EQ(a[i], exp_a[i]) << "State error at index : " << i;
-    }
-
-    for (int i=0; i < n*2*n; i++) {
-        EXPECT_FLOAT_EQ(b[i], exp_b[i]) << "Action error at index : " << i;
-    }
+    test_tensor(o[0], exp_a, dim_a, "a");
+    test_tensor(o[1], exp_b, dim_b, "b");
 
 }
 
@@ -160,34 +133,8 @@ TEST_F(UtileTest, blockDiagTest3) {
 
     TF_CHECK_OK(sess.Run({out_a, out_b}, &o));
 
-    float* a = o[0].flat<float>().data();
-    float* b = o[1].flat<float>().data();
-
-    TensorShape shape_a(o[0].shape()), shape_b(o[1].shape());
-
-    ASSERT_EQ(shape_a.dims(), 2);
-    ASSERT_EQ(shape_b.dims(), 2);
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_a.begin(), dim_a.begin());
-         it.first != shape_a.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_b.begin(), dim_b.begin());
-         it.first != shape_b.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-
-    for (int i=0; i < n*2*n*2; i++) {
-        EXPECT_FLOAT_EQ(a[i], exp_a[i]) << "State error at index : " << i;
-    }
-
-    for (int i=0; i < n*2*n; i++) {
-        EXPECT_FLOAT_EQ(b[i], exp_b[i]) << "Action error at index : " << i;
-    }
+    test_tensor(o[0], exp_a, dim_a, "a");
+    test_tensor(o[1], exp_b, dim_b, "b");
 
 }
 
@@ -221,33 +168,6 @@ TEST_F(UtileTest, blockDiagTest4) {
 
     TF_CHECK_OK(sess.Run({out_a, out_b}, &o));
 
-    float* a = o[0].flat<float>().data();
-    float* b = o[1].flat<float>().data();
-
-    TensorShape shape_a(o[0].shape()), shape_b(o[1].shape());
-
-    ASSERT_EQ(shape_a.dims(), 2);
-    ASSERT_EQ(shape_b.dims(), 2);
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_a.begin(), dim_a.begin());
-         it.first != shape_a.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-    for (pair<TensorShapeIter<TensorShape>, vector<int>::iterator> it(shape_b.begin(), dim_b.begin());
-         it.first != shape_b.end();
-         ++it.first, ++it.second) {
-        EXPECT_EQ((*(it.first)).size, (*it.second));
-    }
-
-
-    for (int i=0; i < n*2*n*2; i++) {
-        EXPECT_FLOAT_EQ(a[i], exp_a[i]) << "State error at index : " << i;
-    }
-
-    for (int i=0; i < n*2*n; i++) {
-        EXPECT_FLOAT_EQ(b[i], exp_b[i]) << "Action error at index : " << i;
-    }
-
+    test_tensor(o[0], exp_a, dim_a, "a");
+    test_tensor(o[1], exp_b, dim_b, "b");
 }

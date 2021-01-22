@@ -204,45 +204,36 @@ TEST_F (CostBaseTest, StateCost) {
 
 TEST_F (CostBaseTest, StepCost) {
 
-    vector<Tensor> o1;
-    auto s_in1 = Identity(root1.WithOpName("State1"), s1);
-    auto a_in1 = Identity(root1.WithOpName("Action1"), a1);
-    auto e_in1 = Identity(root1.WithOpName("noise1"), e1);
-    auto out1 = c1.mBuildStepCostGraph(root1, s_in1, a_in1, e_in1);
-    TF_CHECK_OK(sess1.Run({out1, s_in1, a_in1, e_in1}, &o1));
-    float* res1 = o1[0].flat<float>().data();
-    int size1 = o1[0].NumElements();
-    EXPECT_EQ(size1, k1);
-    EXPECT_FLOAT_EQ(res1[0], 3.);
+    vector<Tensor> o;
+    vector<float> exp = {3.};
+    vector<int> dim = {k1, 1, 1};
+    auto s_in = Identity(root1.WithOpName("State1"), s1);
+    auto a_in = Identity(root1.WithOpName("Action1"), a1);
+    auto e_in = Identity(root1.WithOpName("noise1"), e1);
+    auto out = c1.mBuildStepCostGraph(root1, s_in, a_in, e_in);
+    TF_CHECK_OK(sess1.Run({out}, &o));
+
+    test_tensor(o[0], exp, dim);
 
 
-    vector<Tensor> o2;
-    auto s_in2 = Identity(root2.WithOpName("State2"), s2);
-    auto a_in2 = Identity(root2.WithOpName("Action2"), a2);
-    auto e_in2 = Identity(root2.WithOpName("noise2"), e2);
-    auto out2 = c2.mBuildStepCostGraph(root2, s_in2, a_in2, e_in2);
-    TF_CHECK_OK(sess2.Run({out2, s_in2, a_in2, e_in2}, &o2));
-    float* res2 = o2[0].flat<float>().data();
-    int size2 = o2[0].NumElements();
-
-    EXPECT_EQ(size2, k2); //number of samples
-    EXPECT_FLOAT_EQ(res2[0], 53.5);
+    exp = {53.5};
+    dim = {k2, 1, 1};
+    s_in = Identity(root2.WithOpName("State2"), s2);
+    a_in = Identity(root2.WithOpName("Action2"), a2);
+    e_in = Identity(root2.WithOpName("noise2"), e2);
+    out = c2.mBuildStepCostGraph(root2, s_in, a_in, e_in);
+    TF_CHECK_OK(sess2.Run({out, s_in, a_in, e_in}, &o));
+    test_tensor(o[0], exp, dim);
 
 
-    vector<Tensor> o3;
-    auto s_in3 = Identity(root3.WithOpName("State3"), s3);
-    auto a_in3 = Identity(root3.WithOpName("Action3"), a3);
-    auto e_in3 = Identity(root3.WithOpName("noise3"), e3);
-    auto out3 = c3.mBuildStepCostGraph(root3, s_in3, a_in3, e_in3);
-    TF_CHECK_OK(sess3.Run({out3}, &o3));
-    float* res3 = o3[0].flat<float>().data();
-    int size3 = o3[0].NumElements();
+    exp = {51.25 + 2.75, 52 + 4.3125, 102 - 1.65, 0. + 0, 333 + 2.25};
+    dim = {k3, 1, 1};
+    s_in = Identity(root3.WithOpName("State3"), s3);
+    a_in = Identity(root3.WithOpName("Action3"), a3);
+    e_in = Identity(root3.WithOpName("noise3"), e3);
+    out = c3.mBuildStepCostGraph(root3, s_in, a_in, e_in);
+    TF_CHECK_OK(sess3.Run({out}, &o));
 
-    EXPECT_EQ(size3, k3); //number of samples
-    EXPECT_FLOAT_EQ(res3[0], 51.25 + 2.75);
-    EXPECT_FLOAT_EQ(res3[1], 52 + 4.3125);
-    EXPECT_FLOAT_EQ(res3[2], 102 - 1.65);
-    EXPECT_FLOAT_EQ(res3[3], 0. + 0);
-    EXPECT_FLOAT_EQ(res3[4], 333 + 2.25);
+    test_tensor(o[0], exp, dim);
 
 }
