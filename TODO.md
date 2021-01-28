@@ -1,8 +1,8 @@
 # implementation
 
-- [ ] check the simulation implementation.
+- [X] check the simulation implementation.
 - [X] complete algorithm.
-- [ ] add Mujoco and Envs.
+- [X] add Mujoco and Envs.
 - [ ] DB class for training.
 - [ ] Trainig method in (controller/separate class).
 - [ ] link testing with github to perform auto testing.
@@ -21,6 +21,10 @@
 
   - [ ] profile the graph with [Profiler tool](https://www.tensorflow.org/guide/profiler)
   - [ ] Identify bottleneck and see how to improve performances.
+
+# Code clearness
+
+  - [ ] rewrite env class.
 
 # Documentation
 

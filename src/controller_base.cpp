@@ -125,6 +125,7 @@ ControllerBase::~ControllerBase() {}
 
 
 vector<float> ControllerBase::next(vector<float> x) {
+    
     Tensor s(DT_FLOAT, TensorShape({m_s_dim, 1}));
     copy_n(x.begin(), x.size(), s.flat<float>().data());
     TF_CHECK_OK(m_sess.Run({{mStateInput, s}, {mActionInput, m_U}},
