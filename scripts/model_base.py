@@ -50,8 +50,10 @@ class ModelBase(object):
             self.create_const(c)
         self.optimizer = tf.optimizers.Adam()
 
+
     def getMass(self):
         return self.mass.numpy()[0]
+
 
     def create_const(self, scope):
         a = np.array([[1., self.dt],[0., 1.]])
