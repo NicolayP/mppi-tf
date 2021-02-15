@@ -7,7 +7,7 @@
 - [ ] Trainig method in (controller/separate class).
 - [ ] link testing with github to perform auto testing.
 
-# Testing
+## Testing
 
  - [X] Testing software.
  - [X] verify implementation.
@@ -18,16 +18,16 @@
     - [X] test shif and init see also [#3](/../../issues/1)
  - [ ] Write argument checks and test them.
 
-# Performance
+## Performance
 
   - [ ] profile the graph with [Profiler tool](https://www.tensorflow.org/guide/profiler)
   - [ ] Identify bottleneck and see how to improve performances.
 
-# Code clearness
+## Code clearness
 
   - [ ] rewrite env class.
 
-# Documentation
+## Documentation
 
   - [ ] Write documentation.
   - [ ] Doxygene?
@@ -42,3 +42,13 @@
   - [ ] Sort tensorflow memory usage.
   - [ ] Complexify learning.
   - [ ] Experiment agent learning parameters.
+  - [ ] Rewrite Testing.
+  - [ ] Performance testing.
+  - [ ] Train simple network on Point mass system.
+
+## Testing
+
+  - [ ] Test Model.
+  - [ ] Test Cost.
+  - [ ] Test main.
+  - [ ] Test shift and init.
