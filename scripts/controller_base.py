@@ -54,7 +54,6 @@ class ControllerBase(object):
                                          "done": {}})
 
         stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-        print(stamp)
         logdir = '../graphs/python/%s' % stamp
 
         self.writer = tf.summary.create_file_writer(logdir)
