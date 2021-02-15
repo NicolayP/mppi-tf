@@ -58,6 +58,7 @@ add_executable(${BIN}
                 src/controller_base.cpp
                 src/cost_base.cpp
                 src/model_base.cpp
+                src/data_base.cpp
                 src/mj_pm_env.cpp
                 src/mj_env.cpp)
 
@@ -86,7 +87,8 @@ add_executable(${TEST_BIN} test/test_entry.cpp
                 test/test_utile.cpp src/utile.cpp
                 test/test_cost.cpp src/cost_base.cpp
                 test/test_model.cpp src/model_base.cpp
-                test/test_controller.cpp src/controller_base.cpp)
+                test/test_controller.cpp src/controller_base.cpp
+                src/data_base.cpp)
 
 add_test(NAME ${TEST_BIN} COMMAND ${TEST_BIN})
 target_link_libraries(${TEST_BIN} PUBLIC gtest gtest_main pthread TensorflowCC::TensorflowCC)
