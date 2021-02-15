@@ -25,8 +25,8 @@ See LICENSE file for legal notices. LICENSE must be kept together with this file
 
         <!-- Agent -->
         <body name="agent" pos="0 0 .05">
-            <joint axis="1 0 0" name="agent_x" pos="0 0 0" range="-1.4 1.4" stiffness="0" type="slide"/>
-            <joint axis="0 1 0" name="agent_y" pos="0 0 0" range="-1.4 1.4" stiffness="0" type="slide"/>
+            <joint axis="1 0 0" name="agent_x" pos="0 0 0" range="-10 10" stiffness="0" type="slide"/>
+            <joint axis="0 1 0" name="agent_y" pos="0 0 0" range="-10 10" stiffness="0" type="slide"/>
             <geom conaffinity="1" contype="1" name="agent" pos="0 0 0" rgba="0.2 0.2 0.6 1" size=".05" type="sphere"/>
         </body>
 
