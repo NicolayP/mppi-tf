@@ -37,7 +37,7 @@
 
   - [X] add elements to replay buffer.
   - [X] finish training method.
-  - [ ] Rewrite Testing.
+  - [X] Rewrite Testing.
   - [ ] log cost. (~1/2 day)
   - [ ] extend dimensions. (~1/2 day)
   - [ ] test extended dimension. (~1 day)
