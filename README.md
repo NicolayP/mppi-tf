@@ -10,6 +10,9 @@ Relies on tensorflow c++ API r2.1. If you don't want to mess with bazel, use [te
 
 ## Installation
 
+Need to download MujoCo library and set in under lib/contrib/MuJoCo/ along with
+a mjkey.txt file in /lib/contrib
+
     ```bash
         mkdir build & cd build
         cmake ..

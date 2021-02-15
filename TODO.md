@@ -1,4 +1,4 @@
-# implementation
+# C++ implementation
 
 - [X] check the simulation implementation.
 - [X] complete algorithm.
@@ -16,6 +16,7 @@
     - [X] main_algo.
     - [X] decompose update function for simpler testing.
     - [X] test shif and init see also [#3](/../../issues/1)
+ - [ ] Write argument checks and test them.
 
 # Performance
 
@@ -30,3 +31,14 @@
 
   - [ ] Write documentation.
   - [ ] Doxygene?
+
+
+# Python Implementation
+
+  - [X] add elements to replay buffer
+  - [X] finish training method
+  - [ ] log cost
+  - [ ] extend dimensions
+  - [ ] Sort tensorflow memory usage.
+  - [ ] Complexify learning.
+  - [ ] Experiment agent learning parameters.
