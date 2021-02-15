@@ -26,7 +26,7 @@ ControllerBase::ControllerBase (const int k,
                                 const float mass,
                                 const int s_dim,
                                 const int a_dim):
-                m_root(tensorflow::Scope::NewRootScope()),
+                m_root(tensorflow::Scope::NewRootScope().WithDevice("/cpu:0")),
                 m_sess(m_root),
                 m_k(k), m_tau(tau), m_s_dim(s_dim), m_a_dim(a_dim), m_dt(dt),
                 m_mass(mass),
@@ -123,19 +123,44 @@ ControllerBase::ControllerBase (Scope root,
 
 ControllerBase::~ControllerBase() {}
 
+bool ControllerBase::setGoal(vector<float> goal) {
+    if (goal.size() != m_s_dim) {
+        cerr << "Wrong goal size, it should match the state dimension: " << m_s_dim << endl;
+        return false;
+    }
+    copy_n(goal.begin(), goal.size(), m_goal.flat<float>().data());
+    return m_cost.setGoal(m_goal);
+}
 
 vector<float> ControllerBase::next(vector<float> x) {
-    
+
     Tensor s(DT_FLOAT, TensorShape({m_s_dim, 1}));
     copy_n(x.begin(), x.size(), s.flat<float>().data());
+
+
     TF_CHECK_OK(m_sess.Run({{mStateInput, s}, {mActionInput, m_U}},
                          {mUpdate, mNext},
                          &out_tensor));
     m_U = out_tensor[0];
+
+    m_db.addX(s);
+    m_db.addU(out_tensor[1]);
+
     float* u = out_tensor[1].flat<float>().data();
     vector<float> act = {u, u + out_tensor[1].NumElements()};
     return act;
 
+}
+
+void ControllerBase::toCSV(string filename) {
+    m_db.toCSV(filename);
+}
+
+void ControllerBase::saveNext(vector<float> x_next) {
+    Tensor next(DT_FLOAT, TensorShape({m_s_dim, 1}));
+    copy_n(x_next.begin(), x_next.size(), next.flat<float>().data());
+
+    m_db.addNext(next);
 }
 
 Output ControllerBase::mBeta(Scope scope, Input cost) {
@@ -211,6 +236,9 @@ Output ControllerBase::mBuildModelGraph(Scope model_scope,
     Scope step_scope(Scope::NewRootScope());
     Scope step_cost_scope(Scope::NewRootScope());
     Scope path_cost_scope(cost_scope.NewSubScope("path_cost"));
+
+    m_model.mBuildTrainGraph(model_scope);
+    m_model.mBuildLossGraph(model_scope);
 
     m_cost.setConsts(cost_scope);
 

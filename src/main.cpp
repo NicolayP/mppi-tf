@@ -25,21 +25,24 @@ int main(int argc, char const *argv[]) {
     // load the hyper parameters.
     const char* envFile("../envs/point_mass1d.xml");
     const char* mjkey("../lib/contrib/mjkey.txt");
-    PointMassEnv env = PointMassEnv(envFile, mjkey, true);
+    PointMassEnv env = PointMassEnv(envFile, mjkey, false);
 
-    int k(1500), tau(100), sDim(2), aDim(1);
-    bool debug(false), done(false);
+    int k(2), tau(3), sDim(2), aDim(1);
+    bool debug(true), done(false);
     float dt(0.1);
     ControllerBase ctrl(k, tau, dt, 1., sDim, aDim);
     vector<float> state = {0, 0};
     vector<float> action = {0};
-
+/*
     env.get_x(state);
     while (!done) {
         action = ctrl.next(state);
         done = env.simulate(action);
         env.get_x(state);
+        ctrl.saveNext(state);
     }
+
+    ctrl.toCSV("../data.csv");*/
 
     if (debug) {
         Status log = ctrl.mLogGraph();

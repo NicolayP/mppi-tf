@@ -96,7 +96,7 @@ PointMassEnv::PointMassEnv(const char* envFile, const char* mjkey, bool view) {
   // empty step to initalize everything.
   mj_step(m, d);
 
-  _simend = d->time + 0.0001 + 10;
+  _simend = d->time + 0.0001 + 1;
 }
 
 PointMassEnv::~PointMassEnv() {
