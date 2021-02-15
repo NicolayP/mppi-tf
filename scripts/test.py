@@ -290,13 +290,111 @@ class TestCost(tf.test.TestCase):
 
 class TestController(tf.test.TestCase):
     def setUp(self):
-        pass
+        self.k = 5
+        self.tau = 3
+        self.a_dim = 2
+        self.s_dim = 4
+        self.dt = 0.01
+        self.mass = 1.
+        self.lam = 1.
+
+        self.goal = np.array([[0.], [1.]])
+        self.sigma = np.array([[1., 0.], [0., 1.]])
+        self.Q = np.array([[1., 0., 0., 0.],
+                           [0., 1., 0., 0.],
+                           [0., 0., 1., 0.],
+                           [0., 0., 0., 1.]])
+
+        self.c = np.array([[[3.]], [[10.]], [[0.]], [[1.]], [[5.]]])
+        self.n = np.array([[[[1.], [-0.5]], [[1.], [-0.5]], [[2.], [1.]]],
+                           [[[0.3], [0.]], [[2.], [0.2]], [[1.2], [3.]]],
+                           [[[0.5], [0.5]], [[0.5], [0.5]], [[0.5], [0.5]]],
+                           [[[0.6], [0.7]], [[0.2], [-0.3]], [[0.1], [-0.4]]],
+                           [[[-2.], [-3.]], [[-4.], [-1.]], [[0.], [0.]]]])
+
+        self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
+        model = ModelBase(self.mass, self.dt, self.s_dim, self.a_dim)
+        cost = CostBase(self.lam, self.sigma, self.goal, self.Q)
+        self.cont = ControllerBase(model,
+                                   cost,
+                                   self.k,
+                                   self.tau,
+                                   self.dt,
+                                   self.s_dim,
+                                   self.a_dim,
+                                   self.lam,
+                                   self.sigma)
 
     def testDataPrep(self):
-        pass
+        exp_a0 = np.array([[1.], [0.5]])
+        exp_a1 = np.array([[2.3], [4.5]])
+        exp_a2 = np.array([[2.1], [-0.4]])
+        exp_n0 = np.array([[[1.], [-0.5]], [[0.3], [0.]], [[0.5], [0.5]], [[0.6], [0.7]], [[-2.], [-3.]]])
+        exp_n1 = np.array([[[1.], [-0.5]], [[2.], [0.2]], [[0.5], [0.5]], [[0.2], [-0.3]], [[-4], [-1]]])
+        exp_n2 = np.array([[[2.], [1.]], [[1.2], [3.]], [[0.5], [0.5]], [[0.1], [-0.4]], [[0.], [0.]]])
+
+
+        a0 = self.cont.prepareAction("", self.a, 0)
+        n0 = self.cont.prepareNoise("", self.n, 0)
+
+        a1 = self.cont.prepareAction("", self.a, 1)
+        n1 = self.cont.prepareNoise("", self.n, 1)
+
+        a2 = self.cont.prepareAction("", self.a, 2)
+        n2 = self.cont.prepareNoise("", self.n, 2)
+
+        self.assertAllClose(a0, exp_a0)
+        self.assertAllClose(n0, exp_n0)
+
+        self.assertAllClose(a1, exp_a1)
+        self.assertAllClose(n1, exp_n1)
+
+        self.assertAllClose(a2, exp_a2)
+        self.assertAllClose(n2, exp_n2)
+
 
     def testUpdate(self):
-        pass
+        beta = np.array([[0]])
+        exp_arg = np.array([[[-3.]], [[-10.]], [[0.]], [[-1.]], [[-5.]]])
+        exp = np.array([[[0.049787068367863944]],
+                        [[4.5399929762484854e-05]],
+                        [[1]],
+                        [[0.36787944117144233]],
+                        [[0.006737946999085467]]])
+
+        nabla = np.array([[1.424449856468154]])
+        weights = np.array([[[0.034951787275480706]],
+                           [[3.1871904480408675e-05]],
+                           [[0.7020254138530686]],
+                           [[0.2582607169364174]],
+                           [[0.004730210030553017]]])
+
+        expected = np.array([[[0.034951787275480706*1. + 3.1871904480408675e-05*0.3 + 0.7020254138530686*0.5 + 0.2582607169364174*0.6 + 0.004730210030553017*(-2)],
+                              [0.034951787275480706*(-0.5) + 3.1871904480408675e-05*0 + 0.7020254138530686*0.5 + 0.2582607169364174*0.7 + 0.004730210030553017*(-3)]],
+                             [[0.034951787275480706*1 + 3.1871904480408675e-05*2 + 0.7020254138530686*0.5 + 0.2582607169364174*0.2 + 0.004730210030553017*(-4)],
+                              [0.034951787275480706*(-0.5) + 3.1871904480408675e-05*0.2 + 0.7020254138530686*0.5 + 0.2582607169364174*(-0.3) + 0.004730210030553017*(-1)]],
+                             [[0.034951787275480706*2 + 3.1871904480408675e-05*1.2 + 0.7020254138530686*0.5 + 0.2582607169364174*0.1 + 0.004730210030553017*0],
+                              [0.034951787275480706*1 + 3.1871904480408675e-05*3 + 0.7020254138530686*0.5 + 0.2582607169364174*(-0.4) + 0.004730210030553017*0]]])
+
+        b = self.cont.beta("", self.c)
+        e_arg = self.cont.expArg("", self.c, b)
+        e = self.cont.exp("", e_arg)
+        nab = self.cont.nabla("", e)
+        w = self.cont.weights("", e, nab)
+        w_n = self.cont.weightedNoise("", w, self.n)
+        sum = tf.reduce_sum(w)
+
+
+        self.assertAllClose(b, beta)
+        self.assertAllClose(e_arg, exp_arg)
+
+        self.assertAllClose(e, exp)
+        self.assertAllClose(nab, nabla)
+
+        self.assertAllClose(w, weights)
+        self.assertAllClose(w_n, expected)
+        self.assertAllClose(sum, 1.)
+
 
     def testNew(self):
         pass
