@@ -3,4 +3,5 @@ graphs/*
 lib/contrib/mjkey.txt
 lib/contrib/lib*
 *__pycache__*
-*pyc
+*.pyc
+*.csv
