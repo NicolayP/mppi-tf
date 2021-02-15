@@ -4,6 +4,7 @@
 /* --------- Tensorflow libraries --------- */
 #include "tensorflow/cc/client/client_session.h"
 #include "tensorflow/core/framework/tensor.h"
+#include "tensorflow/cc/framework/gradients.h"
 
 
 class ModelBase {
@@ -12,7 +13,14 @@ private:
     float m_dt;
     float m_m;
     int m_s_dim, m_a_dim;
-    tensorflow::Tensor m_mass;
+
+    std::map<std::string, tensorflow::Output> m_vars;
+    std::map<std::string, tensorflow::Output> m_assigns;
+    std::map<std::string, tensorflow::TensorShape> m_shapes;
+
+    tensorflow::Output gt;
+    tensorflow::Output in_state, in_act;
+    tensorflow::Output loss_var;
 
     /* ------------ Methods ------------- */
 
@@ -56,6 +64,9 @@ public:
     ~ModelBase();
 
     /* ------------ Methods ------------- */
+
+    void mBuildTrainGraph(tensorflow::Scope scope);
+    void mBuildLossGraph(tensorflow::Scope scope);
     /*
      * Builds the computational graph of one step.
      * Input:

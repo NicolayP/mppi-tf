@@ -85,6 +85,22 @@ public:
     /* ------------ Methods ------------- */
 
     /*
+     * TODO
+     * Input:
+     * ------
+     *  - None
+     *
+     * Output:
+     * -------
+     *  - None
+     *
+     */
+    bool setGoal(tensorflow::Tensor goal) {
+        m_goal = goal;
+    }
+
+
+    /*
      * Builds the computational graph for one step cost. Effectively:
      *  $$ q(x_t) + \lambda u^{T}_{t-1} \Sigma^{-1} \epsilon^{k}_{t-1} $$
      * Input:
