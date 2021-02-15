@@ -352,7 +352,6 @@ class TestController(tf.test.TestCase):
         self.assertAllClose(a2, exp_a2)
         self.assertAllClose(n2, exp_n2)
 
-
     def testUpdate(self):
         beta = np.array([[0]])
         exp_arg = np.array([[[-3.]], [[-10.]], [[0.]], [[-1.]], [[-5.]]])
@@ -395,12 +394,31 @@ class TestController(tf.test.TestCase):
         self.assertAllClose(w_n, expected)
         self.assertAllClose(sum, 1.)
 
-
     def testNew(self):
-        pass
+        next1 = np.array([[[1.], [0.5]]])
+        next2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]])
+        next3 = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
+
+        n1 = self.cont.getNext("", self.a, 1)
+        n2 = self.cont.getNext("", self.a, 2)
+        n3 = self.cont.getNext("", self.a, 3)
+
+        self.assertAllClose(n1, next1)
+        self.assertAllClose(n2, next2)
+        self.assertAllClose(n3, next3)
 
     def testShiftAndInit(self):
-        pass
+        init1 = np.array([[[1.], [0.5]]])
+        init2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]])
+
+        exp1 = np.array([[[2.3], [4.5]], [[2.1], [-0.4]], [[1.], [0.5]]])
+        exp2 = np.array([[[2.1], [-0.4]], [[1.], [0.5]], [[2.3], [4.5]]])
+
+        n1 = self.cont.shift("", self.a, init1, 1)
+        n2 = self.cont.shift("", self.a, init2, 2)
+
+        self.assertAllClose(n1, exp1)
+        self.assertAllClose(n2, exp2)
 
     def testAll(self):
         pass
