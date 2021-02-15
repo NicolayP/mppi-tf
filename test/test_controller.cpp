@@ -211,7 +211,6 @@ TEST_F(ControllerBaseTest, testShiftAndInit) {
     auto n0 = cont.mShift(root, in, i1, 1);
     auto n1 = cont.mShift(root, in, i2, 2);
 
-    Status log = utile::logGraph(root);
 
     ClientSession sess(root);
     TF_CHECK_OK(sess.Run({in,
