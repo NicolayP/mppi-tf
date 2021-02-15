@@ -35,16 +35,25 @@
 
 # Python Implementation
 
-  - [X] add elements to replay buffer
-  - [X] finish training method
-  - [ ] log cost
-  - [ ] extend dimensions
-  - [ ] Sort tensorflow memory usage.
-  - [ ] Complexify learning.
-  - [ ] Experiment agent learning parameters.
+  - [X] add elements to replay buffer.
+  - [X] finish training method.
   - [ ] Rewrite Testing.
-  - [ ] Performance testing.
+  - [ ] log cost. (~1/2 day)
+  - [ ] extend dimensions. (~1/2 day)
+  - [ ] test extended dimension. (~1 day)
+  - [ ] generate tf_summary with hyperparam and env name. (~2 days)
+    - [ ] add config file parsing, to load hyperparameters and remove hard coding of the params.
+    - [ ] add argument parsing for the config file, env file etc.
+    This will be usefull for organised testing.
+  - [ ] complexify mujoco simulation with friction and drag etc. (Need to find model for this.) (~(1-2) day)
+  - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)
+  - [ ] Sort tensorflow memory usage.
   - [ ] Train simple network on Point mass system.
+  - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
+  - [ ] Experiment agent learning parameters. (dont know enough about the rest to make a prediction)
+  - [ ] go to uuv_sim.
+  - [ ] Performance testing.
+  - [ ] go to real robot
 
 ## Testing
 
