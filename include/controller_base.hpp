@@ -10,6 +10,7 @@
 /* ------------- Own libraries ------------ */
 #include "cost_base.hpp"
 #include "model_base.hpp"
+#include "data_base.hpp"
 
 
 
@@ -32,6 +33,7 @@ private:
 
     CostBase m_cost; /* Cost class */
     ModelBase m_model; /* Model class */
+    DataBase m_db; /* Data base class */
 
     // The current action sequence. i.e. The mean to sample from.
     tensorflow::Tensor m_sigma; /* [a_dim, a_dim]*/
@@ -76,6 +78,23 @@ public:
 
     /* ------------ Methods ------------- */
 
+
+    /*
+     * Retruns the next action to apply to the plant.
+     * Input:
+     * ------
+     *  - std::vector<float> x the new state. Should be of size s_dim.
+     *
+     * Output:
+     * -------
+     *  - std::vector<float> next, the next action to apply, size a_dim.
+     *
+     */
+    void toCSV(std::string filename);
+
+    bool setGoal (std::vector<float> goal);
+
+    void saveNext (std::vector<float> x_next);
     /*
      * Retruns the next action to apply to the plant.
      * Input:
