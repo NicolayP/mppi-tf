@@ -59,23 +59,25 @@ class ControllerBase(object):
                                          "next_obs": {"shape": (self.s_dim, 1)},
                                          "done": {}})
 
-        stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-        path = '../graphs/python/'
-        logdir = os.path.join(path,
-                              model.getName(),
-                              "k" + str(k),
-                              "T" + str(tau),
-                              "L" + str(lam),
-                              stamp)
-
-        self.writer = tf.summary.create_file_writer(logdir)
-
         self.train_step = 0
-        self.error_step = 0
-        self.cost_step = 0
-
+        self.writer = None
         if self.log:
+            stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
+            path = '../graphs/python/'
+            logdir = os.path.join(path,
+            model.getName(),
+            "k" + str(k),
+            "T" + str(tau),
+            "L" + str(lam),
+            stamp)
+
+            self.writer = tf.summary.create_file_writer(logdir)
+
+            self.error_step = 0
+            self.cost_step = 0
             self.save_graph()
+
+            self.summary_name = ["x", "y", "z"]
 
 
     def save_graph(self):
@@ -96,10 +98,20 @@ class ControllerBase(object):
             avg_cost = np.mean(cost)
 
             with self.writer.as_default():
-                tf.summary.scalar("position_error", error[0], step=self.error_step)
-                tf.summary.scalar("speed_error", error[1], step=self.error_step)
-                tf.summary.scalar("goal-dist", dist[0], step=self.error_step)
-                tf.summary.scalar("goal-speed", dist[1], step=self.error_step)
+                for i in range(int(self.s_dim/2)):
+                    tf.summary.scalar("position_error_" + self.summary_name[i],
+                                      error[2*i],
+                                      step=self.error_step)
+                    tf.summary.scalar("speed_error_" + self.summary_name[i],
+                                      error[2*i+1],
+                                      step=self.error_step)
+
+                    tf.summary.scalar("goal-dist_" + self.summary_name[i],
+                                      dist[2*i],
+                                      step=self.error_step)
+                    tf.summary.scalar("goal-speed_" + self.summary_name[i],
+                                      dist[2*i+1],
+                                      step=self.error_step)
                 tf.summary.scalar("average_cost", avg_cost, step=self.error_step)
             self.error_step += 1
 

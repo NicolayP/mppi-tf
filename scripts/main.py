@@ -48,9 +48,6 @@ def main():
     sim = Simulation(env, goal, render)
     state_goal = sim.getGoal()
 
-    print(state_goal)
-    print(os.path.basename(env))
-
     model = ModelBase(mass=5,
                       dt=dt,
                       state_dim=s_dim,

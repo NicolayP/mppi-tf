@@ -75,7 +75,7 @@ class ModelBase(object):
         return tf.reduce_mean(tf.math.squared_difference(pred, gt), name="Loss")
 
 
-    def train_step(self, gt, x, a, step, writer, log):
+    def train_step(self, gt, x, a, step, writer=None, log=False):
 
         gt = tf.convert_to_tensor(gt, dtype=tf.float64)
         x = tf.convert_to_tensor(x, dtype=tf.float64)
@@ -113,6 +113,7 @@ class ModelBase(object):
         Performs one step prediction for prediction error
         '''
         return self.buildStepGraph("step", state, action)
+
 
     def getName(self):
         return self.name

@@ -43,7 +43,7 @@ class Simulation(object):
 
     def step(self, u):
         for i in range(self.a_dim):
-            self.sim.data.ctrl[i]=u[i]
+            self.sim.data.ctrl[i]=u[0, i]
 
         if self.render:
             self.viewer.render()
