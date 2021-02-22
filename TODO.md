@@ -39,8 +39,8 @@
   - [X] finish training method.
   - [X] Rewrite Testing.
   - [X] log cost. (~1/2 day)
-  - [ ] extend dimensions. (~1/2 day)
-  - [ ] test extended dimension. (~1 day)
+  - [X] extend dimensions. (~1/2 day)
+  - [X] test extended dimension. (~1 day)
   - [X] generate tf_summary with hyperparam and env name. (~2 days)
     - [X] add config file parsing, to load hyperparameters and remove hard coding of the params.
     - [X] add argument parsing for the config file, env file etc.
@@ -61,7 +61,7 @@
 
 ## Testing
 
-  - [ ] Test Model.
-  - [ ] Test Cost.
-  - [ ] Test main.
-  - [ ] Test shift and init.
+  - [X] Test Model.
+  - [X] Test Cost.
+  - [X] Test main.
+  - [X] Test shift and init.
