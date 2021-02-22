@@ -41,7 +41,7 @@ def get_data(filename):
     return gt, x, u
 
 class ModelBase(object):
-    def __init__(self, mass=1, dt=0.1, state_dim=2, act_dim=1):
+    def __init__(self, mass=1, dt=0.1, state_dim=2, act_dim=1, name="point_mass"):
         self.dt = dt
         self.state_dim = state_dim
         self.act_dim = act_dim
@@ -49,6 +49,8 @@ class ModelBase(object):
         with tf.name_scope("Const") as c:
             self.create_const(c)
         self.optimizer = tf.optimizers.Adam()
+
+        self.name= name
 
 
     def getMass(self):
@@ -111,6 +113,9 @@ class ModelBase(object):
         Performs one step prediction for prediction error
         '''
         return self.buildStepGraph("step", state, action)
+
+    def getName(self):
+        return self.name
 
 def plot(v_gt, v, u, m, m_l, dt):
     y = (v_gt - v)
