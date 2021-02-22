@@ -1,4 +1,7 @@
 import tensorflow as tf
+gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+
 from tensorflow.python.ops import summary_ops_v2
 from cpprb import ReplayBuffer
 
@@ -8,6 +11,7 @@ from model_base import ModelBase
 from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
+import os
 
 class ControllerBase(object):
     def __init__(self,
@@ -21,7 +25,7 @@ class ControllerBase(object):
                  lam=1.,
                  sigma=np.array([]),
                  init_seq=np.array([]),
-                 save_graph=False):
+                 log=False):
         # TODO: Check parameters
         self.k = k
         self.tau = tau
@@ -29,6 +33,8 @@ class ControllerBase(object):
         self.s_dim = s_dim
         self.a_dim = a_dim
         self.lam = lam
+
+        self.log=log
 
 
         self.sigma = tf.convert_to_tensor(sigma, dtype=tf.float64)
@@ -54,32 +60,53 @@ class ControllerBase(object):
                                          "done": {}})
 
         stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-        logdir = '../graphs/python/%s' % stamp
+        path = '../graphs/python/'
+        logdir = os.path.join(path,
+                              model.getName(),
+                              "k" + str(k),
+                              "T" + str(tau),
+                              "L" + str(lam),
+                              stamp)
 
         self.writer = tf.summary.create_file_writer(logdir)
 
         self.train_step = 0
         self.error_step = 0
+        self.cost_step = 0
 
-        if save_graph:
+        if self.log:
             self.save_graph()
 
 
     def save_graph(self):
         state=np.zeros((self.s_dim, 1))
-        with writer.as_default():
+        with self.writer.as_default():
             graph = self.next.get_concrete_function(state).graph # get graph from function
             summary_ops_v2.graph(graph.as_graph_def()) # visualize
 
-    def save(self, x, u, x_next, log):
+
+    def save(self, x, u, x_next, cost):
         self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
-        if log:
+        if self.log:
             x_next_pred = self.model.predict(x, u).numpy()[0]
-            error = np.squeeze(x_next - x_next_pred, -1)
+
+            error = np.linalg.norm(x_next - x_next_pred, axis=-1)
+            dist = np.linalg.norm(x_next-self.cost.getGoal(), axis=-1)
+
+            avg_cost = np.mean(cost)
+
             with self.writer.as_default():
                 tf.summary.scalar("position_error", error[0], step=self.error_step)
                 tf.summary.scalar("speed_error", error[1], step=self.error_step)
+                tf.summary.scalar("goal-dist", dist[0], step=self.error_step)
+                tf.summary.scalar("goal-speed", dist[1], step=self.error_step)
+                tf.summary.scalar("average_cost", avg_cost, step=self.error_step)
             self.error_step += 1
+
+
+    def save_cost(self, cost):
+        avg_cost = tf.reduce_mean(cost)
+
 
     def plot_speed(self, v_gt, v, u, m, m_l, dt):
         y = (v_gt - v)
@@ -90,16 +117,16 @@ class ControllerBase(object):
         plt.plot(x_pred, y_pred, x_pred, y_pred_l)
         plt.show()
 
-    def train(self, log):
+
+    def train(self):
         epochs = 500
-        print(self.train_step)
         for e in range(epochs):
             sample = self.rb.sample(self.batch_size)
             #sample = self.rb.get_all_transitions()
             gt = sample['next_obs']
             x = sample['obs']
             u = sample['act']
-            self.model.train_step(gt, x, u, self.train_step*epochs + e, self.writer, log)
+            self.model.train_step(gt, x, u, self.train_step*epochs + e, self.writer, self.log)
 
         self.train_step += 1
 
@@ -110,7 +137,7 @@ class ControllerBase(object):
         v_gt = np.squeeze(gt[:, 1, :], -1)
         v = np.squeeze(x[:, 1, :], -1)
         u_plot = np.squeeze(u, -1)
-        #self.plot_speed(v_gt, v, u_plot, self.mass_init, self.model.getMass(), self.dt)
+
 
     def setGoal(self, goal):
         # shape [s_dim, s_dim]
@@ -199,6 +226,7 @@ class ControllerBase(object):
                 noises = self.buildNoise(rand)
             with tf.name_scope("Rollout") as roll:
                 cost = self.buildModel(roll, state, noises)
+
             with tf.name_scope("Update") as up:
                 self.action_seq = self.update(up, cost, noises)
 
@@ -207,7 +235,7 @@ class ControllerBase(object):
             with tf.name_scope("shift_and_init") as si:
                 init = self.initZeros(si, 1)
                 self.action_seq = self.shift(si, self.action_seq, init, 1)
-            return next
+            return next, cost
 
 
     def buildModel(self, scope, state, noises):
