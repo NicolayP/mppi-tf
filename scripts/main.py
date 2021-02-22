@@ -5,39 +5,82 @@ from cost_base import CostBase
 
 import numpy as np
 
-def parse_arg(args):
-    pass
+import argparse
+import yaml
+import os
+
+from tqdm import tqdm
+
+def parse_arg():
+    parser = argparse.ArgumentParser(prog="mppi", description="mppi-tensorflow")
+    parser.add_argument('config', metavar='c', type=str, help='Config file path')
+    parser.add_argument('-r', '--render', action='store_true', help="render the simulation")
+    parser.add_argument('-l', '--log', action='store_true', help="log in tensorboard")
+    parser.add_argument('-s', '--steps', type=int, help='number of training steps', default=200)
+    parser.add_argument('-t', '--train', type=int, help='training step iterations', default=10)
+    args = parser.parse_args()
+    return args.config, args.render, args.log, args.steps, args.train
 
 def parse_config(file):
-    pass
+    with open(file) as file:
+        conf = yaml.load(file, Loader=yaml.FullLoader)
+        env = conf['env']
+        s_dim = conf['state-dim']
+        a_dim = conf['action-dim']
+        goal = np.expand_dims(np.array(conf['goal']), -1)
+        dt = conf['dt']
+        tau = conf['horizon']
+        init = np.array(conf['init-act'])
+        lam = conf['lambda']
+        maxu = np.array(conf['max-a'])
+        noise = np.array(conf['noise'])
+        samples = conf['samples']
+        cost = conf['cost']
+        q = np.array(cost['w'])
+
+
+    return env, goal, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim, q
 
 def main():
-    sim = Simulation("point_mass1d.xml", False)
+    conf_file, render, log, max_steps, train_iter = parse_arg()
+    env, goal, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim, q = parse_config(conf_file)
+
+    sim = Simulation(env, goal, render)
     state_goal = sim.getGoal()
-    goal = np.zeros((2, 1))
-    goal[0] = state_goal[0]
-    model = ModelBase(mass=5, dt=0.01, state_dim=2, act_dim=1)
-    cost = CostBase(lam=1, sigma=np.array([[1]]), goal=goal, Q=np.array([[1., 0.], [0., 1.]]))
+
+    print(state_goal)
+    print(os.path.basename(env))
+
+    model = ModelBase(mass=5,
+                      dt=dt,
+                      state_dim=s_dim,
+                      act_dim=a_dim,
+                      name=os.path.splitext(os.path.basename(env))[0])
+
+    cost = CostBase(lam=lam,
+                    sigma=noise,
+                    goal=goal,
+                    Q=q)
 
     cont = ControllerBase(model, cost,
-                          k=100, tau=20, dt=0.01, s_dim=2, a_dim=1, lam=1.,
-                          sigma=np.array([[1]]))
+                          k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam,
+                          sigma=noise, log=log)
 
-    i = 1
-    log = True
-    step = 0
-    max_steps = 20
-    while step < max_steps:
+
+    prev_time = sim.getTime()
+    time = sim.getTime()
+
+    for step in tqdm(range(max_steps)):
         x = sim.getState()
-        u = cont.next(x)
-        x_next = sim.step(u)
-        cont.save(x, u, x_next, log)
+        u, cost = cont.next(x)
+        while time-prev_time < dt:
+            x_next = sim.step(u)
+            time=sim.getTime()
+        prev_time = time
+        cont.save(x, u, x_next, cost)
 
-        if i % 100 == 0:
-            i = 0
-            cont.train(log)
-            step += 1
+        if step % train_iter == 0:
+            cont.train()
 
-        i+=1
 if __name__ == '__main__':
     main()
