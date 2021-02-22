@@ -9,12 +9,19 @@ class CostBase(object):
     def __init__(self, lam, sigma, goal, Q):
 
         with tf.name_scope("Cost_setup") as cs:
+            #print(goal)
             self.lam = lam
             s = tf.convert_to_tensor(sigma, dtype=tf.float64)
             self.invSig = tf.linalg.inv(s)
-            self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
+            self.setGoal(goal)
             self.Q = tf.convert_to_tensor(Q, dtype=tf.float64)
 
+
+    def setGoal(self, goal):
+        self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
+
+    def getGoal(self):
+        return self.goal.numpy()
 
     def build_step_cost_graph(self, scope, state, action, noise):
         with tf.name_scope("step_cost") as s:
