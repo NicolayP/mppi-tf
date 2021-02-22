@@ -38,20 +38,24 @@
   - [X] add elements to replay buffer.
   - [X] finish training method.
   - [X] Rewrite Testing.
-  - [ ] log cost. (~1/2 day)
+  - [X] log cost. (~1/2 day)
   - [ ] extend dimensions. (~1/2 day)
   - [ ] test extended dimension. (~1 day)
-  - [ ] generate tf_summary with hyperparam and env name. (~2 days)
-    - [ ] add config file parsing, to load hyperparameters and remove hard coding of the params.
-    - [ ] add argument parsing for the config file, env file etc.
+  - [X] generate tf_summary with hyperparam and env name. (~2 days)
+    - [X] add config file parsing, to load hyperparameters and remove hard coding of the params.
+    - [X] add argument parsing for the config file, env file etc.
     This will be usefull for organised testing.
   - [ ] complexify mujoco simulation with friction and drag etc. (Need to find model for this.) (~(1-2) day)
+  - [ ] add current.
   - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)
-  - [ ] Sort tensorflow memory usage.
+  - [X] Sort tensorflow memory usage.
+  - [ ] Test Cpu.
   - [ ] Train simple network on Point mass system.
   - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
   - [ ] Experiment agent learning parameters. (dont know enough about the rest to make a prediction)
+  - [ ] vehicle modelling.
   - [ ] go to uuv_sim.
+  - [ ] uuv_sim on simulator.
   - [ ] Performance testing.
   - [ ] go to real robot
 
