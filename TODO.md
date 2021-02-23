@@ -45,6 +45,7 @@
     - [X] add config file parsing, to load hyperparameters and remove hard coding of the params.
     - [X] add argument parsing for the config file, env file etc.
     This will be usefull for organised testing.
+  - [X] sort rendering problem.
   - [ ] complexify mujoco simulation with friction and drag etc. (Need to find model for this.) (~(1-2) day)
   - [ ] add current.
   - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)

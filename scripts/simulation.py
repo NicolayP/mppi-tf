@@ -10,7 +10,7 @@ class Simulation(object):
         self.modder = None
 
         self.model = mj.load_model_from_path(xml_file)
-        self.sim = mj.MjSim(self.model, render_callback=self.render_callback)
+        self.sim = mj.MjSim(self.model)
 
         self.a_dim = self.sim.data.ctrl.shape[0]
         self.s_dim = 2*self.sim.data.qpos.shape[0]
@@ -18,7 +18,6 @@ class Simulation(object):
 
         self.goal = goal
         if self.render:
-            self.modder = TextureModder(self.sim)
             self.viewer = mj.MjViewer(self.sim)
             g = self.sim.data.get_site_xpos("target")
             self.goal=np.zeros((self.s_dim, 1))
@@ -50,13 +49,6 @@ class Simulation(object):
         self.sim.step()
 
         return self.getState()
-
-
-    def render_callback(self, sim, viewer):
-        if self.modder is None:
-            self.modder = TextureModder(sim)
-        for name in sim.model.geom_names:
-            self.modder.rand_all(name)
 
 
 def main():
