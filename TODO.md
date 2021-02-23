@@ -50,7 +50,7 @@
   - [ ] add current.
   - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)
   - [X] Sort tensorflow memory usage.
-  - [ ] Test Cpu.
+  - [ ] Test Cpu. (probably inference on GPU, learning on CPU)
   - [ ] Train simple network on Point mass system.
   - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
   - [ ] Experiment agent learning parameters. (dont know enough about the rest to make a prediction)
