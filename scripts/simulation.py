@@ -5,15 +5,14 @@ import numpy as np
 
 
 class Simulation(object):
-    def __init__(self, xml_file, goal, render):
+    def __init__(self, xml_file, s_dim, a_dim, goal, render):
         self.render = render
-        self.modder = None
 
         self.model = mj.load_model_from_path(xml_file)
         self.sim = mj.MjSim(self.model)
 
-        self.a_dim = self.sim.data.ctrl.shape[0]
-        self.s_dim = 2*self.sim.data.qpos.shape[0]
+        self.a_dim = a_dim
+        self.s_dim = s_dim
 
 
         self.goal = goal

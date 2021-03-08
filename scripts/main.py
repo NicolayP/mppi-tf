@@ -5,8 +5,8 @@ from cost_base import CostBase
 
 import numpy as np
 
+from utile import  parse_config
 import argparse
-import yaml
 import os
 
 from tqdm import tqdm
@@ -20,26 +20,6 @@ def parse_arg():
     parser.add_argument('-t', '--train', type=int, help='training step iterations', default=10)
     args = parser.parse_args()
     return args.config, args.render, args.log, args.steps, args.train
-
-def parse_config(file):
-    with open(file) as file:
-        conf = yaml.load(file, Loader=yaml.FullLoader)
-        env = conf['env']
-        s_dim = conf['state-dim']
-        a_dim = conf['action-dim']
-        goal = np.expand_dims(np.array(conf['goal']), -1)
-        dt = conf['dt']
-        tau = conf['horizon']
-        init = np.array(conf['init-act'])
-        lam = conf['lambda']
-        maxu = np.array(conf['max-a'])
-        noise = np.array(conf['noise'])
-        samples = conf['samples']
-        cost = conf['cost']
-        q = np.array(cost['w'])
-
-
-    return env, goal, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim, q
 
 def main():
     conf_file, render, log, max_steps, train_iter = parse_arg()
