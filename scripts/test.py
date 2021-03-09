@@ -201,7 +201,7 @@ class TestCost(tf.test.TestCase):
         Q=np.array([[1., 0.], [0., 1.]])
         lam=np.array([1.])
 
-        cost = CostBase(lam, Sigma, goal, Q)
+        cost = CostBase(lam, Sigma, goal, 1, Q)
 
         exp_a_c = np.array([[[2.]]])
         exp_s_c = np.array([[[1.]]])
@@ -210,8 +210,8 @@ class TestCost(tf.test.TestCase):
         exp_c = exp_a_c + exp_s_c
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state)
-        c = cost.build_step_cost_graph("", state, action, noise)
+        s_c = cost.state_cost("", state, 0)
+        c = cost.build_step_cost_graph("", state, action, noise, 0)
 
         self.assertAllClose(exp_a_c, a_c)
         self.assertAllClose(exp_s_c, s_c)
@@ -231,7 +231,7 @@ class TestCost(tf.test.TestCase):
 
         lam=np.array([1.])
 
-        cost = CostBase(lam, Sigma, goal, Q)
+        cost = CostBase(lam, Sigma, goal, 1, Q)
 
         exp_a_c = np.array([[[2.25]]])
         exp_s_c = np.array([[[51.25]]])
@@ -240,8 +240,8 @@ class TestCost(tf.test.TestCase):
 
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state)
-        c = cost.build_step_cost_graph("", state, action, noise)
+        s_c = cost.state_cost("", state, 0)
+        c = cost.build_step_cost_graph("", state, action, noise, 0)
 
 
         self.assertAllClose(exp_a_c, a_c)
@@ -272,7 +272,7 @@ class TestCost(tf.test.TestCase):
                    [0., 0., 0., 10.]])
         lam=np.array([1.])
 
-        cost = CostBase(lam, Sigma, goal, Q)
+        cost = CostBase(lam, Sigma, goal, 1, Q)
 
         exp_a_c = np.array([[[2.75]], [[4.3125]], [[-1.65]], [[0]], [[2.25]]])
         exp_s_c = np.array([[[51.25]], [[52]], [[102]], [[0.]], [[333]]])
@@ -280,8 +280,8 @@ class TestCost(tf.test.TestCase):
         exp_c = exp_a_c + exp_s_c
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state)
-        c = cost.build_step_cost_graph("", state, action, noise)
+        s_c = cost.state_cost("", state, 0)
+        c = cost.build_step_cost_graph("", state, action, noise, 0)
 
         self.assertAllClose(exp_a_c, a_c)
         self.assertAllClose(exp_s_c, s_c)
@@ -314,7 +314,7 @@ class TestController(tf.test.TestCase):
 
         self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
         model = ModelBase(self.mass, self.dt, self.s_dim, self.a_dim)
-        cost = CostBase(self.lam, self.sigma, self.goal, self.Q)
+        cost = CostBase(self.lam, self.sigma, self.goal, self.tau, self.Q)
         self.cont = ControllerBase(model,
                                    cost,
                                    self.k,

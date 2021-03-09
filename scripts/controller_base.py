@@ -14,18 +14,8 @@ import matplotlib.pyplot as plt
 import os
 
 class ControllerBase(object):
-    def __init__(self,
-                 model,
-                 cost,
-                 k=1,
-                 tau=1,
-                 dt=0.01,
-                 s_dim=1,
-                 a_dim=1,
-                 lam=1.,
-                 sigma=np.array([]),
-                 init_seq=np.array([]),
-                 log=False):
+
+    def __init__(self, model, cost, k=1, tau=1, dt=0.01, s_dim=1, a_dim=1, lam=1., sigma=np.array([]), init_seq=np.array([]), log=False):
         # TODO: Check parameters
         self.k = k
         self.tau = tau
@@ -93,9 +83,10 @@ class ControllerBase(object):
             x_next_pred = self.model.predict(x, u).numpy()[0]
 
             error = np.linalg.norm(x_next - x_next_pred, axis=-1)
-            dist = np.linalg.norm(x_next-self.cost.getGoal(), axis=-1)
+            dist = np.linalg.norm(x_next-self.cost.getGoal(self.tau-1), axis=-1)
 
             avg_cost = np.mean(cost)
+            best_cost = np.min(cost)
 
             with self.writer.as_default():
                 for i in range(int(self.s_dim/2)):
@@ -112,7 +103,13 @@ class ControllerBase(object):
                     tf.summary.scalar("goal-speed_" + self.summary_name[i],
                                       dist[2*i+1],
                                       step=self.error_step)
+                for i in range(self.a_dim):
+                    tf.summary.scalar("Input_" + self.summary_name[i],
+                                      u[0, i, 0],
+                                      step=self.error_step)
+
                 tf.summary.scalar("average_cost", avg_cost, step=self.error_step)
+                tf.summary.scalar("best_cost", best_cost, step=self.error_step)
             self.error_step += 1
 
 
@@ -214,11 +211,11 @@ class ControllerBase(object):
         with tf.name_scope("Nabla"):
             nabla = self.nabla(scope, exp)
         with tf.name_scope("Weights"):
-            weight = self.weights(scope, exp, nabla)
+            weights = self.weights(scope, exp, nabla)
         with tf.name_scope("Weighted_Noise"):
-            weighted_noise = self.weightedNoise(scope, weight, noises)
+            weighted_noises = self.weightedNoise(scope, weights, noises)
         with tf.name_scope("Sequence_update"):
-            return tf.add(self.action_seq, weighted_noise)
+            return tf.add(self.action_seq, weighted_noises), weights
 
 
     def shift(self, scope, action_seq, init, length):
@@ -232,26 +229,31 @@ class ControllerBase(object):
         return tf.slice(current, [0, 0, 0], [length, -1, -1])
 
 
+    def advanceGoal(self, scope, next):
+        self.cost.advanceGoal(scope, next)
+
+
     def buildGraph(self, scope, state):
         with tf.name_scope(scope) as scope:
             with tf.name_scope("random") as rand:
                 noises = self.buildNoise(rand)
             with tf.name_scope("Rollout") as roll:
-                cost = self.buildModel(roll, state, noises)
-
+                cost, paths = self.buildModel(roll, state, noises)
             with tf.name_scope("Update") as up:
-                self.action_seq = self.update(up, cost, noises)
-
+                self.action_seq, weights = self.update(up, cost, noises)
             with tf.name_scope("Next") as n:
                 next = self.getNext(n, self.action_seq, 1)
             with tf.name_scope("shift_and_init") as si:
                 init = self.initZeros(si, 1)
                 self.action_seq = self.shift(si, self.action_seq, init, 1)
-            return next, cost
+            return next, cost, noises, paths, weights, self.action_seq
 
 
     def buildModel(self, scope, state, noises):
         cost = tf.zeros([self.k, 1, 1], dtype=tf.float64)
+
+        paths = []
+
         for i in range(self.tau):
             with tf.name_scope("Prepare_data_" + str(i)) as pd:
                 action = self.prepareAction(pd, self.action_seq, i)
@@ -260,14 +262,17 @@ class ControllerBase(object):
             with tf.name_scope("Step_" + str(i)) as s:
                 next_state = self.model.buildStepGraph(s, state, to_apply)
             with tf.name_scope("Cost_" + str(i)) as c:
-                tmp = self.cost.build_step_cost_graph(c, next_state, action, noise)
+                tmp = self.cost.build_step_cost_graph(c, next_state, action, noise, i)
                 cost = tf.add(cost, tmp, name="tmp_cost")
             state = next_state
 
+            paths.append(tf.expand_dims(state, 1))
+        paths = tf.concat(paths, 1)
+
         with tf.name_scope("terminal_cost") as s:
-            f_cost = self.cost.build_final_step_cost_graph(s, next_state)
+            f_cost = self.cost.build_final_step_cost_graph(s, next_state, self.tau-1)
         with tf.name_scope("Rollout_cost"):
-            return tf.add(f_cost, cost, name="final_cost")
+            return tf.add(f_cost, cost, name="final_cost"), paths
 
 
     def buildNoise(self, scope):
@@ -318,9 +323,6 @@ def main():
                           a_dim=a_dim,
                           sigma=sigma)
     state = np.array([[[0.], [0.]]])
-
-
-    print(cont.next(state))
 
     writer = tf.summary.create_file_writer('../graphs/python')
 

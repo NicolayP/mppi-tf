@@ -5,7 +5,7 @@ from cost_base import CostBase
 
 import numpy as np
 
-from utile import  parse_config
+from utile import  parse_config, gif_path, plt_paths
 import argparse
 import os
 
@@ -25,7 +25,7 @@ def main():
     conf_file, render, log, max_steps, train_iter = parse_arg()
     env, goal, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim, q = parse_config(conf_file)
 
-    sim = Simulation(env, goal, render)
+    sim = Simulation(env, s_dim, a_dim, goal, render)
     state_goal = sim.getGoal()
 
     model = ModelBase(mass=5,
@@ -37,6 +37,7 @@ def main():
     cost = CostBase(lam=lam,
                     sigma=noise,
                     goal=goal,
+                    tau=tau,
                     Q=q)
 
     cont = ControllerBase(model, cost,
@@ -46,10 +47,12 @@ def main():
 
     prev_time = sim.getTime()
     time = sim.getTime()
-
+    paths_list = []
+    weights_list = []
     for step in tqdm(range(max_steps)):
         x = sim.getState()
-        u, cost = cont.next(x)
+        u, cost, noises, paths, weights, action_seq = cont.next(x)
+        #plt_paths(paths, weights, noises, action_seq, step)
         while time-prev_time < dt:
             x_next = sim.step(u)
             time=sim.getTime()
@@ -58,6 +61,7 @@ def main():
 
         if step % train_iter == 0:
             cont.train()
+    #gif_path(max_steps)
 
 if __name__ == '__main__':
     main()
