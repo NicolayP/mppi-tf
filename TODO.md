@@ -46,8 +46,15 @@
     - [X] add argument parsing for the config file, env file etc.
     This will be usefull for organised testing.
   - [X] sort rendering problem.
+  - [X] plot weighted simulated paths.
+  - [ ] look at noise distribution.
+  - [ ] plot weighted actions.
+  - [ ] add current. Needs to be parameterizable.
+  - [X] change the goal be a signal.
+  - [ ] log disturbances.
+  - [X] log inputs.
+  - [X] log best cost.
   - [ ] complexify mujoco simulation with friction and drag etc. (Need to find model for this.) (~(1-2) day)
-  - [ ] add current.
   - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)
   - [X] Sort tensorflow memory usage.
   - [ ] Test Cpu. (probably inference on GPU, learning on CPU)
@@ -66,3 +73,4 @@
   - [X] Test Cost.
   - [X] Test main.
   - [X] Test shift and init.
+  - [ ] Test cost with goal changed to signal.
