@@ -5,3 +5,4 @@ lib/contrib/lib*
 *__pycache__*
 *.pyc
 *.csv
+*.gif
