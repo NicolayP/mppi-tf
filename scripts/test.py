@@ -210,8 +210,8 @@ class TestCost(tf.test.TestCase):
         exp_c = exp_a_c + exp_s_c
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state, 0)
-        c = cost.build_step_cost_graph("", state, action, noise, 0)
+        s_c = cost.state_cost("", state)
+        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
 
         self.assertAllClose(exp_a_c, a_c)
         self.assertAllClose(exp_s_c, s_c)
@@ -240,8 +240,8 @@ class TestCost(tf.test.TestCase):
 
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state, 0)
-        c = cost.build_step_cost_graph("", state, action, noise, 0)
+        s_c = cost.state_cost("", state)
+        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
 
 
         self.assertAllClose(exp_a_c, a_c)
@@ -280,8 +280,8 @@ class TestCost(tf.test.TestCase):
         exp_c = exp_a_c + exp_s_c
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state, 0)
-        c = cost.build_step_cost_graph("", state, action, noise, 0)
+        s_c = cost.state_cost("", state)
+        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
 
         self.assertAllClose(exp_a_c, a_c)
         self.assertAllClose(exp_s_c, s_c)

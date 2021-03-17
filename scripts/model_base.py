@@ -49,7 +49,7 @@ class ModelBase(object):
         with tf.name_scope("Const") as c:
             self.create_const(c)
         self.optimizer = tf.optimizers.Adam()
-
+        self.current_loss = None
         self.name= name
 
 
@@ -75,6 +75,12 @@ class ModelBase(object):
         return tf.reduce_mean(tf.math.squared_difference(pred, gt), name="Loss")
 
 
+    def isTrained(self):
+        if (self.current_loss is not None) and self.current_loss < 5e-5:
+            return True
+        return False
+
+
     def train_step(self, gt, x, a, step, writer=None, log=False):
 
         gt = tf.convert_to_tensor(gt, dtype=tf.float64)
@@ -83,13 +89,13 @@ class ModelBase(object):
 
         with tf.GradientTape() as tape:
             tape.watch(self.mass)
-            current_loss = self.buildLossGraph(gt, x, a)
-        grads = tape.gradient(current_loss, [self.mass])
+            self.current_loss = self.buildLossGraph(gt, x, a)
+        grads = tape.gradient(self.current_loss, [self.mass])
         self.optimizer.apply_gradients(list(zip(grads, [self.mass])))
         if log:
             with writer.as_default():
                 tf.summary.scalar("mass", self.mass.numpy()[0,0], step=step)
-                tf.summary.scalar("loss", current_loss.numpy(), step=step)
+                tf.summary.scalar("loss", self.current_loss.numpy(), step=step)
 
 
     def buildStepGraph(self, scope, state, action):
@@ -151,7 +157,6 @@ def main():
     gt_plot = np.squeeze(gt, -1)
     x_plot = np.squeeze(x, -1)
     a_plot = np.squeeze(a, -1)
-    print(model.mass.numpy()[0, 0])
 
     epochs = 500
     for e in range(epochs):

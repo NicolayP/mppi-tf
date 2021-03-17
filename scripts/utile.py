@@ -28,7 +28,8 @@ def parse_config(file):
     return env, goal, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim, q
 
 
-def plt_paths(paths, weights, noises, action_seq, j):
+def plt_paths(paths, weights, noises, action_seq, j, goal_seq):
+
     n_bins=100
     best_idx = np.argmax(weights)
     #todo extract a_sape from tensor
@@ -55,8 +56,9 @@ def plt_paths(paths, weights, noises, action_seq, j):
     for i, sample in enumerate(paths):
         ax3.plot(sample[:, 0], sample[:, 2], "-b")
         ax3.plot(paths[best_idx, :, 0], paths[best_idx, :, 2], "-r")
-    c = plt.Circle((1, 0.5), 0.05, color='k')
-    ax3.add_patch(c)
+    gx = goal_seq[0, 0]
+    gy = goal_seq[2, 0]
+    ax3.scatter(gx, gy, c="k")
 
     ax4.set_xlim(-1, 60)
     ax4.set_ylim(-0.3, 0.3)
@@ -68,12 +70,15 @@ def plt_paths(paths, weights, noises, action_seq, j):
 
     #ax6.set_xlim(-0.1, 1.1)
     ax6.plot(weights.numpy().reshape(-1))
+
     plt.savefig('/tmp/mppi_{}.png'.format(j))
     plt.close("all")
 
 
-def gif_path(len):
-    with imageio.get_writer('path.gif', mode='I') as writer:
+def gif_path(len, gif):
+    if gif is None:
+        return
+    with imageio.get_writer(gif, mode='I') as writer:
         files = ["/tmp/mppi_{}.png".format(i) for i in range(len)]
         for filename in files:
             image = imageio.imread(filename)

@@ -22,7 +22,7 @@ class Simulation(object):
             self.goal=np.zeros((self.s_dim, 1))
             for i in range(int(self.s_dim/2)):
                 self.goal[2*i] = g[i]
-
+            self.viewer.add_marker(pos=np.array([0, 1 , 1]), label="shpere")
 
     def getTime(self):
         return self.sim.data.time
@@ -39,11 +39,15 @@ class Simulation(object):
         return x
 
 
-    def step(self, u):
+    def step(self, u, goal=None):
         for i in range(self.a_dim):
             self.sim.data.ctrl[i]=u[0, i]
 
         if self.render:
+            if goal is not None:
+                self.viewer.add_marker(pos=np.array([goal[0, 0], goal[2, 0] , 0.3]), size=np.array([0.05, 0.05, 0.05]), label="shpere")
+            else:
+                print("Warning no goal provided for rendering")
             self.viewer.render()
         self.sim.step()
 
