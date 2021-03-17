@@ -47,7 +47,7 @@
     This will be usefull for organised testing.
   - [X] sort rendering problem.
   - [X] plot weighted simulated paths.
-  - [ ] look at noise distribution.
+  - [X] look at noise distribution.
   - [ ] plot weighted actions.
   - [ ] add current. Needs to be parameterizable.
   - [X] change the goal be a signal.
