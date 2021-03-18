@@ -1,0 +1,20 @@
+---
+    dt: 0.1
+    env: ../envs/point_mass2d.xml
+    state-dim: 4
+    action-dim: 2
+
+    horizon: 50
+    init-act:
+      - 0.0
+      - 0.0
+    lambda: 1
+    max-a:
+      - 1.0
+      - 1.0
+    noise:
+      - - 0.25
+        - 0.0
+      - - 0.0
+        - 0.25
+    samples: 3000

@@ -1,0 +1,9 @@
+type: "elipse"
+a: 2.
+b: 1.5
+center_x: 0.
+center_y: 0.
+radius: 2.
+speed: 5.
+m_state: 100.
+m_vel: 1.

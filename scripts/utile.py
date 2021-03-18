@@ -13,7 +13,6 @@ def parse_config(file):
         env = conf['env']
         s_dim = conf['state-dim']
         a_dim = conf['action-dim']
-        goal = np.expand_dims(np.array(conf['goal']), -1)
         dt = conf['dt']
         tau = conf['horizon']
         init = np.array(conf['init-act'])
@@ -21,11 +20,9 @@ def parse_config(file):
         maxu = np.array(conf['max-a'])
         noise = np.array(conf['noise'])
         samples = conf['samples']
-        cost = conf['cost']
-        q = np.array(cost['w'])
 
 
-    return env, goal, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim, q
+    return env, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim
 
 
 def plt_paths(paths, weights, noises, action_seq, j, goal_seq):

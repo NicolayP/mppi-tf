@@ -1,0 +1,16 @@
+---
+    
+    dt: 0.1
+    env: ../envs/point_mass1d.xml
+    state-dim: 2
+    action-dim: 1
+
+    horizon: 50
+    init-act:
+      - 0.0
+    lambda: 1
+    max-a:
+      - 1.0
+    noise:
+      - [0.25]
+    samples: 3000
