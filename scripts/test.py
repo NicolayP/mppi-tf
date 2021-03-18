@@ -1,6 +1,7 @@
 import tensorflow as tf
 from model_base import ModelBase
 from cost_base import CostBase
+from static_cost import StaticCost
 from controller_base import ControllerBase
 import numpy as np
 
@@ -201,21 +202,17 @@ class TestCost(tf.test.TestCase):
         Q=np.array([[1., 0.], [0., 1.]])
         lam=np.array([1.])
 
-        cost = CostBase(lam, Sigma, goal, 1, Q)
+        cost = CostBase(lam, Sigma, 1)
 
         exp_a_c = np.array([[[2.]]])
         exp_s_c = np.array([[[1.]]])
 
 
-        exp_c = exp_a_c + exp_s_c
+        with self.assertRaises(NotImplementedError):
+            s_c = cost.state_cost("", state)
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state)
-        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
-
         self.assertAllClose(exp_a_c, a_c)
-        self.assertAllClose(exp_s_c, s_c)
-        self.assertAllClose(exp_c, c)
 
     def testStepCost_s4_a2_l1(self):
 
@@ -231,23 +228,16 @@ class TestCost(tf.test.TestCase):
 
         lam=np.array([1.])
 
-        cost = CostBase(lam, Sigma, goal, 1, Q)
+        cost = CostBase(lam, Sigma, 1)
 
         exp_a_c = np.array([[[2.25]]])
         exp_s_c = np.array([[[51.25]]])
 
-        exp_c = exp_a_c + exp_s_c
-
+        with self.assertRaises(NotImplementedError):
+            s_c = cost.state_cost("", state)
 
         a_c = cost.action_cost("", action, noise)
-        s_c = cost.state_cost("", state)
-        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
-
-
         self.assertAllClose(exp_a_c, a_c)
-        self.assertAllClose(exp_s_c, s_c)
-        self.assertAllClose(exp_c, c)
-
 
     def testStepCost_s4_a3_l1(self):
 
@@ -272,7 +262,104 @@ class TestCost(tf.test.TestCase):
                    [0., 0., 0., 10.]])
         lam=np.array([1.])
 
-        cost = CostBase(lam, Sigma, goal, 1, Q)
+        cost = CostBase(lam, Sigma, 1)
+
+        exp_a_c = np.array([[[2.75]], [[4.3125]], [[-1.65]], [[0]], [[2.25]]])
+        exp_s_c = np.array([[[51.25]], [[52]], [[102]], [[0.]], [[333]]])
+
+        with self.assertRaises(NotImplementedError):
+            s_c = cost.state_cost("", state)
+
+        a_c = cost.action_cost("", action, noise)
+
+        self.assertAllClose(exp_a_c, a_c)
+
+
+class TestStaticCost(tf.test.TestCase):
+    def setUp(self):
+        self.dt=0.1
+
+    def testStepStaticCost_s2_a2_l1(self):
+
+        state=np.array([[[0.], [1.]]])
+        goal=np.array([[1.], [1.]])
+        action=np.array([[1.], [1.]])
+        noise=np.array([[[1.], [1.]]])
+        Sigma=np.array([[1., 0.], [0., 1.]])
+        Q=np.array([[1., 0.], [0., 1.]])
+        lam=np.array([1.])
+
+        cost = StaticCost(lam, Sigma, goal, 1, Q)
+
+        exp_a_c = np.array([[[2.]]])
+        exp_s_c = np.array([[[1.]]])
+
+
+        exp_c = exp_a_c + exp_s_c
+
+        a_c = cost.action_cost("", action, noise)
+        s_c = cost.state_cost("", state)
+        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
+
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_s_c, s_c)
+        self.assertAllClose(exp_c, c)
+
+    def testStepStaticCost_s4_a2_l1(self):
+
+        state=np.array([[[0.], [0.5], [2.], [0.]]])
+        goal=np.array([[1.], [1.], [1.], [2.]])
+        action=np.array([[0.5], [2.]])
+        noise=np.array([[[0.5], [1.]]])
+        Sigma=np.array([[1., 0.], [0., 1.]])
+        Q=np.array([[1., 0., 0., 0.],
+                   [0., 1., 0., 0.],
+                   [0., 0., 10., 0.],
+                   [0., 0., 0., 10.]])
+
+        lam=np.array([1.])
+
+        cost = StaticCost(lam, Sigma, goal, 1, Q)
+
+        exp_a_c = np.array([[[2.25]]])
+        exp_s_c = np.array([[[51.25]]])
+
+        exp_c = exp_a_c + exp_s_c
+
+
+        a_c = cost.action_cost("", action, noise)
+        s_c = cost.state_cost("", state)
+        c, _, _ = cost.build_step_cost_graph("", state, action, noise)
+
+
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_s_c, s_c)
+        self.assertAllClose(exp_c, c)
+
+    def testStepStaticCost_s4_a3_l1(self):
+
+        state=np.array([[[0.], [0.5], [2.], [0.]],
+                        [[0.], [2.], [0.], [0.]],
+                        [[10.], [2.], [2.], [3.]],
+                        [[1.], [1.], [1.], [2.]],
+                        [[3.], [4.], [5.], [6.]]])
+        goal=np.array([[1.], [1.], [1.], [2.]])
+        action=np.array([[0.5], [2.], [0.25]])
+        noise=np.array([[[0.5], [1.], [2.]],
+                        [[0.5], [2.], [0.25]],
+                        [[-2], [-0.2], [-1]],
+                        [[0.], [0.], [0.]],
+                        [[1.], [0.5], [3.]]])
+        Sigma=np.array([[1., 0., 0.],
+                        [0., 1., 0.],
+                        [0., 0., 1.]])
+        Q=np.array([[1., 0., 0., 0.],
+                   [0., 1., 0., 0.],
+                   [0., 0., 10., 0.],
+                   [0., 0., 0., 10.]])
+        lam=np.array([1.])
+
+        cost = StaticCost(lam, Sigma, goal, 1, Q)
 
         exp_a_c = np.array([[[2.75]], [[4.3125]], [[-1.65]], [[0]], [[2.25]]])
         exp_s_c = np.array([[[51.25]], [[52]], [[102]], [[0.]], [[333]]])
@@ -314,7 +401,7 @@ class TestController(tf.test.TestCase):
 
         self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
         model = ModelBase(self.mass, self.dt, self.s_dim, self.a_dim)
-        cost = CostBase(self.lam, self.sigma, self.goal, self.tau, self.Q)
+        cost = StaticCost(self.lam, self.sigma, self.goal, self.tau, self.Q)
         self.cont = ControllerBase(model,
                                    cost,
                                    self.k,
