@@ -2,6 +2,7 @@ import tensorflow as tf
 from model_base import ModelBase
 from cost_base import CostBase
 from static_cost import StaticCost
+from elipse_cost import ElipseCost
 from controller_base import ControllerBase
 import numpy as np
 
@@ -373,6 +374,67 @@ class TestStaticCost(tf.test.TestCase):
         self.assertAllClose(exp_a_c, a_c)
         self.assertAllClose(exp_s_c, s_c)
         self.assertAllClose(exp_c, c)
+
+
+class TestElipseCost(tf.test.TestCase):
+    def setUp(self):
+        self.dt=0.1
+        self.tau=1
+        self.a=1
+        self.b=1
+        self.cx=0
+        self.cy=0
+        self.r=1
+        self.s=1
+        self.m_s=1
+        self.m_v=1
+
+
+    def testStepElipseCost_s4_l1_k1(self):
+
+        state=np.array([[[0.], [0.5], [1.], [0.]]])
+        sigma=np.array([[1., 0.], [0., 1.]])
+        lam=np.array([1.])
+
+        cost = ElipseCost(lam,
+                          sigma,
+                          self.tau,
+                          self.a, self.b, self.cx, self.cy,
+                          self.s, self.m_s, self.m_v)
+
+        exp_s_c = np.array([[[0.25]]])
+
+        s_c = cost.state_cost("", state)
+
+
+        self.assertAllClose(exp_s_c, s_c)
+
+    def testStepElipseCost_s4_l1_k5(self):
+
+        state=np.array([[[0.], [0.5], [1.], [0.]],
+                        [[0.], [2.], [0.], [0.]],
+                        [[10.], [2.], [2.], [3.]],
+                        [[1.], [1.], [1.], [2.]],
+                        [[3.], [4.], [5.], [6.]]])
+        sigma=np.array([[1., 0., 0.],
+                        [0., 1., 0.],
+                        [0., 0., 1.]])
+        lam=np.array([1.])
+
+        cost = ElipseCost(lam,
+                          sigma,
+                          self.tau,
+                          self.a, self.b, self.cx, self.cy,
+                          self.s, self.m_s, self.m_v)
+
+        exp_s_c = np.array([[[0.25]],
+                            [[2]],
+                            [[103+6.788897449072021]],
+                            [[1+1.5278640450004208]],
+                            [[33+38.57779489814404]]])
+
+        s_c = cost.state_cost("", state)
+        self.assertAllClose(exp_s_c, s_c)
 
 
 class TestController(tf.test.TestCase):
