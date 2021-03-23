@@ -24,7 +24,7 @@ def parse_arg():
 
 def log_straight():
     config_file, render, log = parse_arg()
-    env, _, dt, _, _, _, _, _, _, s_dim, a_dim, _ = parse_config(config_file)
+    env, _, dt, _, _, _, _, _, _, _, _, s_dim, a_dim, _ = parse_config(config_file)
     sim = Simulation(env, s_dim, a_dim, None, True)
     u = np.ones((1, a_dim, 1))*3
     length = 500

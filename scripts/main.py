@@ -5,7 +5,7 @@ from cost import getCost
 
 import numpy as np
 
-from utile import  parse_config, gif_path, plt_paths
+from utile import  parse_config, gif_path, plt_paths, plt_sgf
 import argparse
 import os
 
@@ -13,12 +13,6 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
-def next_goal(x, y, r, w, t):
-    x = (x + r*np.cos(w*t))
-    vx = (-r*w*np.sin(w*t))
-    y = (y + r*np.sin(w*t))
-    vy = (r*w*np.cos(w*t))
-    return np.hstack([x, vx, y, vy]).reshape(-1, 1)
 
 def parse_arg():
     parser = argparse.ArgumentParser(prog="mppi", description="mppi-tensorflow")
@@ -32,10 +26,9 @@ def parse_arg():
     args = parser.parse_args()
     return args.config, args.task, args.render, args.log, args.steps, args.train, args.gif
 
-
 def main():
     conf_file, task_file, render, log, max_steps, train_iter, gif = parse_arg()
-    env, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim = parse_config(conf_file)
+    env, dt, tau, init, lam, gamma, upsilon, maxu, noise, samples, s_dim, a_dim = parse_config(conf_file)
 
     sim = Simulation(env, s_dim, a_dim, None, render)
 
@@ -45,12 +38,11 @@ def main():
                       act_dim=a_dim,
                       name=os.path.splitext(os.path.basename(env))[0])
 
-    cost = getCost(task_file, lam, noise, tau)
+    cost_fc = getCost(task_file, lam, gamma, upsilon, noise, tau)
 
-    cont = ControllerBase(model, cost,
+    cont = ControllerBase(model, cost_fc,
                           k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam,
                           sigma=noise, log=log, config_file=conf_file)
-
 
     prev_time = sim.getTime()
     time = sim.getTime()
@@ -60,16 +52,45 @@ def main():
         x = sim.getState()
         u, cost, cost_state, cost_act, noises, paths, weights, action_seq = cont.next(x)
         if gif is not None:
-            plt_paths(paths, weights, noises, action_seq, step, cont.getGoal())
+            plt_paths(paths, weights, noises, action_seq, step, cost_fc)
         while time-prev_time < dt:
             x_next = sim.step(u)
             time=sim.getTime()
         prev_time = time
-        cont.save(x, u, x_next, cost, cost_state, cost_act)
+        cont.save(x, u, x_next, cost, cost_state, cost_act, weights)
 
         if step % train_iter == 0:
             cont.train()
     gif_path(max_steps, gif)
+
+
+def plot_sgf():
+    conf_file, task_file, render, log, max_steps, train_iter, gif = parse_arg()
+    env, dt, tau, init, lam, gamma, upsilon, maxu, noise, samples, s_dim, a_dim = parse_config(conf_file)
+
+    sim = Simulation(env, s_dim, a_dim, None, False)
+
+    model = ModelBase(mass=5,
+                      dt=dt,
+                      state_dim=s_dim,
+                      act_dim=a_dim,
+                      name=os.path.splitext(os.path.basename(env))[0])
+
+    cost_fc = getCost(task_file, lam, gamma, upsilon, noise, tau)
+
+    cont = ControllerBase(model, cost_fc,
+                          k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam,
+                          sigma=noise, log=log, config_file=conf_file)
+
+    prev_time = sim.getTime()
+    time = sim.getTime()
+    paths_list = []
+    weights_list = []
+
+    x = sim.getState()
+    u, cost, cost_state, cost_act, noises, paths, weights, action_seq = cont.next(x)
+    plt_sgf(action_seq)
+
 
 if __name__ == '__main__':
     main()

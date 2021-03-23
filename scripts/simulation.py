@@ -47,7 +47,8 @@ class Simulation(object):
             if goal is not None:
                 self.viewer.add_marker(pos=np.array([goal[0, 0], goal[2, 0] , 0.3]), size=np.array([0.05, 0.05, 0.05]), label="shpere")
             else:
-                print("Warning no goal provided for rendering")
+                pass
+                #print("Warning no goal provided for rendering")
             self.viewer.render()
         self.sim.step()
 
