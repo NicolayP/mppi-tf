@@ -13,6 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 from shutil import copyfile
+import scipy.signal
 
 
 class ControllerBase(object):
@@ -95,13 +96,13 @@ class ControllerBase(object):
             summary_ops_v2.graph(graph.as_graph_def()) # visualize
 
 
-    def save(self, x, u, x_next, cost, cost_state, cost_act):
+    def save(self, x, u, x_next, cost, cost_state, cost_act, weights):
         self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
         if self.log:
             x_next_pred = self.model.predict(x, u).numpy()[0]
 
             error = np.linalg.norm(x_next - x_next_pred, axis=-1)
-            dist = np.linalg.norm(x_next-self.cost.getGoal(), axis=-1)
+            dist_x, dist_v = self.cost.dist(x_next)
 
             avg_cost = np.mean(cost)
             best_id = np.argmin(cost)
@@ -123,17 +124,13 @@ class ControllerBase(object):
                                       error[2*i+1],
                                       step=self.error_step)
 
-                    tf.summary.scalar("goal-dist_" + self.summary_name[i],
-                                      dist[2*i],
-                                      step=self.error_step)
-                    tf.summary.scalar("goal-speed_" + self.summary_name[i],
-                                      dist[2*i+1],
-                                      step=self.error_step)
                 for i in range(self.a_dim):
                     tf.summary.scalar("Input_" + self.summary_name[i],
                                       u[0, i, 0],
                                       step=self.error_step)
 
+                tf.summary.scalar("goal-dist", dist_x, step=self.error_step)
+                tf.summary.scalar("goal-speed", dist_v, step=self.error_step)
                 tf.summary.scalar("average_cost", avg_cost, step=self.error_step)
                 tf.summary.scalar("best_cost", best_cost, step=self.error_step)
                 #tf.summary.scalar("avg_ratio", avg_ratio, step=self.error_step)
@@ -142,6 +139,7 @@ class ControllerBase(object):
                 tf.summary.scalar("best_state", best_state, step=self.error_step)
                 tf.summary.scalar("avg_act", avg_act, step=self.error_step)
                 tf.summary.scalar("avg_state", avg_state, step=self.error_step)
+                tf.summary.histogram("Controller_weights", weights, self.error_step)
             self.error_step += 1
 
 
@@ -201,7 +199,12 @@ class ControllerBase(object):
 
     def next(self, state):
         next, cost, cost_state, cost_act, noises, paths, weights, action_seq = self._next(state, self.action_seq)
-        self.action_seq = action_seq.numpy()
+        # FIRST GUESS window_length = 5, we don't want to filter out to much since we expect smooth inputs, need to be played around with.
+        # FIRST GUESS polyorder = 3, think that a 3rd degree polynome is enough for this.
+
+        action_seq = np.expand_dims(scipy.signal.savgol_filter(action_seq.numpy()[:, :, 0], 29, 9, deriv=0, delta=1.0, axis=0), axis=-1)
+        self.action_seq = action_seq
+
         return next, cost, cost_state, cost_act, noises, paths, weights, action_seq
 
 
