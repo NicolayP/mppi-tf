@@ -6,6 +6,7 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 import imageio
+import scipy.signal
 
 def parse_config(file):
     with open(file) as file:
@@ -20,12 +21,27 @@ def parse_config(file):
         maxu = np.array(conf['max-a'])
         noise = np.array(conf['noise'])
         samples = conf['samples']
+        gamma = conf['gamma']
+        upsilon = conf['upsilon']
 
 
-    return env, dt, tau, init, lam, maxu, noise, samples, s_dim, a_dim
+    return env, dt, tau, init, lam, gamma, upsilon, maxu, noise, samples, s_dim, a_dim
 
 
-def plt_paths(paths, weights, noises, action_seq, j, goal_seq):
+def plt_sgf(action_seq):
+    print(action_seq.numpy()[:, :, 0].shape)
+    fig = plt.figure()
+    ax1 = plt.subplot(121)
+    ax2 = plt.subplot(122)
+
+    for i in np.arange(9,49,4):
+        y = scipy.signal.savgol_filter(action_seq.numpy()[:, :, 0], i, 7, deriv=0, delta=1.0, axis=0)
+        ax1.plot(y[:,0], label="{}".format(i))
+        ax2.plot(y[:,1], label="{}".format(i))
+    plt.legend()
+    plt.show()
+
+def plt_paths(paths, weights, noises, action_seq, j, cost):
 
     n_bins=100
     best_idx = np.argmax(weights)
@@ -48,13 +64,13 @@ def plt_paths(paths, weights, noises, action_seq, j, goal_seq):
     ax2.set_ylim(-0.1, 2)
     ax2.hist(noises[:, 1], bins=n_bins, density=True)
 
-    ax3.set_ylim(-2, 2)
-    ax3.set_xlim(-2, 2)
+    ax3.set_ylim(-5, 5)
+    ax3.set_xlim(-5, 5)
     for i, sample in enumerate(paths):
         ax3.plot(sample[:, 0], sample[:, 2], "-b")
         ax3.plot(paths[best_idx, :, 0], paths[best_idx, :, 2], "-r")
-    gx = goal_seq[0, 0]
-    gy = goal_seq[2, 0]
+
+    gx, gy = cost.draw_goal()
     ax3.scatter(gx, gy, c="k")
 
     ax4.set_xlim(-1, 60)

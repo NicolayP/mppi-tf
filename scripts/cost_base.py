@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class CostBase(object):
-    def __init__(self, lam, sigma, tau):
+    def __init__(self, lam, gamma, upsilon, sigma, tau):
 
         with tf.name_scope("Cost_setup") as cs:
             self.lam = lam
+            self.gamma = gamma
+            self.upsilon = upsilon
             self.tau = tau
             s = tf.convert_to_tensor(sigma, dtype=tf.float64)
             self.invSig = tf.linalg.inv(s)
@@ -31,6 +33,27 @@ class CostBase(object):
 
 
     def action_cost(self, scope, action, noise):
-        noise_cost = tf.linalg.matmul(self.invSig, noise, name="noise")
-        action_cost = tf.linalg.matmul(action, noise_cost, transpose_a=True, name="action")
-        return tf.math.multiply(tf.cast(self.lam, dtype=tf.float64), action_cost)
+        rhs_noise_cost = tf.linalg.matmul(self.invSig, noise, name="rhs_noise")
+        rhs_action_cost = tf.linalg.matmul(self.invSig, action, name="rhs_action")
+        # \u^{T}_t \Sigma^{-1} \epsilon_t
+        mix_cost = tf.linalg.matmul(action, rhs_noise_cost, transpose_a=True, name="mix")
+        # \epsilon^{T}_t \Sigma^{-1} \epsilon_t
+        noise_cost = tf.linalg.matmul(noise, rhs_noise_cost, transpose_a=True, name="noise")
+        # \u^{T}_t \Sigma^{-1} \u_t
+        action_cost = tf.linalg.matmul(action, rhs_action_cost, transpose_a=True, name="action")
+
+        # \gamma [action_cost + 2mix_cost]
+        control_cost = tf.math.multiply(tf.cast(self.gamma, dtype=tf.float64),
+            tf.add(action_cost, tf.math.multiply(tf.cast(2., dtype=tf.float64), mix_cost)))
+        # \lambda(1-\upsilon^{-1})noise_cost
+        pert_cost = tf.math.multiply(tf.cast(self.lam*(1.-1./self.upsilon), dtype=tf.float64),
+            noise_cost)
+        # \frac{1}{2}*(control_cost+pert_cost)
+        return tf.math.multiply(tf.cast(0.5, dtype=tf.float64), tf.add(control_cost, pert_cost))
+
+    def draw_goal(self):
+        raise NotImplementedError
+
+
+    def dist(self, state):
+        raise NotImplementedError
