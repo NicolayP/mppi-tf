@@ -48,7 +48,7 @@ class ModelBase(object):
         self.mass = tf.Variable([[mass]], name="mass", trainable=True, dtype=tf.float64)
         with tf.name_scope("Const") as c:
             self.create_const(c)
-        self.optimizer = tf.optimizers.Adam()
+        self.optimizer = tf.optimizers.Adam(learning_rate=1)
         self.current_loss = None
         self.name= name
 
@@ -71,7 +71,6 @@ class ModelBase(object):
 
     def buildLossGraph(self, gt, x, a):
         pred = self.buildStepGraph("train", x, a)
-        tmp = tf.math.squared_difference(pred, gt)
         return tf.reduce_mean(tf.math.squared_difference(pred, gt), name="Loss")
 
 
