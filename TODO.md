@@ -58,6 +58,7 @@
   - [X] log inputs.
   - [X] log best cost.
   - [X] Sort tensorflow memory usage.
+  - [X] normailze cost?
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.

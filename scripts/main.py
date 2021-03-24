@@ -42,7 +42,7 @@ def main():
 
     cont = ControllerBase(model, cost_fc,
                           k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam,
-                          sigma=noise, log=log, config_file=conf_file, task_file=task_file)
+                          sigma=noise, log=log, normalize_cost=True, config_file=conf_file, task_file=task_file)
 
     prev_time = sim.getTime()
     time = sim.getTime()

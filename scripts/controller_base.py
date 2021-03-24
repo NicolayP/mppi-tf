@@ -29,6 +29,7 @@ class ControllerBase(object):
                  lam=1.,
                  sigma=np.array([]),
                  init_seq=np.array([]),
+                 normalize_cost=False,
                  log=False,
                  config_file=None,
                  task_file=None):
@@ -39,7 +40,7 @@ class ControllerBase(object):
         self.s_dim = s_dim
         self.a_dim = a_dim
         self.lam = lam
-
+        self.normalize_cost = normalize_cost
         self.log=log
 
 
@@ -195,14 +196,14 @@ class ControllerBase(object):
 
 
     @tf.function
-    def _next(self, state, action_seq):
+    def _next(self, state, action_seq, normalize_cost=False):
         with tf.name_scope("Controller") as cont:
             state=tf.convert_to_tensor(state, dtype=tf.float64, name=cont)
-            return self.buildGraph(cont, state, action_seq)
+            return self.buildGraph(cont, state, action_seq, normalize=normalize_cost)
 
 
     def next(self, state):
-        next, cost, cost_state, cost_act, noises, paths, weights, action_seq, nabla = self._next(state, self.action_seq)
+        next, cost, cost_state, cost_act, noises, paths, weights, action_seq, nabla = self._next(state, self.action_seq, self.normalize_cost)
         # FIRST GUESS window_length = 5, we don't want to filter out to much since we expect smooth inputs, need to be played around with.
         # FIRST GUESS polyorder = 3, think that a 3rd degree polynome is enough for this.
 
@@ -217,10 +218,16 @@ class ControllerBase(object):
         return tf.reduce_min(cost, 0)
 
 
-    def expArg(self, scope, cost, beta):
+    def expArg(self, scope, cost, beta, normalize=False):
+        shift = tf.math.subtract(cost, beta)
+
+        if normalize:
+            max = tf.reduce_max(shift, 0)
+            return tf.math.multiply(np.array([-1./self.lam]),
+                                    tf.divide(shift, max))
         # shapes: in [k, 1, 1], [1, 1]; out [k, 1, 1]
         return tf.math.multiply(np.array([-1./self.lam]),
-                                tf.math.subtract(cost, beta))
+                                shift)
 
 
     def exp(self, scope, arg):
@@ -253,12 +260,12 @@ class ControllerBase(object):
         return tf.squeeze(tf.slice(noises, [0, timestep, 0, 0], [-1, 1, -1, -1]), 1)
 
 
-    def update(self, scope, cost, noises):
+    def update(self, scope, cost, noises, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, a_dim, 1]; out [tau, a_dim, 1]
         with tf.name_scope("Beta"):
             beta = self.beta(scope, cost)
         with tf.name_scope("Expodential_arg"):
-            exp_arg = self.expArg(scope, cost, beta)
+            exp_arg = self.expArg(scope, cost, beta, normalize=normalize)
         with tf.name_scope("Expodential"):
             exp = self.exp(scope, exp_arg)
         with tf.name_scope("Nabla"):
@@ -286,14 +293,14 @@ class ControllerBase(object):
         self.cost.setGoal(next)
 
 
-    def buildGraph(self, scope, state, action_seq):
+    def buildGraph(self, scope, state, action_seq, normalize=False):
         with tf.name_scope(scope) as scope:
             with tf.name_scope("random") as rand:
                 noises = self.buildNoise(rand)
             with tf.name_scope("Rollout") as roll:
                 cost, paths, cost_state, cost_act = self.buildModel(roll, state, noises, action_seq)
             with tf.name_scope("Update") as up:
-                action_seq, weights, nabla = self.update(up, cost, noises)
+                action_seq, weights, nabla = self.update(up, cost, noises, normalize=normalize)
             with tf.name_scope("Next") as n:
                 next = self.getNext(n, action_seq, 1)
             with tf.name_scope("shift_and_init") as si:
