@@ -48,15 +48,21 @@
   - [X] sort rendering problem.
   - [X] plot weighted simulated paths.
   - [X] look at noise distribution.
-  - [ ] plot weighted actions.
-  - [ ] add current. Needs to be parameterizable.
+  - [X] log weights.
+  - [X] log nabla in % of K.
   - [X] change the goal be a signal.
-  - [ ] log disturbances.
+  - [X] look at signal filtering for control input.
+  - [X] decoupling temprature from control cost.
+  - [X] implement covariance decoupling between natural noise and artifical noise. Simple variance multiplier first.
+  - [X] save task_config file.
   - [X] log inputs.
   - [X] log best cost.
+  - [X] Sort tensorflow memory usage.
+  - [ ] tune filtering process.
+  - [ ] log disturbances.
+  - [ ] add current. Needs to be parameterizable.
   - [ ] complexify mujoco simulation with friction and drag etc. (Need to find model for this.) (~(1-2) day)
   - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)
-  - [X] Sort tensorflow memory usage.
   - [ ] Test Cpu. (probably inference on GPU, learning on CPU)
   - [ ] Train simple network on Point mass system.
   - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
@@ -73,4 +79,6 @@
   - [X] Test Cost.
   - [X] Test main.
   - [X] Test shift and init.
+  - [ ] Test ellips cost.
+  - [ ] Test gamma and upsilon.
   - [ ] Test cost with goal changed to signal.
