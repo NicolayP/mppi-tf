@@ -30,7 +30,8 @@ class ControllerBase(object):
                  sigma=np.array([]),
                  init_seq=np.array([]),
                  log=False,
-                 config_file=None):
+                 config_file=None,
+                 task_file=None):
         # TODO: Check parameters
         self.k = k
         self.tau = tau
@@ -85,8 +86,10 @@ class ControllerBase(object):
             self.summary_name = ["x", "y", "z"]
 
             if config_file is not None:
-                dest = os.path.join(logdir, "config.yaml")
-                copyfile(config_file, dest)
+                conf_dest = os.path.join(logdir, "config.yaml")
+                task_dest = os.path.join(logdir, "task.yaml")
+                copyfile(config_file, conf_dest)
+                copyfile(task_file, task_dest)
 
 
     def save_graph(self):
@@ -96,7 +99,7 @@ class ControllerBase(object):
             summary_ops_v2.graph(graph.as_graph_def()) # visualize
 
 
-    def save(self, x, u, x_next, cost, cost_state, cost_act, weights):
+    def save(self, x, u, x_next, cost, cost_state, cost_act, weights, nabla):
         self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
         if self.log:
             x_next_pred = self.model.predict(x, u).numpy()[0]
@@ -139,6 +142,7 @@ class ControllerBase(object):
                 tf.summary.scalar("best_state", best_state, step=self.error_step)
                 tf.summary.scalar("avg_act", avg_act, step=self.error_step)
                 tf.summary.scalar("avg_state", avg_state, step=self.error_step)
+                tf.summary.scalar("nabla_percent", nabla[0,0]/self.k, step=self.error_step)
                 tf.summary.histogram("Controller_weights", weights, self.error_step)
             self.error_step += 1
 
@@ -198,14 +202,14 @@ class ControllerBase(object):
 
 
     def next(self, state):
-        next, cost, cost_state, cost_act, noises, paths, weights, action_seq = self._next(state, self.action_seq)
+        next, cost, cost_state, cost_act, noises, paths, weights, action_seq, nabla = self._next(state, self.action_seq)
         # FIRST GUESS window_length = 5, we don't want to filter out to much since we expect smooth inputs, need to be played around with.
         # FIRST GUESS polyorder = 3, think that a 3rd degree polynome is enough for this.
 
         action_seq = np.expand_dims(scipy.signal.savgol_filter(action_seq.numpy()[:, :, 0], 29, 9, deriv=0, delta=1.0, axis=0), axis=-1)
         self.action_seq = action_seq
 
-        return next, cost, cost_state, cost_act, noises, paths, weights, action_seq
+        return next, cost, cost_state, cost_act, noises, paths, weights, action_seq, nabla
 
 
     def beta(self, scope, cost):
@@ -264,7 +268,7 @@ class ControllerBase(object):
         with tf.name_scope("Weighted_Noise"):
             weighted_noises = self.weightedNoise(scope, weights, noises)
         with tf.name_scope("Sequence_update"):
-            return tf.add(self.action_seq, weighted_noises), weights
+            return tf.add(self.action_seq, weighted_noises), weights, nabla
 
 
     def shift(self, scope, action_seq, init, length):
@@ -289,13 +293,13 @@ class ControllerBase(object):
             with tf.name_scope("Rollout") as roll:
                 cost, paths, cost_state, cost_act = self.buildModel(roll, state, noises, action_seq)
             with tf.name_scope("Update") as up:
-                action_seq, weights = self.update(up, cost, noises)
+                action_seq, weights, nabla = self.update(up, cost, noises)
             with tf.name_scope("Next") as n:
                 next = self.getNext(n, action_seq, 1)
             with tf.name_scope("shift_and_init") as si:
                 init = self.initZeros(si, 1)
                 action_seq = self.shift(si, action_seq, init, 1)
-            return next, cost, cost_state, cost_act, noises, paths, weights, action_seq
+            return next, cost, cost_state, cost_act, noises, paths, weights, action_seq, nabla
 
 
     def buildModel(self, scope, state, noises, action_seq):
@@ -332,7 +336,7 @@ class ControllerBase(object):
     def buildNoise(self, scope):
         # scales: in []; out [k, tau, a_dim, 1]
         rng = tf.random.normal(shape=(self.k, self.tau, self.a_dim, 1),
-                               stddev=1.,
+                               stddev=tf.linalg.diag_part(self.sigma)[0], # Change this to simga
                                mean=0.,
                                dtype=tf.float64,
                                seed=1)

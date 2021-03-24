@@ -42,7 +42,7 @@ def main():
 
     cont = ControllerBase(model, cost_fc,
                           k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam,
-                          sigma=noise, log=log, config_file=conf_file)
+                          sigma=noise, log=log, config_file=conf_file, task_file=task_file)
 
     prev_time = sim.getTime()
     time = sim.getTime()
@@ -50,14 +50,14 @@ def main():
     weights_list = []
     for step in tqdm(range(max_steps)):
         x = sim.getState()
-        u, cost, cost_state, cost_act, noises, paths, weights, action_seq = cont.next(x)
+        u, cost, cost_state, cost_act, noises, paths, weights, action_seq, nabla = cont.next(x)
         if gif is not None:
             plt_paths(paths, weights, noises, action_seq, step, cost_fc)
         while time-prev_time < dt:
             x_next = sim.step(u)
             time=sim.getTime()
         prev_time = time
-        cont.save(x, u, x_next, cost, cost_state, cost_act, weights)
+        cont.save(x, u, x_next, cost, cost_state, cost_act, weights, nabla)
 
         if step % train_iter == 0:
             cont.train()
