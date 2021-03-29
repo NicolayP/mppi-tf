@@ -1,7 +1,7 @@
 from cost_base import CostBase
 import numpy as np
 import tensorflow as tf
-
+from logger import addItem
 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
@@ -20,6 +20,7 @@ class ElipseCost(CostBase):
         self.mv = tf.cast(m_vel, tf.float64)
 
     def state_cost(self, scope, state):
+        return_dict = {}
         x = tf.slice(state, [0, 0, 0], [-1, 1, -1])
         y = tf.slice(state, [0, 2, 0], [-1, 1, -1])
         vx = tf.slice(state, [0, 1, 0], [-1, 1, -1])
@@ -28,8 +29,15 @@ class ElipseCost(CostBase):
         diffx = tf.divide(tf.math.subtract(x, self.cx, name="diff"), self.a)
         diffy = tf.divide(tf.math.subtract(y, self.cy, name="diff"), self.b)
         d = tf.abs(tf.pow(diffx, 2) + tf.pow(diffy, 2) - 1)
+        d = tf.math.multiply(self.mx, d)
         dv = tf.pow(v - self.gv, 2)
-        return tf.add(tf.math.multiply(self.mx, d), tf.math.multiply(self.mv, dv))
+        dv = tf.math.multiply(self.mv, dv)
+        state_cost = tf.add(d, dv)
+
+        return_dict["speed_cost"]=dv
+        return_dict["position_cost"]=d
+        return_dict["state_cost"]=state_cost
+        return return_dict
 
     def draw_goal(self):
         alpha = np.linspace(0, 2*np.pi, 1000)
@@ -46,6 +54,7 @@ class ElipseCost(CostBase):
         x_cost = (((x-self.cx)/self.a)**2 + ((y-self.cy)/self.b)**2) - 1
         v_cost = np.abs(v-self.gv)
         return x_cost[0], v_cost[0]
+
 
 
 def main():

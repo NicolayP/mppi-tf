@@ -3,7 +3,7 @@ import numpy as np
 from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
-
+from logger import addItem
 
 
 

@@ -3,6 +3,7 @@ import numpy as np
 from datetime import datetime
 import pandas as pd
 import matplotlib.pyplot as plt
+from logger import addItem
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class CostBase(object):
@@ -18,11 +19,26 @@ class CostBase(object):
 
 
     def build_step_cost_graph(self, scope, state, action, noise):
-        with tf.name_scope("step_cost") as s:
-            state_cost = self.state_cost(s, state)
-            action_cost = self.action_cost(s, action, noise)
-            return tf.add(state_cost, action_cost, name="add"), state_cost, action_cost
+        return_dict = {}
 
+        with tf.name_scope("step_cost") as s:
+            state_cost_dict = self.state_cost(s, state)
+            action_cost = self.action_cost(s, action, noise)
+            step_cost = tf.add(state_cost_dict["state_cost"], action_cost, name="add")
+
+
+        return_dict["action_cost"]=action_cost
+        return_dict["cost"]=step_cost
+        return_dict = {**return_dict, **state_cost_dict}
+        return return_dict
+
+    def add_cost(self, scope, input_dict, current_dict):
+        for key in input_dict:
+            if key in current_dict.keys():
+                current_dict[key] = tf.add(current_dict[key], input_dict[key], "tmp_cost")
+            else:
+                current_dict[key] = input_dict[key]
+        return current_dict
 
     def build_final_step_cost_graph(self, scope, state):
         return self.state_cost(scope, state)
@@ -50,6 +66,7 @@ class CostBase(object):
             noise_cost)
         # \frac{1}{2}*(control_cost+pert_cost)
         return tf.math.multiply(tf.cast(0.5, dtype=tf.float64), tf.add(control_cost, pert_cost))
+
 
     def draw_goal(self):
         raise NotImplementedError

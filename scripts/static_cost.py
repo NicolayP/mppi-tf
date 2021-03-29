@@ -1,5 +1,6 @@
 import tensorflow as tf
 from cost_base import CostBase
+from logger import addItem
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class StaticCost(CostBase):
@@ -9,8 +10,13 @@ class StaticCost(CostBase):
         self.Q = tf.convert_to_tensor(Q, dtype=tf.float64)
 
     def state_cost(self, scope, state):
+        return_dict = {}
+
         diff = tf.math.subtract(state, self.goal, name="diff")
-        return tf.linalg.matmul(diff, tf.linalg.matmul(self.Q, diff, name="right"), transpose_a=True, name="left")
+        state_cost = tf.linalg.matmul(diff, tf.linalg.matmul(self.Q, diff, name="right"), transpose_a=True, name="left")
+
+        return_dict["state_cost"] = state_cost
+        return return_dict
 
     def setGoal(self, goal):
         self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
