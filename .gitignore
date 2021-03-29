@@ -7,4 +7,4 @@ lib/contrib/lib*
 *.csv
 *.gif
 config/envs/*\!default!.yaml
-config/tasks/*\!default!.yaml
+config/tasks/\!*default!.yaml
