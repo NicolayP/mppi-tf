@@ -58,7 +58,13 @@
   - [X] log inputs.
   - [X] log best cost.
   - [X] Sort tensorflow memory usage.
-  - [X] normailze cost?
+  - [X] normailze cost
+  - [X] log normalized cost.
+  - [X] debug flag when logging summary.
+  - [ ] log predictied cost.
+  - [X] train only if enough samples.
+  - [X] moved logging to a separated pseudo singleton.
+  - [X] log speed and position cost for elipse.
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.
@@ -80,6 +86,5 @@
   - [X] Test Cost.
   - [X] Test main.
   - [X] Test shift and init.
-  - [ ] Test ellips cost.
-  - [ ] Test gamma and upsilon.
-  - [ ] Test cost with goal changed to signal.
+  - [X] Test elips cost.
+  - [X] Test gamma and upsilon.
