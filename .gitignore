@@ -6,5 +6,9 @@ lib/contrib/lib*
 *.pyc
 *.csv
 *.gif
-config/envs/\!point_mass.default!.yaml
-config/tasks/\!*default!.yaml
+
+config/envs/*
+config/tasks/*
+
+!config/envs/*.default.yaml
+!config/tasks/*.default.yaml
