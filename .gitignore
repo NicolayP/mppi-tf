@@ -6,3 +6,5 @@ lib/contrib/lib*
 *.pyc
 *.csv
 *.gif
+/config/envs/*!default.yaml!
+/config/tasks/*!default.yaml!
