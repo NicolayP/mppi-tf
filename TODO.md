@@ -61,10 +61,12 @@
   - [X] normailze cost
   - [X] log normalized cost.
   - [X] debug flag when logging summary.
-  - [ ] log predictied cost.
+  - [X] log predictied cost.
   - [X] train only if enough samples.
   - [X] moved logging to a separated pseudo singleton.
   - [X] log speed and position cost for elipse.
+  - [X] log arguments in the graphs dir to repeate experiments.
+  - [X] prepare experiment bash script
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.
@@ -78,7 +80,7 @@
   - [ ] go to uuv_sim.
   - [ ] uuv_sim on simulator.
   - [ ] Performance testing.
-  - [ ] go to real robot
+  - [ ] go to real robot.
 
 ## Testing
 
