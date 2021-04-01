@@ -1,97 +1,122 @@
-from controller_base import ControllerBase
-from simulation import Simulation
-from model_base import ModelBase
-from cost import getCost
-
-import numpy as np
-
-from utile import  parse_config, gif_path, plt_paths, plt_sgf
 import argparse
 import os
 
 from tqdm import tqdm
 
-import matplotlib.pyplot as plt
+from controller_base import ControllerBase
+from cost import getCost
+from model_base import ModelBase
+from simulation import Simulation
+from utile import parse_config, gif_path
 
 
 def parse_arg():
-    parser = argparse.ArgumentParser(prog="mppi", description="mppi-tensorflow")
-    parser.add_argument('config', metavar='c', type=str, help='Controler and env config file')
-    parser.add_argument('task', metavar='t', type=str, help="Task description file")
-    parser.add_argument('-r', '--render', action='store_true', help="render the simulation")
-    parser.add_argument('-d', '--debug', action='store_true', help="debug flag that will store every saved data inside a graphs/debug/ folder")
-    parser.add_argument('-l', '--log', action='store_true', help="log in tensorboard")
-    parser.add_argument('-s', '--steps', type=int, help='number of training steps', default=200)
-    parser.add_argument('-t', '--train', type=int, help='training step iterations', default=10)
-    parser.add_argument('-g', '--gif', type=str, default=None, help="Save all the trajectories in a gif file (takes a lot of time)")
+    parser = argparse.ArgumentParser(prog="mppi",
+                                     description="mppi-tensorflow")
+
+    parser.add_argument('config', metavar='c', type=str,
+                        help='Controler and env config file')
+
+    parser.add_argument('task', metavar='t', type=str,
+                        help="Task description file")
+
+    parser.add_argument('-r', '--render', action='store_true',
+                        help="render the simulation")
+
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help="debug flag that will store every saved data \
+                        inside a graphs/debug/ folder")
+
+    parser.add_argument('-l', '--log', action='store_true',
+                        help="log in tensorboard")
+
+    parser.add_argument('-s', '--steps', type=int,
+                        help='number of steps', default=200)
+
+    parser.add_argument('-t', '--train', type=int,
+                        help='training step iterations', default=10)
+
+    parser.add_argument('-g', '--gif', type=str, default=None,
+                        help="Save all the trajectories in a gif file \
+                        (takes a lot of time)")
+
+    parser.add_argument('-f', '--filter', action='store_true',
+                        help='filters the control sequence to smooth \
+                        out the result')
+
     args = parser.parse_args()
-    return args.config, args.task, args.render, args.log, args.debug, args.steps, args.train, args.gif
+    return args
+
 
 def main():
-    conf_file, task_file, render, log, debug, max_steps, train_iter, gif = parse_arg()
-    env, dt, tau, init, lam, gamma, upsilon, maxu, noise, samples, s_dim, a_dim = parse_config(conf_file)
+    print("*"*5 + " start mppi controller " + "*"*5)
+    args = parse_arg()
+    conf = parse_config(args.config)
 
-    sim = Simulation(env, s_dim, a_dim, None, render)
+    sim = Simulation(conf["env"], conf['state-dim'], conf['action-dim'],
+                     None, args.render)
 
-    model = ModelBase(mass=5,
-                      dt=dt,
-                      state_dim=s_dim,
-                      act_dim=a_dim,
-                      name=os.path.splitext(os.path.basename(env))[0])
+    model = ModelBase(mass=5, dt=conf["dt"], state_dim=conf['state-dim'],
+                      act_dim=conf['action-dim'],
+                      name=os.path.splitext(os.path.basename(conf["env"]))[0])
 
-    cost_fc = getCost(task_file, lam, gamma, upsilon, noise, tau)
+    cost_fc = getCost(args.task, conf['lambda'], conf['gamma'],
+                      conf['upsilon'], conf['noise'], conf["horizon"])
 
-    cont = ControllerBase(model, cost_fc,
-                          k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam, upsilon=upsilon,
-                          sigma=noise, log=log, normalize_cost=True, config_file=conf_file, task_file=task_file, debug=debug)
+    cont = ControllerBase(model, cost_fc, k=conf['samples'],
+                          tau=conf["horizon"], dt=conf["dt"],
+                          s_dim=conf['state-dim'], a_dim=conf['action-dim'],
+                          lam=conf['lambda'], upsilon=conf['upsilon'],
+                          sigma=conf['noise'], log=args.log, gif=args.gif,
+                          normalize_cost=True, filter_seq=args.filter,
+                          config_file=args.config, task_file=args.task,
+                          debug=args.debug)
 
     prev_time = sim.getTime()
     time = sim.getTime()
-    paths_list = []
-    weights_list = []
-    for step in tqdm(range(max_steps)):
+
+    for step in tqdm(range(args.steps)):
+
         x = sim.getState()
         u = cont.next(x)
-        #if gif is not None:
-        #    plt_paths(paths, weights, noises, action_seq, step, cost_fc)
-        while time-prev_time < dt:
+        while time-prev_time < conf["dt"]:
             x_next = sim.step(u)
-            time=sim.getTime()
+            time = sim.getTime()
+
         prev_time = time
         cont.save(x, u, x_next)
 
-        # Train only if enough samples
-        if step % train_iter == 0:
+        if step % args.train == 0:
             cont.train()
-    #gif_path(max_steps, gif)
 
+    gif_path(args.steps, args.gif)
+
+    print("*"*5 + " Done " + "*"*5)
 
 def plot_sgf():
-    conf_file, task_file, render, log, max_steps, train_iter, gif = parse_arg()
-    env, dt, tau, init, lam, gamma, upsilon, maxu, noise, samples, s_dim, a_dim = parse_config(conf_file)
+    args = parse_arg()
+    conf = parse_config(args.config)
 
-    sim = Simulation(env, s_dim, a_dim, None, False)
+    sim = Simulation(conf["env"], conf['state-dim'], conf['action-dim'],
+                     None, False)
 
     model = ModelBase(mass=5,
-                      dt=dt,
-                      state_dim=s_dim,
-                      act_dim=a_dim,
-                      name=os.path.splitext(os.path.basename(env))[0])
+                      dt=conf["dt"],
+                      state_dim=conf['state-dim'],
+                      act_dim=conf['action-dim'],
+                      name=os.path.splitext(os.path.basename(conf["env"]))[0])
 
-    cost_fc = getCost(task_file, lam, gamma, upsilon, noise, tau)
+    cost_fc = getCost(args.task, conf['lambda'], conf['gamma'],
+                      conf['upsilon'], conf['noise'], conf["horizon"])
 
-    cont = ControllerBase(model, cost_fc,
-                          k=samples, tau=tau, dt=dt, s_dim=s_dim, a_dim=a_dim, lam=lam,
-                          sigma=noise, log=log, config_file=conf_file)
-
-    prev_time = sim.getTime()
-    time = sim.getTime()
-    paths_list = []
-    weights_list = []
+    cont = ControllerBase(model, cost_fc, k=conf['samples'],
+                          tau=conf["horizon"], dt=conf["dt"],
+                          s_dim=conf['state-dim'], a_dim=conf['action-dim'],
+                          lam=conf['lambda'], sigma=conf['noise'],
+                          log=args.log, config_file=args.config)
 
     x = sim.getState()
-    u, cost, cost_state, cost_act, noises, paths, weights, action_seq = cont.next(x)
-    plt_sgf(action_seq)
+    _ = cont.next(x)
 
 
 if __name__ == '__main__':
