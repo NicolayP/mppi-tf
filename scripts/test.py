@@ -213,8 +213,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             s_c = cost.state_cost("", state)
 
-        a_c = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c)
+        a_c_dict = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
 
     def testStepCost_s4_a2_l1(self):
 
@@ -240,8 +240,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             s_c = cost.state_cost("", state)
 
-        a_c = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c)
+        a_c_dict = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
 
     def testStepCost_s4_a3_l1(self):
 
@@ -281,9 +281,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             s_c = cost.state_cost("", state)
 
-        a_c = cost.action_cost("", action, noise)
-
-        self.assertAllClose(exp_a_c, a_c)
+        a_c_dict = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
 
     def testStepCost_s4_a3_l10_g2_u3(self):
 
@@ -323,9 +322,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             s_c = cost.state_cost("", state)
 
-        a_c = cost.action_cost("", action, noise)
-
-        self.assertAllClose(exp_a_c, a_c)
+        a_c_dict = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
 
     def testStepCost_s4_a3_l15_g20_u30(self):
 
@@ -365,9 +363,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             s_c = cost.state_cost("", state)
 
-        a_c = cost.action_cost("", action, noise)
-
-        self.assertAllClose(exp_a_c, a_c)
+        a_c_dict = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
 
 
 class TestStaticCost(tf.test.TestCase):
@@ -394,10 +391,10 @@ class TestStaticCost(tf.test.TestCase):
 
         exp_c = exp_a_c + exp_s_c
 
-        a_c = cost.action_cost("", action, noise)
+        a_c_dict = cost.action_cost("", action, noise)
         c_dict = cost.build_step_cost_graph("", state, action, noise)
 
-        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
         self.assertAllClose(exp_s_c, c_dict["state_cost"])
         self.assertAllClose(exp_c, c_dict["cost"])
 
@@ -426,12 +423,13 @@ class TestStaticCost(tf.test.TestCase):
         exp_c = exp_a_c + exp_s_c
 
 
-        a_c = cost.action_cost("", action, noise)
+        a_c_dict = cost.action_cost("", action, noise)
         c_dict = cost.build_step_cost_graph("", state, action, noise)
 
-        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
         self.assertAllClose(exp_s_c, c_dict["state_cost"])
         self.assertAllClose(exp_c, c_dict["cost"])
+
 
     def testStepStaticCost_s4_a3_l1(self):
 
@@ -470,10 +468,10 @@ class TestStaticCost(tf.test.TestCase):
 
         exp_c = exp_a_c + exp_s_c
 
-        a_c = cost.action_cost("", action, noise)
+        a_c_dict = cost.action_cost("", action, noise)
         c_dict = cost.build_step_cost_graph("", state, action, noise)
 
-        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
         self.assertAllClose(exp_s_c, c_dict["state_cost"])
         self.assertAllClose(exp_c, c_dict["cost"])
 
