@@ -1,6 +1,5 @@
 import tensorflow as tf
 from cost_base import CostBase
-from logger import addItem
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class StaticCost(CostBase):
@@ -35,4 +34,6 @@ class StaticCost(CostBase):
         return np_goal[0], np_goal[1]
 
     def dist(self, state):
-        return np.linalg.norm(state-self.getGoal(), axis=-1)
+        return_dict = {}
+        return_dict["dist"] = np.linalg.norm(state-self.getGoal(), axis=-1)
+        return return_dict

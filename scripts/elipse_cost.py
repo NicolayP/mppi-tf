@@ -1,12 +1,12 @@
 from cost_base import CostBase
 import numpy as np
 import tensorflow as tf
-from logger import addItem
 
 from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
+
 
 class ElipseCost(CostBase):
     def __init__(self, lam, gamma, upsilon, sigma, tau, a, b, center_x, center_y, speed, m_state, m_vel):
@@ -46,15 +46,17 @@ class ElipseCost(CostBase):
         return x, y
 
     def dist(self, state):
+        return_dict = {}
         x = state[0]
         vx = state[1]
         y = state[2]
         vy = state[3]
         v = np.sqrt(vx**2 + vy**2)
-        x_cost = (((x-self.cx)/self.a)**2 + ((y-self.cy)/self.b)**2) - 1
-        v_cost = np.abs(v-self.gv)
-        return x_cost[0], v_cost[0]
-
+        x_dist = (((x-self.cx)/self.a)**2 + ((y-self.cy)/self.b)**2) - 1
+        v_dist = np.abs(v-self.gv)
+        return_dict["x_dist"] = x_dist[0]
+        return_dict["v_dist"] = v_dist[0]
+        return return_dict
 
 
 def main():
