@@ -1,8 +1,8 @@
 type: "elipse"
-a: 1.
-b: 1.
+a: 4.
+b: 2.
 center_x: 0.
 center_y: 0.
-speed: 1.
+speed: 5.
 m_state: 1.
 m_vel: 1.
