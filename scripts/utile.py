@@ -17,6 +17,21 @@ def parse_config(file):
     return conf
 
 
+def list_files(log_dir):
+    for file in os.listdir(log_dir):
+        if os.path.isfile(os.path.join(log_dir, file)):
+            yield file
+
+
+def parse_dir(log_dir):
+    for file in list_files(log_dir):
+        if file == "config.yaml":
+            config_file = os.path.join(log_dir, file)
+        elif file == "task.yaml":
+            task_file = os.path.join(log_dir, file)
+    return parse_config(config_file), task_file
+
+
 def plt_sgf(action_seq):
     print(action_seq.numpy()[:, :, 0].shape)
     _ = plt.figure()

@@ -7,17 +7,29 @@ from controller_base import ControllerBase
 from cost import getCost
 from model_base import ModelBase
 from simulation import Simulation
-from utile import parse_config, gif_path
+from utile import parse_config, parse_dir, gif_path
 
 
 def parse_arg():
     parser = argparse.ArgumentParser(prog="mppi",
                                      description="mppi-tensorflow")
 
-    parser.add_argument('config', metavar='c', type=str,
+    group = parser.add_mutually_exclusive_group(required=True)
+
+    group.add_argument("--replay", action="store_true",
+                       help="replay experience from log dir")
+
+    group.add_argument("--new", action="store_true", help="this flag will \
+                       expect a config and task file")
+
+    parser.add_argument("--log_dir", type=str, help="when replay is active\
+                        this argument should point to the tensorboard logdir\
+                        which experiment should be replayed.")
+
+    parser.add_argument('--config', metavar='c', type=str,
                         help='Controler and env config file')
 
-    parser.add_argument('task', metavar='t', type=str,
+    parser.add_argument('--task', metavar='t', type=str,
                         help="Task description file")
 
     parser.add_argument('-r', '--render', action='store_true',
@@ -51,7 +63,11 @@ def parse_arg():
 def main():
     print("*"*5 + " start mppi controller " + "*"*5)
     args = parse_arg()
-    conf = parse_config(args.config)
+    if args.new:
+        conf = parse_config(args.config)
+    elif args.replay:
+        conf, args.task = parse_dir(args.log_dir)
+
 
     sim = Simulation(conf["env"], conf['state-dim'], conf['action-dim'],
                      None, args.render)
