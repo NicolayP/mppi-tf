@@ -66,7 +66,8 @@
   - [X] moved logging to a separated pseudo singleton.
   - [X] log speed and position cost for elipse.
   - [X] log arguments in the graphs dir to repeate experiments.
-  - [X] prepare experiment bash script
+  - [X] write experiment bash script.
+  - [X] write repeate experience from log script.
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.
