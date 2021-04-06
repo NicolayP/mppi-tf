@@ -69,7 +69,7 @@ def main():
     y = np.reshape(yv, (-1, 1))
     vx = np.zeros(x.shape)
     vy = np.zeros(y.shape)
-    nptensor = np.stack([x, vy, y, vy], axis=1)
+    nptensor = np.stack([x, vx, y, vy], axis=1)
     tensor = tf.convert_to_tensor(nptensor, dtype=tf.float64)
 
     Sigma=np.array([[1., 0., 0.],
@@ -84,13 +84,13 @@ def main():
     ms = 100
     ma = 5
     gv = 5
-    cost = ElipseCost(1, Sigma, tau, a, b, cx, cy, gv, ms, ma)
-    c = cost.state_cost("main", tensor).numpy()
+    cost = ElipseCost(1, 1, 1, Sigma, tau, a, b, cx, cy, gv, ms, ma)
+    c = cost.state_cost("main", tensor)["state_cost"].numpy()
     cv = c.reshape((x_sam, y_sam))
 
     fig = plt.figure()
     ax = fig.gca(projection='3d')
-    surf = ax.plot_surface(xv, yv, cv, cmap=cm.coolwarm,
+    surf = ax.plot_surface(xv, yv, cv,
                        linewidth=0, antialiased=False)
 
 

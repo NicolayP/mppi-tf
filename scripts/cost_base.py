@@ -71,14 +71,6 @@ class CostBase(object):
         return_dict["action_cost"] = tf.math.multiply(tf.cast(0.5, dtype=tf.float64),
                                 tf.add(return_dict["control_cost"], return_dict["n_cost"]))
 
-        '''
-        print("*"*10 + " Action Cost " + "*"*10)
-        print(return_dict["a_cost"])
-        print(return_dict["mix_cost"])
-        print(return_dict["n_cost"])
-        print(return_dict["control_cost"])
-        print(return_dict["action_cost"])
-        '''
         return return_dict
 
     def state_cost(self, scope, state):
