@@ -1,5 +1,6 @@
 build/*
 graphs/*
+.vscode/*
 lib/contrib/mjkey.txt
 lib/contrib/lib*
 *__pycache__*
