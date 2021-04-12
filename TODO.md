@@ -68,7 +68,7 @@
   - [X] log arguments in the graphs dir to repeate experiments.
   - [X] write experiment bash script.
   - [X] write repeate experience from log script.
-  - [ ] write model abstract class.
+  - [X] write model abstract class.
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.

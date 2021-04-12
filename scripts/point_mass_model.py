@@ -41,13 +41,13 @@ class PointMassModel(ModelBase):
     def __init__(self, mass=1, dt=0.1, state_dim=2, action_dim=1, name="point_mass"):
         ModelBase.__init__(self, dt, state_dim, action_dim, name)
 
-        self.mass = tf.Variable([[mass]], name="mass",
+        mass = tf.Variable([[mass]], name="mass",
                                 trainable=True, dtype=tf.float64)
+
+        self.addModelVars("mass", mass)
 
         with tf.name_scope("Const") as c:
             self.create_const(c)
-
-        self.addModelVars("mass", self.mass)
 
     def buildStepGraph(self, scope, state, action):
         with tf.name_scope("Model_Step"):
@@ -61,12 +61,12 @@ class PointMassModel(ModelBase):
     def buildActionStepGraph(self, scope, action):
         with tf.name_scope(scope):
             return tf.linalg.matmul(tf.divide(self.B,
-                                                self.mass,
+                                                self.model_vars["mass"],
                                                 name="B"),
                                     action, name="B_u")
 
     def getMass(self):
-        return self.mass.numpy()[0]
+        return self.model_vars["mass"].numpy()[0]
 
     def create_const(self, scope):
         a = np.array([[1., self.dt], [0., 1.]])

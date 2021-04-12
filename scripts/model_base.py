@@ -32,19 +32,18 @@ class ModelBase(object):
             return True
         return False
 
-    def train_step(self, gt, x, a, step, writer=None, log=False):
+    def train_step(self, gt, x, a, step=None, writer=None, log=False):
 
         gt = tf.convert_to_tensor(gt, dtype=tf.float64)
         x = tf.convert_to_tensor(x, dtype=tf.float64)
         a = tf.convert_to_tensor(a, dtype=tf.float64)
-
         with tf.GradientTape() as tape:
             for key in self.model_vars:
                 tape.watch(self.model_vars[key])
             self.current_loss = self.buildLossGraph(gt, x, a)
 
-        grads = tape.gradient(self.current_loss, self.model_vars.items())
-        self.optimizer.apply_gradients(list(zip(grads, self.model_vars.items())))
+        grads = tape.gradient(self.current_loss, list(self.model_vars.values()))
+        self.optimizer.apply_gradients(list(zip(grads, list(self.model_vars.values()))))
 
         if log:
             with writer.as_default():

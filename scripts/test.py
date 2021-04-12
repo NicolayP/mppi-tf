@@ -184,6 +184,21 @@ class TestModel(tf.test.TestCase):
 
         self.assertAllClose(exp, pred)
 
+    def test_training(self):
+        s = 4
+        a = 2
+        m = 1.5
+        model = PointMassModel(m, self.dt, s, a)
+
+        x = np.array([[0.5], [0.1], [0.2], [-0.1]])
+        u = np.array([[0.2], [-0.15]])
+        gt = np.array([[0.514], [0.14], [0.187], [-0.13]])
+
+        model.train_step(gt, x, u)
+
+        mt = model.getMass()
+
+        self.assertAllLessEqual(mt, m)
 
 class TestCost(tf.test.TestCase):
     def setUp(self):
