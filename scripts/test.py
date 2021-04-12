@@ -1,5 +1,6 @@
 import tensorflow as tf
 from model_base import ModelBase
+from point_mass_model import PointMassModel
 from cost_base import CostBase
 from static_cost import StaticCost
 from elipse_cost import ElipseCost
@@ -12,11 +13,10 @@ class TestModel(tf.test.TestCase):
         pass
 
     def test_step1_k1_s2_a1_m1(self):
-        k = 1
         s = 2
         a = 1
         m = 1.
-        model = ModelBase(m, self.dt, s, a)
+        model = PointMassModel(m, self.dt, s, a)
 
         state_in = np.array([[[0.], [0.]]])
         action_in = np.array([[[1.]]])
@@ -36,11 +36,10 @@ class TestModel(tf.test.TestCase):
         self.assertAllClose(exp, pred)
 
     def test_step1_k1_s4_a2_m1(self):
-        k = 1
         s = 4
         a = 2
         m = 1.
-        model = ModelBase(m, self.dt, s, a)
+        model = PointMassModel(m, self.dt, s, a)
 
         state_in = np.array([[[0.], [0.], [0.], [0.]]])
         action_in = np.array([[[1.], [1.]]])
@@ -60,11 +59,10 @@ class TestModel(tf.test.TestCase):
         self.assertAllClose(exp, pred)
 
     def test_step1_k5_s6_a3_m1d5(self):
-        k = 5
         s = 6
         a = 3
         m = 1.5
-        model = ModelBase(m, self.dt, s, a)
+        model = PointMassModel(m, self.dt, s, a)
 
         state_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
                              [[2.], [1.], [5.], [0.], [-1.], [-2.]],
@@ -101,11 +99,10 @@ class TestModel(tf.test.TestCase):
         self.assertAllClose(exp, pred)
 
     def test_init_k5_s6_a3_m1d5(self):
-        k = 5
         s = 6
         a = 3
         m = 1.5
-        model = ModelBase(m, self.dt, s, a)
+        model = PointMassModel(m, self.dt, s, a)
 
         state_in = np.array([[[-1.], [0.5], [-3.], [2.], [0.], [0.]]])
         action_in = np.array([[[1.], [1.], [1.]],
@@ -141,11 +138,10 @@ class TestModel(tf.test.TestCase):
         self.assertAllClose(exp, pred)
 
     def test_step3_k5_s6_a3_m1d5(self):
-        k = 5
         s = 6
         a = 3
         m = 1.5
-        model = ModelBase(m, self.dt, s, a)
+        model = PointMassModel(m, self.dt, s, a)
 
         state_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
                              [[2.], [1.], [5.], [0.], [-1.], [-2.]],
@@ -196,11 +192,9 @@ class TestCost(tf.test.TestCase):
     def testStepCost_s2_a2_l1(self):
 
         state=np.array([[[0.], [1.]]])
-        goal=np.array([[1.], [1.]])
         action=np.array([[1.], [1.]])
         noise=np.array([[[1.], [1.]]])
         Sigma=np.array([[1., 0.], [0., 1.]])
-        Q=np.array([[1., 0.], [0., 1.]])
         lam=np.array([1.])
         gamma = 1.
         upsilon = 1.
@@ -211,7 +205,7 @@ class TestCost(tf.test.TestCase):
 
 
         with self.assertRaises(NotImplementedError):
-            s_c = cost.state_cost("", state)
+            _ = cost.state_cost("", state)
 
         a_c_dict = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
@@ -219,14 +213,9 @@ class TestCost(tf.test.TestCase):
     def testStepCost_s4_a2_l1(self):
 
         state=np.array([[[0.], [0.5], [2.], [0.]]])
-        goal=np.array([[1.], [1.], [1.], [2.]])
         action=np.array([[0.5], [2.]])
         noise=np.array([[[0.5], [1.]]])
         Sigma=np.array([[1., 0.], [0., 1.]])
-        Q=np.array([[1., 0., 0., 0.],
-                   [0., 1., 0., 0.],
-                   [0., 0., 10., 0.],
-                   [0., 0., 0., 10.]])
 
         lam=np.array([1.])
         lam=np.array([1.])
@@ -238,7 +227,7 @@ class TestCost(tf.test.TestCase):
         exp_a_c = np.array([[[0.5*(gamma*(4.25 + 2.*2.25) + lam[0]*(1-1./upsilon)*(1.25) )]]])
 
         with self.assertRaises(NotImplementedError):
-            s_c = cost.state_cost("", state)
+            _ = cost.state_cost("", state)
 
         a_c_dict = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
@@ -250,7 +239,6 @@ class TestCost(tf.test.TestCase):
                         [[10.], [2.], [2.], [3.]],
                         [[1.], [1.], [1.], [2.]],
                         [[3.], [4.], [5.], [6.]]])
-        goal=np.array([[1.], [1.], [1.], [2.]])
         action=np.array([[0.5], [2.], [0.25]])
         noise=np.array([[[0.5], [1.], [2.]],
                         [[0.5], [2.], [0.25]],
@@ -260,10 +248,6 @@ class TestCost(tf.test.TestCase):
         Sigma=np.array([[1., 0., 0.],
                         [0., 1., 0.],
                         [0., 0., 1.]])
-        Q=np.array([[1., 0., 0., 0.],
-                   [0., 1., 0., 0.],
-                   [0., 0., 10., 0.],
-                   [0., 0., 0., 10.]])
         lam=np.array([1.])
         gamma = 1.
         upsilon = 1.
@@ -279,7 +263,7 @@ class TestCost(tf.test.TestCase):
 
 
         with self.assertRaises(NotImplementedError):
-            s_c = cost.state_cost("", state)
+            _ = cost.state_cost("", state)
 
         a_c_dict = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
@@ -291,7 +275,6 @@ class TestCost(tf.test.TestCase):
                         [[10.], [2.], [2.], [3.]],
                         [[1.], [1.], [1.], [2.]],
                         [[3.], [4.], [5.], [6.]]])
-        goal=np.array([[1.], [1.], [1.], [2.]])
         action=np.array([[0.5], [2.], [0.25]])
         noise=np.array([[[0.5], [1.], [2.]],
                         [[0.5], [2.], [0.25]],
@@ -301,10 +284,6 @@ class TestCost(tf.test.TestCase):
         Sigma=np.array([[1., 0., 0.],
                         [0., 1., 0.],
                         [0., 0., 1.]])
-        Q=np.array([[1., 0., 0., 0.],
-                   [0., 1., 0., 0.],
-                   [0., 0., 10., 0.],
-                   [0., 0., 0., 10.]])
         lam=np.array([10.])
         gamma = 2.
         upsilon = 3.
@@ -320,7 +299,7 @@ class TestCost(tf.test.TestCase):
 
 
         with self.assertRaises(NotImplementedError):
-            s_c = cost.state_cost("", state)
+            _ = cost.state_cost("", state)
 
         a_c_dict = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
@@ -332,7 +311,6 @@ class TestCost(tf.test.TestCase):
                         [[10.], [2.], [2.], [3.]],
                         [[1.], [1.], [1.], [2.]],
                         [[3.], [4.], [5.], [6.]]])
-        goal=np.array([[1.], [1.], [1.], [2.]])
         action=np.array([[0.5], [2.], [0.25]])
         noise=np.array([[[0.5], [1.], [2.]],
                         [[0.5], [2.], [0.25]],
@@ -342,10 +320,6 @@ class TestCost(tf.test.TestCase):
         Sigma=np.array([[1., 0., 0.],
                         [0., 1., 0.],
                         [0., 0., 1.]])
-        Q=np.array([[1., 0., 0., 0.],
-                   [0., 1., 0., 0.],
-                   [0., 0., 10., 0.],
-                   [0., 0., 0., 10.]])
         lam=np.array([15.])
         gamma = 20.
         upsilon = 30.
@@ -361,7 +335,7 @@ class TestCost(tf.test.TestCase):
 
 
         with self.assertRaises(NotImplementedError):
-            s_c = cost.state_cost("", state)
+            _ = cost.state_cost("", state)
 
         a_c_dict = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
@@ -429,7 +403,6 @@ class TestStaticCost(tf.test.TestCase):
         self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
         self.assertAllClose(exp_s_c, c_dict["state_cost"])
         self.assertAllClose(exp_c, c_dict["cost"])
-
 
     def testStepStaticCost_s4_a3_l1(self):
 
@@ -571,7 +544,7 @@ class TestController(tf.test.TestCase):
                            [[[-2.], [-3.]], [[-4.], [-1.]], [[0.], [0.]]]])
 
         self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
-        model = ModelBase(self.mass, self.dt, self.s_dim, self.a_dim)
+        model = PointMassModel(self.mass, self.dt, self.s_dim, self.a_dim)
         cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.tau, self.Q)
         self.cont = ControllerBase(model,
                                    cost,
