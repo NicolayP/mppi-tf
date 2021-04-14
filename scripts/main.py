@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from controller_base import ControllerBase
 from cost import getCost
-from model_base import ModelBase
+from point_mass_model import PointMassModel
 from simulation import Simulation
 from utile import parse_config, parse_dir, gif_path
 
@@ -72,8 +72,8 @@ def main():
     sim = Simulation(conf["env"], conf['state-dim'], conf['action-dim'],
                      None, args.render)
 
-    model = ModelBase(mass=5, dt=conf["dt"], state_dim=conf['state-dim'],
-                      act_dim=conf['action-dim'],
+    model = PointMassModel(mass=5, dt=conf["dt"], state_dim=conf['state-dim'],
+                      action_dim=conf['action-dim'],
                       name=os.path.splitext(os.path.basename(conf["env"]))[0])
 
     cost_fc = getCost(args.task, conf['lambda'], conf['gamma'],
@@ -109,6 +109,7 @@ def main():
 
     print("*"*5 + " Done " + "*"*5)
 
+
 def plot_sgf():
     args = parse_arg()
     conf = parse_config(args.config)
@@ -116,10 +117,10 @@ def plot_sgf():
     sim = Simulation(conf["env"], conf['state-dim'], conf['action-dim'],
                      None, False)
 
-    model = ModelBase(mass=5,
+    model = PointMassModel(mass=5,
                       dt=conf["dt"],
                       state_dim=conf['state-dim'],
-                      act_dim=conf['action-dim'],
+                      action_dim=conf['action-dim'],
                       name=os.path.splitext(os.path.basename(conf["env"]))[0])
 
     cost_fc = getCost(args.task, conf['lambda'], conf['gamma'],
