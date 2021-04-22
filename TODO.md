@@ -78,11 +78,15 @@
   - [ ] Train simple network on Point mass system.
   - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
   - [ ] Experiment agent learning parameters. (dont know enough about the rest to make a prediction)
+  
+
+## ROS Integration
+
+  - [x] run a tf-graph in ros with python3.
   - [ ] vehicle modelling.
-  - [ ] go to uuv_sim.
-  - [ ] uuv_sim on simulator.
   - [ ] Performance testing.
   - [ ] go to real robot.
+
 
 ## Testing
 
