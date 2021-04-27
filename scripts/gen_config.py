@@ -1,6 +1,6 @@
 import argparse
 import os
-from utile import parse_config
+from mppi_tf.scripts.utile import parse_config
 import yaml
 import numpy as np
 

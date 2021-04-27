@@ -3,14 +3,17 @@ from tensorflow.python.ops import summary_ops_v2
 from cpprb import ReplayBuffer
 
 import numpy as np
-from cost_base import CostBase
-from model_base import ModelBase
+
+from mppi_tf.scripts.cost_base import CostBase
+from mppi_tf.scripts.model_base import ModelBase
+
 from datetime import datetime
 import matplotlib.pyplot as plt
 import os
 from shutil import copyfile
 import scipy.signal
-from utile import log_control, plt_paths
+
+from mppi_tf.scripts.utile import log_control, plt_paths
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
@@ -33,10 +36,12 @@ class ControllerBase(object):
                  normalize_cost=False,
                  filter_seq=False,
                  log=False,
+                 log_path=None,
                  gif=False,
                  config_file=None,
                  task_file=None,
                  debug=False):
+
         # TODO: Check parameters
         self.k = k
         self.tau = tau
@@ -63,8 +68,6 @@ class ControllerBase(object):
         self.model = model
         self.cost = cost
 
-        self.mass_init = self.model.getMass()
-
         self.buffer_size = 264
         self.batch_size = 32
 
@@ -80,11 +83,13 @@ class ControllerBase(object):
         self.writer = None
         if self.log or self.debug:
             stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-            path = '../graphs/python/'
+            path = 'graphs/python/'
             if self.debug:
-                path = os.path.join(path, 'debug')
+                path = os.path.join(log_path, path, 'debug')
             logdir = os.path.join(path, model.getName(), "k" + str(k),
                                   "T" + str(tau), "L" + str(lam), stamp)
+
+            os.makedirs(logdir)
 
             self.writer = tf.summary.create_file_writer(logdir)
 
@@ -249,7 +254,7 @@ class ControllerBase(object):
         self.action_seq = return_dict["action_seq"]
         self.log_dict = return_dict
 
-        return return_dict["next"]
+        return np.squeeze(return_dict["next"].numpy())
 
     def beta(self, scope, cost):
         # shapes: in [k, 1, 1]; out [1, 1]

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from model_base import ModelBase
+from mppi_tf.scripts.model_base import ModelBase
 
 class NNModel(ModelBase):
     def __init__(self, dt=0.1, state_dim=2, action_dim=1, name="nn_model"):
@@ -12,6 +12,13 @@ class NNModel(ModelBase):
         self.addModelVars("final", self.getWeights((5, state_dim), "final"))
 
     def buildStepGraph(self, scope, state, action):
+        # expand and broadcast state vector to match dim of action
+        sshape = state.shape
+        ashape = action.shape
+
+        if len(sshape) < 3:
+            state = tf.broadcast_to(tf.expand_dims(state, axis=0), [ashape[0], sshape[0], sshape[1]])
+
         inputs = tf.squeeze(tf.concat([state, action], axis=1), -1)
         init = self.dense(inputs, self.model_vars["first"])
         second = self.dense(init, self.model_vars["second"])

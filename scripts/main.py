@@ -3,11 +3,11 @@ import os
 
 from tqdm import tqdm
 
-from controller_base import ControllerBase
-from cost import getCost
-from point_mass_model import PointMassModel
-from simulation import Simulation
-from utile import parse_config, parse_dir, gif_path
+from mppi_tf.scripts.controller_base import ControllerBase
+from mppi_tf.scripts.cost import getCost
+from mppi_tf.scripts.point_mass_model import PointMassModel
+from mppi_tf.scripts.simulation import Simulation
+from mppi_tf.scripts.utile import parse_config, parse_dir, gif_path
 
 
 def parse_arg():

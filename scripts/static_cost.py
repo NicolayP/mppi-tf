@@ -1,5 +1,5 @@
 import tensorflow as tf
-from cost_base import CostBase
+from mppi_tf.scripts.cost_base import CostBase
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class StaticCost(CostBase):

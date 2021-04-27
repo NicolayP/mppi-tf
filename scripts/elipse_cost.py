@@ -1,4 +1,5 @@
-from cost_base import CostBase
+from mppi_tf.scripts.cost_base import CostBase
+
 import numpy as np
 import tensorflow as tf
 

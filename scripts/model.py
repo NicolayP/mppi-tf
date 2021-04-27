@@ -1,28 +1,28 @@
 import numpy as np
 import yaml
 
-from nn_model import NNModel
-from point_mass_model import PointMassModel
+from mppi_tf.scripts.nn_model import NNModel
+from mppi_tf.scripts.point_mass_model import PointMassModel
 
-def nn(model_dic):
-    return NNModel(dt=model_dic['dt'], 
-                   state_dim=model_dic['state_dim'], 
-                   action_dim=model_dic['action_dim'],
-                   name=model_dic['name'])
+def nn(model_dic, dt, state_dim, action_dim, name):
+    return NNModel(dt=dt, 
+                   state_dim=state_dim, 
+                   action_dim=action_dim,
+                   name=name)
 
 
-def pm(model_dic):
+def pm(model_dic, dt, state_dim, action_dim, name):
     return PointMassModel(mass=model_dic["mass"],
-                          dt=model_dic['dt'], 
-                          state_dim=model_dic['state_dim'], 
-                          action_dim=model_dic['action_dim'],
-                          name=model_dic['name'])
+                          dt=dt, 
+                          state_dim=state_dim, 
+                          action_dim=action_dim,
+                          name=name)
 
 def auv(model_dic):
     raise NotImplementedError()
 
 
-def getCost(model_file):
+def getModel(model_dict, dt, state_dim, action_dim, name):
 
     switcher = {
         "point_mass": pm,
@@ -30,9 +30,7 @@ def getCost(model_file):
         "auv": auv
     }
 
-    with open(model_file) as file:
-        model = yaml.load(file, Loader=yaml.FullLoader)
-        model_type = task['model']
-        getter = switcher.get(model_type, lambda: "invalid model type, check\
-                    spelling, supporter are: point_mass, neural_net, auv")
-        return getter(model)
+    model_type = model_dict['type']
+    getter = switcher.get(model_type, lambda: "invalid model type, check\
+                spelling, supporter are: point_mass, neural_net, auv")
+    return getter(model_dict, dt, state_dim, action_dim, name)

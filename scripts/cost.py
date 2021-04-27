@@ -1,8 +1,9 @@
 import numpy as np
 import yaml
 
-from elipse_cost import ElipseCost
-from static_cost import StaticCost
+from mppi_tf.scripts.static_cost import StaticCost
+from mppi_tf.scripts.elipse_cost import ElipseCost
+
 
 
 def static(task_dic, lam, gamma, upsilon, sigma, tau):
@@ -23,16 +24,14 @@ def elipse(task_dic, lam, gamma, upsilon, sigma, tau):
                       center_y, speed, m_state, m_vel)
 
 
-def getCost(task_file, lam, gamma, upsilon, sigma, tau):
+def getCost(task, lam, gamma, upsilon, sigma, tau):
 
     switcher = {
         "static": static,
         "elipse": elipse
     }
 
-    with open(task_file) as file:
-        task = yaml.load(file, Loader=yaml.FullLoader)
-        cost_type = task['type']
-        getter = switcher.get(cost_type, lambda: "invalid cost type, check\
-                    spelling, supporter are: static, elipse")
-        return getter(task, lam, gamma, upsilon, sigma, tau)
+    cost_type = task['type']
+    getter = switcher.get(cost_type, lambda: "invalid cost type, check\
+                spelling, supporter are: static, elipse")
+    return getter(task, lam, gamma, upsilon, sigma, tau)
