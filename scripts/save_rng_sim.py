@@ -1,7 +1,7 @@
 from cpprb import ReplayBuffer
-from mppi_tf.scripts.simulation import Simulation
+from simulation import Simulation
 import numpy as np
-from mppi_tf.scripts.nn_model import NNModel
+from nn_model import NNModel
 import tensorflow as tf
 from datetime import datetime
 

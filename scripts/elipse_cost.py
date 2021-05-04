@@ -1,4 +1,5 @@
-from mppi_tf.scripts.cost_base import CostBase
+from cost_base import CostBase
+from utile import assert_shape
 
 import numpy as np
 import tensorflow as tf
@@ -10,8 +11,24 @@ from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 
 class ElipseCost(CostBase):
-    def __init__(self, lam, gamma, upsilon, sigma, tau, a, b, center_x, center_y, speed, m_state, m_vel):
-        CostBase.__init__(self, lam, gamma, upsilon, sigma, tau)
+    def __init__(self, lam, gamma, upsilon, sigma, a, b, center_x, center_y, speed, m_state, m_vel):
+        '''
+            2D eliptic cost function.
+            - input:
+            --------
+                - lam (lambda) the inverse temperature. 
+                - gamma: decoupling parameter between action and noise.
+                - upsilon: covariance augmentation for noise generation.
+                - sigma: the noise covariance matrix. shape [a_dim, a_dim].
+                - a: the long axis of the elipse.
+                - b: the short axis of the elipse.
+                - center_x: the x value of the elipse center.
+                - center_y: the y value of the elipse center.
+                - speed: the target speed.
+                - m_state: multiplier for the state error.
+                - m_vel: multiplier for the vel error.
+        '''
+        CostBase.__init__(self, lam, gamma, upsilon, sigma)
         self.a = a
         self.b = b
         self.cx = center_x
@@ -21,6 +38,25 @@ class ElipseCost(CostBase):
         self.mv = tf.cast(m_vel, tf.float64)
 
     def state_cost(self, scope, state):
+        '''
+            Computes the state cost for the eliptic cost function.
+
+            - input:
+            --------
+                - scope: the tensorflow scope.
+                - state: current state. Shape: [k/1, 4, 1]
+
+            - output:
+            ---------
+                dict with entry:
+                "speed_cost" = m_vel * (speed - current_speed)^2
+                "position_cost" =  m_state|\frac{x-cx}{a} + \frac{y-cy}{b} - 1|
+                "state_cost" = speed_cost + position_cost
+
+        '''
+        if not assert_shape(state, (-1, 4, 1)):
+            raise AssertionError("State tensor doesn't have the expected shape.\n Expected [k/1, 4, 1], got {}".format(state.shape))
+
         return_dict = {}
         x = tf.slice(state, [0, 0, 0], [-1, 1, -1])
         y = tf.slice(state, [0, 2, 0], [-1, 1, -1])
@@ -58,49 +94,3 @@ class ElipseCost(CostBase):
         return_dict["x_dist"] = x_dist[0]
         return_dict["v_dist"] = v_dist[0]
         return return_dict
-
-
-def main():
-    x_sam = 1001
-    y_sam = 1001
-    coord_x = np.linspace(-6, 6, x_sam)
-    coord_y = np.linspace(-7, 7, y_sam)
-    xv, yv = np.meshgrid(coord_x, coord_y, sparse=False, indexing='ij')
-    x = np.reshape(xv, (-1, 1))
-    y = np.reshape(yv, (-1, 1))
-    vx = np.zeros(x.shape)
-    vy = np.zeros(y.shape)
-    nptensor = np.stack([x, vx, y, vy], axis=1)
-    tensor = tf.convert_to_tensor(nptensor, dtype=tf.float64)
-
-    Sigma=np.array([[1., 0., 0.],
-                    [0., 1., 0.],
-                    [0., 0., 1.]])
-
-    tau = 1
-    a = 2
-    b = 1.5
-    cx = 0
-    cy = 0
-    ms = 100
-    ma = 5
-    gv = 5
-    cost = ElipseCost(1, 1, 1, Sigma, tau, a, b, cx, cy, gv, ms, ma)
-    c = cost.state_cost("main", tensor)["state_cost"].numpy()
-    cv = c.reshape((x_sam, y_sam))
-
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    surf = ax.plot_surface(xv, yv, cv,
-                       linewidth=0, antialiased=False)
-
-
-    # Add a color bar which maps values to colors.
-    ax.zaxis.set_major_locator(LinearLocator(10))
-    ax.zaxis.set_major_formatter(FormatStrFormatter('%.02f'))
-    fig.colorbar(surf, shrink=0.5, aspect=5)
-    plt.show()
-
-
-if __name__ == '__main__':
-    main()

@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from mppi_tf.scripts.model_base import ModelBase
+from model_base import ModelBase
 import pandas as pd
 
 def blockDiag(vec, pad, dim):

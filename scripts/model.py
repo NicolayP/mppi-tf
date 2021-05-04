@@ -1,8 +1,8 @@
 import numpy as np
 import yaml
 
-from mppi_tf.scripts.nn_model import NNModel
-from mppi_tf.scripts.point_mass_model import PointMassModel
+from nn_model import NNModel
+from point_mass_model import PointMassModel
 
 def nn(model_dic, dt, state_dim, action_dim, name):
     return NNModel(dt=dt, 

@@ -4,8 +4,8 @@ from cpprb import ReplayBuffer
 
 import numpy as np
 
-from mppi_tf.scripts.cost_base import CostBase
-from mppi_tf.scripts.model_base import ModelBase
+from cost_base import CostBase
+from model_base import ModelBase
 
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -13,7 +13,7 @@ import os
 from shutil import copyfile
 import scipy.signal
 
-from mppi_tf.scripts.utile import log_control, plt_paths
+from utile import log_control, plt_paths
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
@@ -45,7 +45,6 @@ class ControllerBase(object):
         # TODO: Check parameters
         self.k = k
         self.tau = tau
-        self.dt = dt
         self.s_dim = s_dim
         self.a_dim = a_dim
         self.lam = lam
@@ -63,7 +62,10 @@ class ControllerBase(object):
         if init_seq.size == 0:
             self.action_seq = np.zeros((self.tau, self.a_dim, 1))
         else:
-            self.action_seq = init_seq
+            if self.check_shape_np(init_seq, (self.tau, self.a_dim, 1)):
+                self.action_seq = init_seq
+            else:
+                raise AssertionError
 
         self.model = model
         self.cost = cost
@@ -105,16 +107,30 @@ class ControllerBase(object):
                 copyfile(config_file, conf_dest)
                 copyfile(task_file, task_dest)
 
+    def check_shape(self, array, shape):
+        ashape = array.shape
+        if len(ashape) != len(shape):
+            return False
+        for i, j in zip(ashape, shape):
+            if i != j:
+                return False
+        return True
+
     def save_graph(self):
-        state = np.zeros((self.s_dim, 1))
+        state = np.zeros((1, self.s_dim, 1))
+        seq = np.zeros((5, self.a_dim, 1))
         with self.writer.as_default():
             # get graph from function
-            graph = self._next.get_concrete_function(state,
-                                                     self.action_seq).graph
+            graph = self._next.get_concrete_function(1, state, seq).graph
             # visualize
             summary_ops_v2.graph(graph.as_graph_def())
 
     def save(self, x, u, x_next):
+        if not (self.check_shape(x, (self.s_dim, 1)) and
+           self.check_shape(u, (self.a_dim, 1)) and
+           self.check_shape(x_next, (self.s_dim, 1)) ):
+           raise AssertionError
+
         self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
         
         if self.log:
@@ -232,14 +248,14 @@ class ControllerBase(object):
         '''
 
     @tf.function
-    def _next(self, state, action_seq, normalize_cost=False):
+    def _next(self, k, state, action_seq, normalize_cost=False):
         with tf.name_scope("Controller") as cont:
             state = tf.convert_to_tensor(state, dtype=tf.float64, name=cont)
-            return self.buildGraph(cont, state, action_seq,
+            return self.buildGraph(cont, k, state, action_seq,
                                    normalize=normalize_cost)
 
     def next(self, state):
-        return_dict = self._next(state, self.action_seq, self.normalize_cost)
+        return_dict = self._next(self.k, state, self.action_seq, self.normalize_cost)
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
         # since we expect smooth inputs, need to be played around with.
@@ -342,11 +358,11 @@ class ControllerBase(object):
     def advanceGoal(self, scope, next):
         self.cost.setGoal(next)
 
-    def buildGraph(self, scope, state, action_seq, normalize=False):
+    def buildGraph(self, scope, k, state, action_seq, normalize=False):
         return_dict = {}
         with tf.name_scope(scope) as scope:
             with tf.name_scope("random") as rand:
-                noises = self.buildNoise(rand)
+                noises = self.buildNoise(rand, k)
             with tf.name_scope("Rollout") as roll:
                 cost_dict = self.buildModel(roll, state, noises, action_seq)
             with tf.name_scope("Update") as up:
@@ -395,9 +411,9 @@ class ControllerBase(object):
         return_dict = {**return_dict, **sample_costs_dict}
         return return_dict
 
-    def buildNoise(self, scope):
+    def buildNoise(self, scope, k):
         # scales: in []; out [k, tau, a_dim, 1]
-        rng = tf.random.normal(shape=(self.k, self.tau, self.a_dim, 1),
+        rng = tf.random.normal(shape=(k, self.tau, self.a_dim, 1),
                                stddev=1.,
                                mean=0.,
                                dtype=tf.float64,

@@ -11,6 +11,16 @@ control_items: dict = {}
 control_step = 0
 
 
+def assert_shape(array, shape):
+    ashape = array.shape
+    if len(ashape) != len(shape):
+        return False
+    for i, j in zip(ashape, shape):
+        if j != -1 and i != j:
+            return False
+    return True
+
+
 def parse_config(file):
     with open(file) as file:
         conf = yaml.load(file, Loader=yaml.FullLoader)

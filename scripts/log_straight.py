@@ -4,7 +4,7 @@ import numpy as np
 from cpprb import ReplayBuffer
 
 import argparse
-from mppi_tf.scripts.utile import parse_config
+from utile import parse_config
 import os
 
 from tqdm import tqdm

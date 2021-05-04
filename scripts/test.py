@@ -214,7 +214,7 @@ class TestCost(tf.test.TestCase):
         gamma = 1.
         upsilon = 1.
 
-        cost = CostBase(lam, gamma, upsilon, Sigma, 1)
+        cost = CostBase(lam, gamma, upsilon, Sigma)
 
         exp_a_c = np.array([[[ 0.5*(gamma*(2. + 4.) + lam[0]*(1-1./upsilon)*(0.) ) ]]])
 
@@ -237,7 +237,7 @@ class TestCost(tf.test.TestCase):
         gamma = 1.
         upsilon = 1.
 
-        cost = CostBase(lam, gamma, upsilon, Sigma, 1)
+        cost = CostBase(lam, gamma, upsilon, Sigma)
 
         exp_a_c = np.array([[[0.5*(gamma*(4.25 + 2.*2.25) + lam[0]*(1-1./upsilon)*(1.25) )]]])
 
@@ -267,7 +267,7 @@ class TestCost(tf.test.TestCase):
         gamma = 1.
         upsilon = 1.
 
-        cost = CostBase(lam, gamma, upsilon, Sigma, 1)
+        cost = CostBase(lam, gamma, upsilon, Sigma)
 
 
         exp_a_c = np.array([[[0.5*(gamma*(4.3125 + 2.*2.75) + lam[0]*(1-1./upsilon)*(5.25) ) ]],
@@ -303,7 +303,7 @@ class TestCost(tf.test.TestCase):
         gamma = 2.
         upsilon = 3.
 
-        cost = CostBase(lam, gamma, upsilon, Sigma, 1)
+        cost = CostBase(lam, gamma, upsilon, Sigma)
 
 
         exp_a_c = np.array([[[0.5*(gamma*(4.3125 + 2.*2.75) + lam[0]*(1-1./upsilon)*(5.25) ) ]],
@@ -339,7 +339,7 @@ class TestCost(tf.test.TestCase):
         gamma = 20.
         upsilon = 30.
 
-        cost = CostBase(lam, gamma, upsilon, Sigma, 1)
+        cost = CostBase(lam, gamma, upsilon, Sigma)
 
 
         exp_a_c = np.array([[[0.5*(gamma*(4.3125 + 2.*2.75) + lam[0]*(1-1./upsilon)*(5.25) ) ]],
@@ -372,7 +372,7 @@ class TestStaticCost(tf.test.TestCase):
         gamma = 1.
         upsilon = 1.
 
-        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, 1, Q)
+        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, Q)
 
         exp_a_c = np.array([[[ 0.5*(gamma*(2. + 4.) + lam[0]*(1-upsilon)*(0.) ) ]]])
         exp_s_c = np.array([[[1.]]])
@@ -403,7 +403,7 @@ class TestStaticCost(tf.test.TestCase):
         gamma = 1.
         upsilon = 1.
 
-        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, 1, Q)
+        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, Q)
 
         exp_a_c = np.array([[[0.5*(gamma*(4.25 + 2.*2.25) + lam[0]*(1-upsilon)*(1.25) )]]])
 
@@ -444,7 +444,7 @@ class TestStaticCost(tf.test.TestCase):
         gamma = 1.
         upsilon = 1.
 
-        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, 1, Q)
+        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, Q)
 
         exp_a_c = np.array([[[0.5*(gamma*(4.3125 + 2.*2.75) + lam[0]*(1-upsilon)*(5.25) ) ]],
                             [[0.5*(gamma*(4.3125 + 2.*4.3125) + lam[0]*(1-upsilon)*(4.3125) ) ]],
@@ -489,7 +489,6 @@ class TestElipseCost(tf.test.TestCase):
                           gamma,
                           upsilon,
                           sigma,
-                          self.tau,
                           self.a, self.b, self.cx, self.cy,
                           self.s, self.m_s, self.m_v)
 
@@ -518,7 +517,6 @@ class TestElipseCost(tf.test.TestCase):
                           gamma,
                           upsilon,
                           sigma,
-                          self.tau,
                           self.a, self.b, self.cx, self.cy,
                           self.s, self.m_s, self.m_v)
 
@@ -560,7 +558,7 @@ class TestController(tf.test.TestCase):
 
         self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
         model = PointMassModel(self.mass, self.dt, self.s_dim, self.a_dim)
-        cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.tau, self.Q)
+        cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
         self.cont = ControllerBase(model,
                                    cost,
                                    self.k,

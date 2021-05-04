@@ -3,11 +3,11 @@ import os
 
 from tqdm import tqdm
 
-from mppi_tf.scripts.controller_base import ControllerBase
-from mppi_tf.scripts.cost import getCost
-from mppi_tf.scripts.point_mass_model import PointMassModel
-from mppi_tf.scripts.simulation import Simulation
-from mppi_tf.scripts.utile import parse_config, parse_dir, gif_path
+from controller_base import ControllerBase
+from cost import getCost
+from point_mass_model import PointMassModel
+from simulation import Simulation
+from utile import parse_config, parse_dir, gif_path
 
 
 def parse_arg():
@@ -77,7 +77,7 @@ def main():
                       name=os.path.splitext(os.path.basename(conf["env"]))[0])
 
     cost_fc = getCost(args.task, conf['lambda'], conf['gamma'],
-                      conf['upsilon'], conf['noise'], conf["horizon"])
+                      conf['upsilon'], conf['noise'])
 
     cont = ControllerBase(model, cost_fc, k=conf['samples'],
                           tau=conf["horizon"], dt=conf["dt"],
@@ -124,7 +124,7 @@ def plot_sgf():
                       name=os.path.splitext(os.path.basename(conf["env"]))[0])
 
     cost_fc = getCost(args.task, conf['lambda'], conf['gamma'],
-                      conf['upsilon'], conf['noise'], conf["horizon"])
+                      conf['upsilon'], conf['noise'])
 
     cont = ControllerBase(model, cost_fc, k=conf['samples'],
                           tau=conf["horizon"], dt=conf["dt"],
