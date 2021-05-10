@@ -3,6 +3,10 @@ from utile import assert_shape
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class CostBase(object):
+    '''
+        Cost base class for the mppi controller. 
+        This is an abstract class and should be heritated by every specific cost.
+    '''
     def __init__(self, lam, gamma, upsilon, sigma):
         '''
             Abstract class for the cost function. 
@@ -158,10 +162,36 @@ class CostBase(object):
         return return_dict
 
     def state_cost(self, scope, state):
+        '''
+            Computes a step state cost. $q(x)$
+
+            - input:
+            --------
+                - scope. tensorflow scope name.
+                - state. the current state tensor. Shape [k, s_dim, 1]
+            
+            - output:
+            ---------
+                - the cost for the current state.
+        '''
         raise NotImplementedError
 
     def draw_goal(self):
+        '''
+            generates a graph representing the goal.
+        '''
         raise NotImplementedError
 
     def dist(self, state):
+        '''
+            computes a distance metric from the state to the goal.
+            
+            - input:
+            --------
+                - state: The state tensor. Shape [s_dim, 1]
+
+            - output:
+            ---------
+                - the "distance" from the state to the goal.
+        '''
         raise NotImplementedError

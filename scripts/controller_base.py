@@ -13,7 +13,7 @@ import os
 from shutil import copyfile
 import scipy.signal
 
-from utile import log_control, plt_paths
+from utile import log_control, plt_paths, assert_shape
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
@@ -42,6 +42,32 @@ class ControllerBase(object):
                  task_file=None,
                  debug=False):
 
+        '''
+            Mppi controller base class constructor.
+
+            - Input:
+            --------
+                - model: a model object heritated from the model_base class.
+                - Cost: a cost object heritated from the cost_base class.
+                - k: Int, The number of samples used inside the controller.
+                - tau: Int, The number of prediction timesteps.
+                - dt: Float, The timestep size.
+                - s_dim: Int, The state space dimension.
+                - a_dim: Int, The action space dimension.
+                - lam: Float, The inverse temperature.
+                - upsilon: Float, The augmented covariance on the noise term.
+                - sigma: The noise of the system. Array with shape [a_dim, a_dim]
+                - init_seq: The inital action sequence. Array of shape [tau, a_dim, 1]
+                - normalize_cost: Bool, wether or not normalizin the cost, simplifies tuning of lambda
+                - filter_seq: Bool, wether or not to filter the input sequence after each optimization.
+                - log: Bool, if true logs controller info in tensorboard.
+                - log_path: String, the path where the info will be logged.
+                - gif: Bool, if true generates an animated gif of the controller execution (not tested in ros).
+                - config_file: Environment config file.
+                - task_file: Task config file, the cost hyper parameter.
+                - debug: Bool, if true, the controller goes in debug mode and logs more information.
+
+        '''
         # TODO: Check parameters
         self.k = k
         self.tau = tau
@@ -62,7 +88,7 @@ class ControllerBase(object):
         if init_seq.size == 0:
             self.action_seq = np.zeros((self.tau, self.a_dim, 1))
         else:
-            if self.check_shape_np(init_seq, (self.tau, self.a_dim, 1)):
+            if assert_shape(init_seq, (self.tau, self.a_dim, 1)):
                 self.action_seq = init_seq
             else:
                 raise AssertionError
@@ -107,16 +133,11 @@ class ControllerBase(object):
                 copyfile(config_file, conf_dest)
                 copyfile(task_file, task_dest)
 
-    def check_shape(self, array, shape):
-        ashape = array.shape
-        if len(ashape) != len(shape):
-            return False
-        for i, j in zip(ashape, shape):
-            if i != j:
-                return False
-        return True
-
     def save_graph(self):
+        '''
+            Saves the graph in tensorboard.
+
+        '''
         state = np.zeros((1, self.s_dim, 1))
         seq = np.zeros((5, self.a_dim, 1))
         with self.writer.as_default():
@@ -126,9 +147,20 @@ class ControllerBase(object):
             summary_ops_v2.graph(graph.as_graph_def())
 
     def save(self, x, u, x_next):
-        if not (self.check_shape(x, (self.s_dim, 1)) and
-           self.check_shape(u, (self.a_dim, 1)) and
-           self.check_shape(x_next, (self.s_dim, 1)) ):
+        '''
+            Saves the transitions to the replay buffer.
+            If log is True, saves controller info to tensorboard.
+
+            - input:
+            --------
+                - x: the current state. Shape [s_dim, 1]
+                - u: the current action. Shape [a_dim, 1]
+                - x_next: the next state. Shape [s_dim, 1]
+        '''
+
+        if not (assert_shape(x, (self.s_dim, 1)) and
+           assert_shape(u, (self.a_dim, 1)) and
+           assert_shape(x_next, (self.s_dim, 1)) ):
            raise AssertionError
 
         self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
@@ -249,12 +281,45 @@ class ControllerBase(object):
 
     @tf.function
     def _next(self, k, state, action_seq, normalize_cost=False):
+        '''
+            Internal tensorflow part of the controller. 
+            Computes the next action based on the number of sample,s the state, the current action sequence.
+            Should not be called by user directly.
+            
+            - input:
+            --------
+                - k: int, the number of samples to use.
+                - state: np array, the current state of the system. Shape: [s_dim, 1]
+                - action_seq: np array, the current optimized action sequence. Shape: [tau, a_dim ,1]
+                - normalize_cost: Bool, if true the cost are normalized before the expodential.
+
+            - output:
+            ---------
+                - dictionnary with entries:
+                    'next' the next action to be applied. Shape: [a_dim, 1]
+
+        '''
+
+        # every input has already been check in parent function calls
         with tf.name_scope("Controller") as cont:
             state = tf.convert_to_tensor(state, dtype=tf.float64, name=cont)
             return self.buildGraph(cont, k, state, action_seq,
                                    normalize=normalize_cost)
 
     def next(self, state):
+        '''
+            Computes the next action from MPPI controller.
+            input:
+            ------
+                -state. The Current observed state of the system. Shape: [s_dim, 1]
+
+            output:
+            -------
+                - next_action. The next action to be applied to the system. Shape: [a_dim, 1]
+        '''
+        if not tf.ensure_shape(state, [self.s_dim, 1]):
+            raise AssertionError("State tensor doesn't have the expected shape.\n Expected [{}, 1], got {}".format(self.s_dim, state.shape))
+
         return_dict = self._next(self.k, state, self.action_seq, self.normalize_cost)
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
@@ -308,11 +373,37 @@ class ControllerBase(object):
                                   0)
 
     def prepareAction(self, scope, actions, timestep):
-        # shapes: in [tau, a_dim, 1]; out [a_dim, 1]
+        '''
+            Prepares the next action to be applied during the rollouts.
+
+            - input:
+            --------
+                - scope: string, the tensorflow scope name.
+                - actions: the action sequence. Shape [tau, a_dim, 1]
+                - timestep: the current timestep in the rollout.
+
+            - output:
+            ---------
+                - the action to apply: float tensor. Shape [a_dim, 1]
+        '''
+
         return tf.squeeze(tf.slice(actions, [timestep, 0, 0], [1, -1, -1]), 0)
 
     def prepareNoise(self, scope, noises, timestep):
-        # shapes: in [k,, tau, a_dim, 1]; out [k, a_dim, 1]
+        '''
+            Prepares the noise to be applied at the current timestep of the rollouts.
+
+            - input:
+            --------
+                - scope: string, the tensorflow scope name.
+                - noises: float tensor. The noise tensor. Shape [k, tau, a_dim, 1]
+                - timestep: the current timestep of the rollout.
+
+            - output:
+            ---------
+                - noise tensor at time timestep. Shape [k, a_dim, 1]
+        '''
+
         return tf.squeeze(tf.slice(noises,
                                    [0, timestep, 0, 0],
                                    [-1, 1, -1, -1]),
@@ -359,6 +450,26 @@ class ControllerBase(object):
         self.cost.setGoal(next)
 
     def buildGraph(self, scope, k, state, action_seq, normalize=False):
+        '''
+            Builds the tensorflow computational graph for the controller update. First it generates
+            the noise used for the samples. Then it computes the cost of every sample's rollout and then 
+            performes the update of the action sequence (compute weighted average). Finally it gets the next
+            element to apply and shifts the action sequence.
+            
+            - input:
+            --------
+                - k: int, the number of samples to use.
+                - state: np array, the current state of the system. Shape: [s_dim, 1]
+                - action_seq: np array, the current optimized action sequence. Shape: [tau, a_dim ,1]
+                - normalize_cost: Bool, if true the cost are normalized before the expodential.
+
+            - output:
+            ---------
+                - dictionnary with entries:
+                    'noises' the noise tensor used for the current step. Shape [k, tau, a_dim, 1]
+                    'action_seq' the action sequence at the current step. Shape [tau, a_dim, 1]
+                    'next' the next action to be applied. Shape: [a_dim, 1]
+        '''
         return_dict = {}
         with tf.name_scope(scope) as scope:
             with tf.name_scope("random") as rand:
@@ -382,7 +493,22 @@ class ControllerBase(object):
         return return_dict
 
     def buildModel(self, scope, state, noises, action_seq):
+        '''
+            Builds the rollout graph and computes the cost for every sample. 
 
+            - input:
+            --------
+                - scope: string, the tensorflow scope name.
+                - state: the current state of the system. Shape [s_dim, 1]
+                - noises: the noise tensor to use for the rollouts. Shape [k, tau, a_dim, 1]
+                - action_seq: the current action sequence. Shape [tau, a_dim, 1]
+
+            - output:
+            ---------
+                - dictionnary with entries:
+                    'paths' the generated paths for every samples. Shape [k, tau, s_dim, 1]
+
+        '''
         return_dict = {}
         paths = []
 
@@ -412,14 +538,24 @@ class ControllerBase(object):
         return return_dict
 
     def buildNoise(self, scope, k):
-        # scales: in []; out [k, tau, a_dim, 1]
+        '''
+            Buids the tensorflow ops to generate the random noise for the controller.
+            
+            - input:
+            --------
+                - Scope: String, name of the current scope.
+                - k: the number of samples to use.
+            
+            - output:
+            ---------
+                - Noise tensor: float tensor. Shape [k, tau, a_dim, 1]
+        '''
         rng = tf.random.normal(shape=(k, self.tau, self.a_dim, 1),
                                stddev=1.,
                                mean=0.,
                                dtype=tf.float64,
                                seed=1)
 
-        # print(self.upsilon*self.sigma)
         return tf.linalg.matmul(self.upsilon*self.sigma, rng)
 
     def initZeros(self, scope, size):

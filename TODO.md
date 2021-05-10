@@ -30,7 +30,15 @@
 ## Documentation
 
   - [ ] Write documentation.
-  - [ ] Doxygene?
+    - [X] Model base.
+    - [ ] Cost base.
+    - [ ] Controller base.
+    - [ ] auv_model.
+    - [ ] point mass model.
+    - [ ] nn model.
+    - [ ] static cost.
+    - [ ] elipse cost.
+ - [ ] Doxygene?
 
 
 # Python Implementation
@@ -69,6 +77,8 @@
   - [X] write experiment bash script.
   - [X] write repeate experience from log script.
   - [X] write model abstract class.
+  - [ ] write documentation.
+  - [ ] perform argument checking.
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.
@@ -83,6 +93,7 @@
 ## ROS Integration
 
   - [x] run a tf-graph in ros with python3.
+  - [ ] adapt static cost and eliptic cost to 3d problems.
   - [ ] vehicle modelling.
   - [ ] Performance testing.
   - [ ] go to real robot.
