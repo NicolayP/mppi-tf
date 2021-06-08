@@ -24,23 +24,27 @@ def blockDiag(vec, pad, dim):
             vec_np = np.vstack([vec_np, tmp])
     return vec_np
 
-
-def get_data(filename):
-    df = pd.read_csv(filename)
-    df_header = df.copy().columns[0: -1]
-
-    # remove the two last rows as they seem erroneous.
-    arr = df[df_header].to_numpy()[0: -2]
-    x = np.expand_dims(arr[:, 0:2], -1)
-    u = np.expand_dims(arr[:, 2:3], -1)
-    gt = np.expand_dims(arr[:, 3:], -1)
-    return gt, x, u
-
-
 class PointMassModel(ModelBase):
+    '''
+        Point mass model heritated from Model Base class.
+        This model is a simple LTI model of a point mass where the mass
+        is a trainable variable.
+    '''
     def __init__(self, mass=1, dt=0.1, state_dim=2, action_dim=1, name="point_mass"):
-        ModelBase.__init__(self, dt, state_dim, action_dim, name)
+        '''
+            Constructor of the point mass model.
 
+            - input:
+            --------
+                - mass. Float, the inital mass of the model.
+                - state_dim. Int, the state space dimension.
+                - action_dim. Int, the action space dimension.
+                - name. String, model name.
+
+        '''
+
+        ModelBase.__init__(self, state_dim, action_dim, name)
+        self.dt = dt
         mass = tf.Variable([[mass]], name="mass",
                                 trainable=True, dtype=tf.float64)
 
@@ -50,15 +54,58 @@ class PointMassModel(ModelBase):
             self.create_const(c)
 
     def buildStepGraph(self, scope, state, action):
+        '''
+            Abstract method, need to be overwritten in child class.
+            Step graph for the model. This computes the prediction for $\hat{f}(x, u)$
+
+            - input:
+            --------
+                - scope: String, the tensorflow scope name.
+                - state: State tensor. Shape [k, s_dim, 1]
+                - action: Action tensor. Shape [k, a_dim, 1]
+
+            - output:
+            ---------
+                - the next state.
+        '''
+
         with tf.name_scope("Model_Step"):
             return tf.add(self.buildFreeStepGraph("free", state),
                           self.buildActionStepGraph("action", action))
 
     def buildFreeStepGraph(self, scope, state):
+        '''
+            Control free update part of the model. From LTI notation this
+            corresponds to A*x_{t}
+
+            - input:
+            --------
+                - scope: String, the tensorflow scope name.
+                - state: State tensor. Shape [k, s_dim, 1]
+
+            - output:
+            ---------
+                - A*x_{t}: the input free update tensor. Shape [k, s_dim, 1]
+        '''
+
         with tf.name_scope(scope):
             return tf.linalg.matmul(self.A, state, name="A_x")
-        
+
     def buildActionStepGraph(self, scope, action):
+        '''
+            Control update part of the model. From LTI notation this
+            this corresponds to B*u_{t}
+
+            - input:
+            --------
+                - scope: String, the tensorflow scope name.
+                - action: the action tensor. Shape [k, a_dim, 1]
+
+            - output:
+            ---------
+                - B*u_{t}: the input update tensor. Shape [k, s_dim, 1]
+        '''
+
         with tf.name_scope(scope):
             return tf.linalg.matmul(tf.divide(self.B,
                                                 self.model_vars["mass"],
@@ -66,9 +113,21 @@ class PointMassModel(ModelBase):
                                     action, name="B_u")
 
     def getMass(self):
+        '''
+            Return the mnodel estimated mass.
+        '''
+
         return self.model_vars["mass"].numpy()[0]
 
     def create_const(self, scope):
+        '''
+            Creates the A and B matrix of the LTI system.
+
+            - input:
+            --------
+                - scope. String, the tensorflow scope name
+        '''
+
         a = np.array([[1., self.dt], [0., 1.]])
         a_pad = np.array([[0, 0], [0, 0]])
         a_np = blockDiag(a, a_pad, int(self.state_dim/2))
