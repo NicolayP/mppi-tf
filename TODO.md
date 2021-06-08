@@ -31,13 +31,13 @@
 
   - [ ] Write documentation.
     - [X] Model base.
-    - [ ] Cost base.
+    - [X] Cost base.
     - [ ] Controller base.
     - [ ] auv_model.
-    - [ ] point mass model.
-    - [ ] nn model.
+    - [X] point mass model.
+    - [X] nn model.
     - [ ] static cost.
-    - [ ] elipse cost.
+    - [X] elipse cost.
  - [ ] Doxygene?
 
 
@@ -95,6 +95,36 @@
   - [x] run a tf-graph in ros with python3.
   - [ ] adapt static cost and eliptic cost to 3d problems.
   - [ ] vehicle modelling.
+    - [X] step function.
+    - [X] compute acceleration.
+    - [X] compute damping.
+    - [X] compute restoring forces.
+    - [X] compute coriolis matrix.
+    - [X] load ros model parameters.
+      - [X] namespace.
+      - [X] world frame.
+      - [X] body frame.
+      - [X] inertial.
+      - [X] mass.
+      - [X] volume.
+      - [X] density.
+      - [X] height.
+      - [X] length.
+      - [X] width.
+      - [X] center of gravity.
+      - [X] center of buoyancy.
+      - [X] added mass.
+      - [X] gravity?
+      - [X] linear damping.
+      - [X] linear damping forward speed.
+      - [X] quadratic damping.
+      - [X] build mass matrix
+      - [ ] test step function.
+      - [ ] look for learning mechanism.
+    - [ ] write test functions.
+    - [ ] change variables to tensorflow variables.
+    - [ ] find solution to skew operation (maks?).
+
   - [ ] Performance testing.
   - [ ] go to real robot.
 
