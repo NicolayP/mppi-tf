@@ -299,7 +299,7 @@ class ControllerBase(object):
                     'next' the next action to be applied. Shape: [a_dim, 1]
 
         '''
-
+        self.model.set_k(k)
         # every input has already been check in parent function calls
         with tf.name_scope("Controller") as cont:
             state = tf.convert_to_tensor(state, dtype=tf.float64, name=cont)
