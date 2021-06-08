@@ -12,7 +12,7 @@ class ModelBase(object):
         Every model should inherit this class.
     '''
     def __init__(self, state_dim=2,
-                 action_dim=1, name="model"):
+                 action_dim=1, name="model", k=1):
         '''
             Model constructor. 
             
@@ -22,6 +22,7 @@ class ModelBase(object):
                 - action_dim: int. the action space dimension.
                 - name: string. the model name. Used for logging.
         '''
+        self.k = k
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.model_vars = {}
@@ -166,3 +167,5 @@ class ModelBase(object):
         '''
         return self.name
 
+    def set_k(self, k):
+        self.k = k
