@@ -4,7 +4,7 @@ from utile import assert_shape
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class StaticCost(CostBase):
-    def __init__(self, lam, gamma, upsilon, sigma, goal, Q):
+    def __init__(self, lam, gamma, upsilon, sigma, goal, Q, diag=False):
         '''
             Compute the cost for a static point.
 
@@ -21,14 +21,21 @@ class StaticCost(CostBase):
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
         
         self.Q = tf.convert_to_tensor(Q, dtype=tf.float64)
-        self.q_shape = Q.shape
 
+        if diag:
+            self.Q = tf.linalg.diag(self.Q)
+        
+        self.q_shape = self.Q.shape
         self.setGoal(goal)
         
     def setGoal(self, goal):
         if not assert_shape(goal, (self.q_shape[0], 1)):
             raise AssertionError("Goal tensor shape error, expected: [{}, 1], got {}".format(self.q_shape[0], goal.shape))
+
         self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
+
+    def getGoal(self):
+        return self.goal
 
     def state_cost(self, scope, state):
         '''
@@ -56,10 +63,10 @@ class StaticCost(CostBase):
         return return_dict
 
     def draw_goal(self):
-        np_goal = self.getGoal()
+        np_goal = self.goal
         return np_goal[0], np_goal[1]
 
     def dist(self, state):
         return_dict = {}
-        return_dict["dist"] = np.linalg.norm(state-self.getGoal(), axis=-1)
+        return_dict["dist"] = tf.linalg.normalize(state-self.goal, axis=-1)
         return return_dict
