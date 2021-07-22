@@ -254,18 +254,13 @@ class AUVModel(ModelBase):
                      ---------------------------------------
         '''
         k = self._rotBtoI.shape[0]
-        print(k)
+
         O_pad3x3 = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
-        print(O_pad3x3)
         O_pad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
-        print(O_pad4x3)
-        print(self._TBtoIquat)
+
         jac_r1 = tf.concat([self._rotBtoI, O_pad3x3], axis=-1)
-        print(jac_r1)
         jac_r2 = tf.concat([O_pad4x3, self._TBtoIquat], axis=-1)
-        print(jac_r2)
         jac = tf.concat([jac_r1, jac_r2], axis=1)
-        print(jac)
         return jac
 
     def body2inertial_transform(self, pose):
