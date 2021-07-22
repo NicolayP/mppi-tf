@@ -20,7 +20,7 @@ def pm(model_dic, samples, dt, state_dim, action_dim, name):
 
 def auv(model_dic, samples, dt, state_dim, action_dim, name):
     return AUVModel(inertial_frame_id=model_dic['frame_id'],
-                    state_dim=state_dim,
+                    quat=True,
                     action_dim=action_dim,
                     name=name,
                     k=samples,
