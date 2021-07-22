@@ -1,13 +1,14 @@
 import tensorflow as tf
 from model_base import ModelBase
 from point_mass_model import PointMassModel
+from auv_model import AUVModel
 from cost_base import CostBase
 from static_cost import StaticCost
 from elipse_cost import ElipseCost
 from controller_base import ControllerBase
 import numpy as np
 
-class TestModel(tf.test.TestCase):
+class TestPointMassModel(tf.test.TestCase):
     def setUp(self):
         self.dt=0.1
         pass
@@ -199,6 +200,123 @@ class TestModel(tf.test.TestCase):
         mt = model.getMass()
 
         self.assertAllLessEqual(mt, m)
+
+
+class TestAUVModel(tf.test.TestCase):
+    def setUp(self):
+        self.params = dict()
+        self.params["mass"] = 1000
+        self.params["volume"] = 1.5
+        self.params["density"] = 1000
+        self.params["height"] = 1.6
+        self.params["length"] = 2.5
+        self.params["width"] = 1.5
+        self.params["cog"] = [0, 0, 0]
+        self.params["cob"] = [0, 0, 0.5]
+        self.params["Ma"] = [[500., 0., 0., 0., 0., 0.],
+                             [0., 500., 0., 0., 0., 0.],
+                             [0., 0., 500., 0., 0., 0.],
+                             [0., 0., 0., 500., 0., 0.],
+                             [0., 0., 0., 0., 500., 0.],
+                             [0., 0., 0., 0., 0., 500.]]
+        self.params["linear_damping"] = [-70., -70., -700., -300., -300., -100.]
+        self.params["quad_damping"] = [-740., -990., -1800., -670., -770., -520.]
+        self.params["linear_damping_forward_speed"] = [0., 0., 0., 0., 0., 0.]
+        self.inertial = dict()
+        self.inertial["ixx"] = 650.0
+        self.inertial["iyy"] = 750.0
+        self.inertial["izz"] = 550.0
+        self.inertial["ixy"] = 1.0
+        self.inertial["ixz"] = 2.0
+        self.inertial["iyz"] = 3.0
+        self.params["inertial"] = self.inertial
+        self.model = AUVModel(state_dim=12, action_dim=6, dt=0.1, k=1, parameters=self.params)
+
+    def test_restoring(self):
+        pose = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
+        rotBtoI, TBtoI = self.model.body2inertial_transform(pose)
+        self.model.rotBtoI = rotBtoI
+        self.TBtoI = TBtoI
+        rest = self.model.restoring_forces("rest")
+        print("*"*10 + " Rest " + "*"*10)
+        print(rest)
+        print("*"*20)
+        pass
+
+    def test_damping(self):
+        pass
+        vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
+        d = self.model.damping_matrix("damp", vel)
+
+        print("*"*10 + " Damping " + "*"*10)
+        print(d)
+        print("*"*20)
+        pass
+
+    def test_corrolis(self):
+        vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
+        Iv = [self.inertial["ixx"]*vel[0, 3, 0] - self.inertial["ixy"]*vel[0, 4, 0] - self.inertial["ixz"]*vel[0, 5, 0], 
+              - self.inertial["ixy"]*vel[0, 3, 0] + self.inertial["iyy"]*vel[0, 4, 0] - self.inertial["iyz"]*vel[0, 5, 0],
+              - self.inertial["ixz"]*vel[0, 3, 0] - self.inertial["iyz"]*vel[0, 4, 0] + self.inertial["izz"]*vel[0, 5, 0]]
+        Mav = - np.dot(np.array(self.params["Ma"]), vel)
+
+        crb = np.array([[[0., 0., 0., 0., self.params["mass"]*vel[0, 2, 0], -self.params["mass"]*vel[0, 1, 0]],
+                        [0., 0., 0., -self.params["mass"]*vel[0, 2, 0], 0., self.params["mass"]*vel[0, 0, 0]],
+                        [0., 0., 0., self.params["mass"]*vel[0, 1, 0], -self.params["mass"]*vel[0, 0, 0], 0.],
+                        [0., self.params["mass"]*vel[0, 2, 0], -self.params["mass"]*vel[0, 1, 0], 0., Iv[2], -Iv[1]],
+                        [-self.params["mass"]*vel[0, 2, 0], 0., self.params["mass"]*vel[0, 0, 0], -Iv[2], 0., Iv[0]],
+                        [self.params["mass"]*vel[0, 1, 0], -self.params["mass"]*vel[0, 0, 0], 0., Iv[1], -Iv[0], 0.]]])
+
+        ca = np.array([[[0., 0., 0., 0., -Mav[2, 0, 0], Mav[1, 0, 0]],
+                       [0., 0., 0., Mav[2, 0, 0], 0., -Mav[0, 0, 0]],
+                       [0., 0., 0., -Mav[1, 0, 0], Mav[0, 0, 0], 0.],
+                       [0., -Mav[2, 0, 0], Mav[1, 0, 0], 0., -Mav[5, 0, 0], Mav[4, 0, 0]],
+                       [Mav[2, 0, 0], 0., -Mav[0, 0, 0], Mav[5, 0, 0], 0., -Mav[3, 0, 0]],
+                       [-Mav[1, 0, 0], Mav[0, 0, 0], 0., -Mav[4, 0, 0], Mav[3, 0, 0], 0.]]])
+
+        c = self.model.coriolis_matrix("coriolis", vel)
+
+        self.assertAllClose(c, crb + ca)
+        pass
+
+    def test_step1_k1_s12_a6(self):
+        state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
+                           [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]])
+        action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]])
+        next_state = self.model.buildStepGraph("step", state, action)
+
+        print("*"*10 + " Next State " + "*"*10)
+        print(next_state)
+        print("*"*20)
+        pass
+
+    def test_step1_k5_s12_a6(self):
+        state = np.array([ [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
+                             [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ],
+
+                           [ [1.0], [1.0], [1.0], [0.0], [0.0], [0.0],
+                             [0.1], [2.0], [2.0], [1.0], [2.0], [3.0] ],
+
+                           [ [0.0], [2.0], [1.0], [0.2], [0.3], [0.0],
+                             [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ],
+
+                           [ [5.0], [0.2], [0.0], [1.2], [0.0], [3.1],
+                             [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ],
+
+                           [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
+                             [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ] ])
+
+        action = np.array([[ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ],
+                           [ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ],
+                           [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ],
+                           [ [2.0], [2.0], [2.0], [2.0], [2.0], [2.0] ],
+                           [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]])
+
+        next_state = self.model.buildStepGraph("step", state, action)
+        print("*"*10 + " Next State Many " + "*"*10)
+        print(next_state)
+        print("*"*20)
+        pass
 
 class TestCost(tf.test.TestCase):
     def setUp(self):
@@ -542,7 +660,7 @@ class TestController(tf.test.TestCase):
         self.gamma = 1.
         self.upsilon = 1.
 
-        self.goal = np.array([[0.], [1.]])
+        self.goal = np.array([[0.], [1.], [0.], [1.]])
         self.sigma = np.array([[1., 0.], [0., 1.]])
         self.Q = np.array([[1., 0., 0., 0.],
                            [0., 1., 0., 0.],
