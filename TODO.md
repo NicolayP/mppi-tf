@@ -119,11 +119,16 @@
       - [X] linear damping forward speed.
       - [X] quadratic damping.
       - [X] build mass matrix
-      - [ ] test step function.
-      - [ ] look for learning mechanism.
+    - [X] test step function.
+    - [ ] Why is model exploding
+      - [X] Damping matrix computation had an error. Done, compared with the UUV implementation and have no diff anymore.
+      - [X] Rerun the data gen process and see if it still explodes. It still explodes. Need to look at the angles as they are not normalized.
+      - [X] Implement quaternions. 
+      - [ ] Test quaternions.
+    - [ ] look for learning mechanism.
     - [ ] write test functions.
     - [ ] change variables to tensorflow variables.
-    - [ ] find solution to skew operation (maks?).
+    - [X] find solution to skew operation concat .
 
   - [ ] Performance testing.
   - [ ] go to real robot.
