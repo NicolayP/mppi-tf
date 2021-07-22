@@ -143,16 +143,14 @@ class ElipseCost3D(CostBase):
         '''
         if not assert_shape(state, (-1, 12, 1)):
             raise AssertionError("State tensor doesn't have the expected shape.\n Expected [k/1, 12, 1], got {}".format(state.shape))
-
-
         return_dict = {}
-        x = state[:, 0]
-        y = state[:, 1]
-        z = state[:, 2]
+        x = tf.expand_dims(state[:, 0], axis=-1)
+        y = tf.expand_dims(state[:, 1], axis=-1)
+        z = tf.expand_dims(state[:, 2], axis=-1)
 
-        vx = state[:, 6]
-        vy = state[:, 7]
-        vz = state[:, 8]
+        vx = tf.expand_dims(state[:, 6], axis=-1)
+        vy = tf.expand_dims(state[:, 7], axis=-1)
+        vz = tf.expand_dims(state[:, 8], axis=-1)
 
         v = tf.sqrt(tf.pow(vx, 2) + tf.pow(vy, 2))
         diffx = tf.divide(tf.math.subtract(x, self.cx, name="diff"), self.a)
