@@ -123,7 +123,7 @@ class ControllerBase(object):
 
             self.error_step = 0
             self.cost_step = 0
-            self.save_graph()
+            #self.save_graph()
 
             self.summary_name = ["x", "y", "z"]
 
@@ -161,7 +161,7 @@ class ControllerBase(object):
         if not (assert_shape(x, (self.s_dim, 1)) and
            assert_shape(u, (self.a_dim, 1)) and
            assert_shape(x_next, (self.s_dim, 1)) ):
-           raise AssertionError
+           raise AssertionError("Input shape missmatch, x.shape = {}; expected {}, u.shape = {}; expected {}, x_next.shape = {}; expected {}". format(x.shape, (self.s_dim, 1), u.shape, (self.a_dim, 1), x_next.shape, (self.s_dim, 1)))
 
         self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
         
@@ -176,7 +176,7 @@ class ControllerBase(object):
     def ch_dict_prefix(self, prefix, cur_dict):
         return_dict = {}
         for item in cur_dict:
-            return_dict[prefix+"_"+item] = cur_dict[item][0, 0, 0]
+            return_dict[prefix+"_"+item] = cur_dict[item]
         return return_dict
 
     def state_error(self, state_gt, state_pred):
@@ -200,7 +200,7 @@ class ControllerBase(object):
         # TODO: get first predicted next state, predict action sequence, compute diff between first next state and next state
         # log error on prediction, predicted cost, action input, state input.
         return_dict = {}
-        next_state = self.model.predict(x, u)
+        next_state = self.model.predict(np.expand_dims(x, axis=0), np.expand_dims(u, axis=0))
         error_dict = self.state_error(x_next, next_state.numpy()[0, :, :])
         return_dict["next_state"] = x_next
         return_dict["state"] = x
@@ -279,7 +279,7 @@ class ControllerBase(object):
         plt.show()
         '''
 
-    @tf.function
+    #@tf.function
     def _next(self, k, state, action_seq, normalize_cost=False):
         '''
             Internal tensorflow part of the controller. 
@@ -317,9 +317,9 @@ class ControllerBase(object):
             -------
                 - next_action. The next action to be applied to the system. Shape: [a_dim, 1]
         '''
-        if not tf.ensure_shape(state, [self.s_dim, 1]):
-            raise AssertionError("State tensor doesn't have the expected shape.\n Expected [{}, 1], got {}".format(self.s_dim, state.shape))
 
+        #if not tf.ensure_shape(state, [self.s_dim, 1]):
+        #    raise AssertionError("State tensor doesn't have the expected shape.\n Expected [{}, 1], got {}".format(self.s_dim, state.shape))
         return_dict = self._next(self.k, state, self.action_seq, self.normalize_cost)
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
@@ -336,6 +336,15 @@ class ControllerBase(object):
         self.log_dict = return_dict
 
         return np.squeeze(return_dict["next"].numpy())
+
+    def getPaths(self):
+        return self.log_dict["paths"].numpy()
+
+    def getApplied(self):
+        return self.log_dict["applied"].numpy()
+
+    def getLog(self):
+        return self.log_dict.copy()
 
     def beta(self, scope, cost):
         # shapes: in [k, 1, 1]; out [1, 1]
@@ -509,8 +518,15 @@ class ControllerBase(object):
                     'paths' the generated paths for every samples. Shape [k, tau, s_dim, 1]
 
         '''
+        state = tf.expand_dims(state, axis=0)
+        sshape = state.shape
+        k = noises.shape[0]
         return_dict = {}
-        paths = []
+        paths = [tf.broadcast_to(state, [k, sshape[0], sshape[1], sshape[2]])]
+        applied = []
+
+        #print("*"*5 + " Initial state " + "*"*5)
+        #print(state)
 
         for i in range(self.tau):
             with tf.name_scope("Prepare_data_" + str(i)) as pd:
@@ -519,14 +535,19 @@ class ControllerBase(object):
                 to_apply = tf.add(action, noise, name="to_apply")
             with tf.name_scope("Step_" + str(i)) as s:
                 next_state = self.model.buildStepGraph(s, state, to_apply)
+                #print("*"*5 + " Step: " + str(i) + " " + "*"*5)
+                #print(next_state)
             with tf.name_scope("Cost_" + str(i)) as c:
                 tmp_dict = self.cost.build_step_cost_graph(c, next_state,
                                                            action, noise)
                 cost_dict = self.cost.add_cost(c, tmp_dict, return_dict)
+
             state = next_state
 
             paths.append(tf.expand_dims(state, 1))
+            applied.append(tf.expand_dims(to_apply, 1))
         paths = tf.concat(paths, 1)
+        applied = tf.concat(applied, 1)
 
         with tf.name_scope("terminal_cost") as s:
             f_cost_dict = self.cost.build_final_step_cost_graph(s, next_state)
@@ -534,6 +555,7 @@ class ControllerBase(object):
             sample_costs_dict = self.cost.add_cost(c, f_cost_dict, cost_dict)
 
         return_dict["paths"] = paths
+        return_dict["applied"] = applied
         return_dict = {**return_dict, **sample_costs_dict}
         return return_dict
 
