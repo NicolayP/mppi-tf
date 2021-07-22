@@ -1,5 +1,6 @@
 ---
     type: "static"
+    diag: false
     goal:
       - 1.0
       - 0.0
