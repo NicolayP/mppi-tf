@@ -181,16 +181,16 @@ def log_control(writer, control_items):
 
             elif key == "mix_cost":
                 mix_cost = control_items[key]
-                avg_mix = np.mean(speed_cost)
-                best_mix = speed_cost[best_id, 0, 0]
+                avg_mix = np.mean(mix_cost)
+                best_mix = mix_cost[best_id, 0, 0]
                 tf.summary.scalar("cost/action/avg_mix_cost", avg_mix, step=control_step)
                 tf.summary.scalar("cost/action/best_mix_cost", best_mix, step=control_step)
                 tf.summary.histogram("cost/action/mix_cost", mix_cost, step=control_step)
 
             elif key == "control_cost":
                 control_cost = control_items[key]
-                avg_control = np.mean(speed_cost)
-                best_control = speed_cost[best_id, 0, 0]
+                avg_control = np.mean(control_cost)
+                best_control = control_cost[best_id, 0, 0]
                 tf.summary.scalar("cost/action/avg_control_cost", avg_control, step=control_step)
                 tf.summary.scalar("cost/action/best_control_cost", best_control, step=control_step)
                 tf.summary.histogram("cost/action/control_cost", control_cost, step=control_step)
@@ -224,15 +224,15 @@ def log_control(writer, control_items):
 
             elif key == "predicted_speed_cost":
                 ps_cost = control_items[key]
-                tf.summary.scalar("predicted/speed_cost", ps_cost, step=control_step)
+                tf.summary.scalar("predicted/speed_cost", tf.squeeze(ps_cost), step=control_step)
             
             elif key == "predicted_state_cost":
                 pstate_cost = control_items[key]
-                tf.summary.scalar("predicted/state_cost", pstate_cost, step=control_step)
+                tf.summary.scalar("predicted/state_cost", tf.squeeze(pstate_cost), step=control_step)
             
             elif key == "predicted_position_cost":
                 pp_cost = control_items[key]
-                tf.summary.scalar("predicted/position_cost", pp_cost, step=control_step)
+                tf.summary.scalar("predicted/position_cost", tf.squeeze(pp_cost), step=control_step)
 
             elif key == "next":
                 action = control_items[key][0]
