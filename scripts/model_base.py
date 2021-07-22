@@ -155,6 +155,7 @@ class ModelBase(object):
             ---------
                 - the predicted next state. Shape [1, s_dim, 1]
         '''
+        self.k = 1
         return self.buildStepGraph("step", state, action)
 
     def getName(self):
