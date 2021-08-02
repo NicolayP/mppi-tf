@@ -236,7 +236,7 @@ class TestAUVModel(tf.test.TestCase):
         self.model_quat = AUVModel(quat=True, action_dim=6, dt=0.1, k=1, parameters=self.params)
         self.model_euler = AUVModel(quat=False, action_dim=6, dt=0.1, k=1, parameters=self.params)
 
-    def test_B2I_transform(self):
+    def test_B2I_transform_and_jacobian(self):
         ''' 
             Quat representation is [w, x, y, z] 
             quat: shape [k, 13, 1]
@@ -364,6 +364,21 @@ class TestAUVModel(tf.test.TestCase):
         exp_TB2Iquat[:, 3, 2] = quat[:, wid, 0]
         
         exp_TB2Iquat = 0.5*exp_TB2Iquat
+
+        self.model_quat.body2inertial_transform_q(pose_quat)
+
+        self.assertAllClose(self.model_quat._rotBtoI, exp_rot)
+        self.assertAllClose(self.model_quat._rotBtoI, rot_from_lib)
+
+        self.assertAllClose(self.model_quat._TBtoIquat, exp_TB2Iquat)
+
+        exp_jac_quat = np.zeros(shape=(3, 7, 6))
+        exp_jac_quat[:, 0:3, 0:3] = exp_rot
+        exp_jac_quat[:, 3:7, 3:6] = exp_TB2Iquat
+        jac_quat = self.model_quat.get_jacobian_q()
+
+        self.assertAllClose(jac_quat, exp_jac_quat)
+
         # Euler section 
         rid=3
         pid=4
@@ -412,20 +427,22 @@ class TestAUVModel(tf.test.TestCase):
         exp_TB2Ieuler[:, 2, 1] = sr/cp
         exp_TB2Ieuler[:, 2, 2] = cr/cp
 
-        self.model_quat.body2inertial_transform_q(pose_quat)
         self.model_euler.body2inertial_transform(pose_euler)
-
-        self.assertAllClose(self.model_quat._rotBtoI, exp_rot)
-        self.assertAllClose(self.model_quat._rotBtoI, exp_rot_euler)
-        self.assertAllClose(self.model_quat._rotBtoI, rot_from_lib)
 
         self.assertAllClose(self.model_euler._rotBtoI, exp_rot)
         self.assertAllClose(self.model_euler._rotBtoI, exp_rot_euler)
         self.assertAllClose(self.model_euler._rotBtoI, rot_from_lib)
-        
-        self.assertAllClose(self.model_quat._TBtoIquat, exp_TB2Iquat)
 
         self.assertAllClose(self.model_euler._TBtoIeuler, exp_TB2Ieuler)
+
+        exp_jac_euler = np.zeros(shape=(3, 6, 6))
+        exp_jac_euler[:, 0:3, 0:3] = exp_rot
+        exp_jac_euler[:, 3:6, 3:6] = exp_TB2Ieuler
+
+        jac_euler = self.model_euler.get_jacobian()
+        self.assertAllClose(jac_euler, exp_jac_euler)
+
+
 
     def test_restoring(self):
         pose = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])

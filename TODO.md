@@ -128,9 +128,9 @@
         - [X] check rot.
         - [X] check t.
         - [X] verify order of multiplication.
-        - [ ] check jacobian.
+        - [X] check jacobian.
         - [ ] check multiplication in step.
-        - [ ] check converstion.
+        - [X] check converstion.
         
     - [ ] look for learning mechanism.
     - [ ] write test functions.

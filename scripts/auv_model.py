@@ -581,17 +581,17 @@ def dummpy_plot(traj=None, applied=None):
     y = traj_plot[:, :, 1]
     z = traj_plot[:, :, 2]
 
-    r = traj_plot[:, :, 3]
-    p = traj_plot[:, :, 4]
-    ya = traj_plot[:, :, 5]
+    r = traj_plot[:, :, 3]*180/np.pi
+    p = traj_plot[:, :, 4]*180/np.pi
+    ya = traj_plot[:, :, 5]*180/np.pi
 
     vx = traj_plot[:, :, 6]
     vy = traj_plot[:, :, 7]
     vz = traj_plot[:, :, 8]
 
-    vr = traj_plot[:, :, 9]
-    vp = traj_plot[:, :, 10]
-    vya = traj_plot[:, :, 11]
+    vr = traj_plot[:, :, 9]*180/np.pi
+    vp = traj_plot[:, :, 10]*180/np.pi
+    vya = traj_plot[:, :, 11]*180/np.pi
 
     shape = traj_plot.shape
 
@@ -609,39 +609,44 @@ def dummpy_plot(traj=None, applied=None):
     for i in range(shape[0]):
 
         axs[0, 0].plot(x[i, :])
-
+        axs[0, 0].title.set_text(' X (m)')
 
         axs[1, 0].plot(y[i, :])
+        axs[1, 0].title.set_text(' Y (m)')
 
         axs[2, 0].plot(z[i, :])
+        axs[2, 0].title.set_text(' Z (m)')
 
         axs[0, 1].plot(r[i, :])
+        axs[0, 1].title.set_text(' Roll (Degrees)')
 
         axs[1, 1].plot(p[i, :])
+        axs[1, 1].title.set_text(' Pitch (Degrees)')
 
         axs[2, 1].plot(ya[i, :])
+        axs[2, 1].title.set_text(' Yaw (Degrees)')
 
 
     fig1, axs1 = plt.subplots(3, 2)
     for i in range(shape[0]):
 
         axs1[0, 0].plot(vx[i, :])
+        axs1[0, 0].title.set_text(' Vel_x (m/s)')
 
+        axs1[1, 0].plot(vy[i, :])
+        axs1[1, 0].title.set_text(' Vel_y (m/s)')
 
-        axs1[0, 1].plot(vy[i, :])
+        axs1[2, 0].plot(vz[i, :])
+        axs1[2, 0].title.set_text(' Vel_z (m/s)')
 
+        axs1[0, 1].plot(vr[i, :])
+        axs1[0, 1].title.set_text(' Ang vel_p (deg/s)')
 
-        axs1[1, 0].plot(vz[i, :])
-
-
-        axs1[1, 1].plot(vr[i, :])
-
-
-        axs1[2, 0].plot(vp[i, :])
-
+        axs1[1, 1].plot(vp[i, :])
+        axs1[1, 1].title.set_text(' Ang_vel_q (deg/s)')
 
         axs1[2, 1].plot(vya[i, :])
-
+        axs1[2, 1].title.set_text(' Ang_vel_r (deg/s)')
 
     applied_plot = np.squeeze(applied, axis=-1)
 
@@ -688,6 +693,27 @@ def to_quat(state_euler):
         quats[i, 3, 0] = q.z
 
     return np.concatenate([pos, quats, vel], axis=1)
+
+def euler_rot(state, rotBtoI):
+    """`list`: Orientation in Euler angles in radians 
+    as described in Fossen, 2011.
+    """
+    # Rotation matrix from BODY to INERTIAL
+    rot = rotBtoI
+    # Roll
+    roll = np.arctan2(rot[:, 2, 1], rot[:, 2, 2])
+    # Pitch, treating singularity cases
+    den = np.sqrt(1 - rot[:, 2, 1]**2)
+    pitch = - np.arctan(rot[:, 2, 1] / den)
+    # Yaw
+    yaw = np.arctan2(rot[:, 1, 0], rot[:, 0, 0])
+    pos = state[:, :, 0:3, :]
+    vel = state[:, :, 7:13, :]
+    euler = np.expand_dims(np.expand_dims(np.array([roll, pitch, yaw]),axis=0), axis=0)
+
+    state_euler =  np.concatenate([pos, euler, vel], axis=2)
+
+    return state_euler
 
 def to_euler(state_quat):
     k = state_quat.shape[0]
@@ -765,7 +791,7 @@ def main():
         
         fake_out_quat = auv_quat.buildStepGraph("foo", fake_out_quat, fake_in)
         
-        fake_state_quat_list.append(to_euler(np.expand_dims(fake_out_quat, axis=1)))
+        fake_state_quat_list.append(euler_rot(np.expand_dims(fake_out_quat, axis=1), auv_quat._rotBtoI))
         fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
         fake_applied_list.append(fake_in_expand)
         #print(fake_out_quat)
