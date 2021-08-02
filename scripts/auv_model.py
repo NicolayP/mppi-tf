@@ -664,16 +664,16 @@ def dummpy_plot(traj=None, applied=None):
     #print(fy.shape)
     #print(fz.shape)
 
-    fig2, axs2 = plt.subplots(3, 2)
-    for i in range(shape[0]):
-        axs2[0, 0].plot(fx[i, :])
-        axs2[0, 1].plot(fy[i, :])
-
-        axs2[1, 0].plot(fz[i, :])
-
-        axs2[1, 1].plot(tx[i, :])
-        axs2[2, 0].plot(ty[i, :])
-        axs2[2, 1].plot(tz[i, :])
+#    fig2, axs2 = plt.subplots(3, 2)
+#    for i in range(shape[0]):
+#        axs2[0, 0].plot(fx[i, :])
+#        axs2[0, 1].plot(fy[i, :])
+#
+#        axs2[1, 0].plot(fz[i, :])
+#
+#        axs2[1, 1].plot(tx[i, :])
+#        axs2[2, 0].plot(ty[i, :])
+#        axs2[2, 1].plot(tz[i, :])
 
 
     pass
@@ -701,15 +701,15 @@ def euler_rot(state, rotBtoI):
     # Rotation matrix from BODY to INERTIAL
     rot = rotBtoI
     # Roll
-    roll = np.arctan2(rot[:, 2, 1], rot[:, 2, 2])
+    roll = np.expand_dims(np.arctan2(rot[:, 2, 1], rot[:, 2, 2]), axis=-1)
     # Pitch, treating singularity cases
-    den = np.sqrt(1 - rot[:, 2, 1]**2)
-    pitch = - np.arctan(rot[:, 2, 1] / den)
+    den = np.sqrt(1 - rot[:, 2, 0]**2)
+    pitch = np.expand_dims(-np.arctan(rot[:, 2, 0] / den), axis=-1)
     # Yaw
-    yaw = np.arctan2(rot[:, 1, 0], rot[:, 0, 0])
+    yaw = np.expand_dims(np.arctan2(rot[:, 1, 0], rot[:, 0, 0]), axis=-1)
     pos = state[:, :, 0:3, :]
     vel = state[:, :, 7:13, :]
-    euler = np.expand_dims(np.expand_dims(np.array([roll, pitch, yaw]),axis=0), axis=0)
+    euler = np.expand_dims(np.expand_dims(np.concatenate([roll, pitch, yaw], axis=-1), axis=-1), axis=1)
 
     state_euler =  np.concatenate([pos, euler, vel], axis=2)
 
@@ -735,7 +735,8 @@ def to_euler(state_quat):
     return state_euler
 
 def main():
-
+    k = 100
+    tau = 1000
     params = dict()
     params["mass"] = 1862.87
     params["volume"] = 1.83826
@@ -762,47 +763,49 @@ def main():
     inertial["ixz"] = 33.41
     inertial["iyz"] = 2.6
     params["inertial"] = inertial
-    auv_quat = AUVModel(quat=True, action_dim=6, dt=0.1, k=1, parameters=params)
-    auv_euler = AUVModel(quat=False, action_dim=6, dt=0.1, k=1, parameters=params)
+    auv_quat = AUVModel(quat=True, action_dim=6, dt=0.1, k=k, parameters=params)
+    #auv_euler = AUVModel(quat=False, action_dim=6, dt=0.1, k=1, parameters=params)
 
 
-    print("*"*5 + " Initial state " + "*"*5)
     #fake input.
     fake_state_quat_list = []
-    fake_state_euler_list = []
+    #fake_state_euler_list = []
     fake_applied_list = []
 
     fake_out_quat = np.array([[[0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
-    fake_out_euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
-    fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
-                        [[1.], [2.], [0.], [0.], [1.], [0.]]])
+    fake_out_quat = np.broadcast_to(fake_out_quat, shape=(k, 13, 1))
+    #fake_out_euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
+    #fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
+    #                    [[1.], [2.], [0.], [0.], [1.], [0.]]])
 
-    fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]]])
-    fake_in_expand = np.expand_dims(fake_in, axis=1)
+    #fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]]])
+    fake_in = np.random.normal(loc=0.0, scale=1000.0, size=(k, tau, 6, 1))
+
+    #fake_in_expand = np.expand_dims(fake_in, axis=1)
 
     fake_state_quat_list.append(to_euler(np.expand_dims(fake_out_quat, axis=1)))
-    fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
+    #fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
 
 
-    for i in range(1000):
-        fake_out_euler = auv_euler.buildStepGraph("foo", fake_out_euler, fake_in)
+    for i in range(tau):
+        #fake_out_euler = auv_euler.buildStepGraph("foo", fake_out_euler, fake_in)
         #print(fake_out_euler)
         #fake_out_euler_to_quat = to_quat(fake_out_euler)
-        
-        fake_out_quat = auv_quat.buildStepGraph("foo", fake_out_quat, fake_in)
+        fake_out_quat = auv_quat.buildStepGraph("foo", fake_out_quat, fake_in[:, i, :, :])
         
         fake_state_quat_list.append(euler_rot(np.expand_dims(fake_out_quat, axis=1), auv_quat._rotBtoI))
-        fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
-        fake_applied_list.append(fake_in_expand)
+        #fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
+        fake_applied_list.append(fake_in)
         #print(fake_out_quat)
 
         #print(fake_out_euler_to_quat-fake_out_quat)
 
         #input()
     fake_state_quat_list = np.concatenate(fake_state_quat_list, axis=1)
-    fake_state_euler_list = np.concatenate(fake_state_euler_list, axis=1)
+    #fake_state_euler_list = np.concatenate(fake_state_euler_list, axis=1)
 
-    fake_states_list = np.concatenate([fake_state_euler_list, fake_state_quat_list], axis=0)
+    #fake_states_list = np.concatenate([fake_state_euler_list, fake_state_quat_list], axis=0)
+    fake_states_list = fake_state_quat_list
     fake_applied_list = np.concatenate(fake_applied_list, axis=1)
     
     dummpy_plot(fake_states_list, fake_applied_list)
