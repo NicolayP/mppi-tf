@@ -125,6 +125,13 @@
       - [X] Rerun the data gen process and see if it still explodes. It still explodes. Need to look at the angles as they are not normalized.
       - [X] Implement quaternions. 
       - [ ] Test quaternions.
+        - [X] check rot.
+        - [X] check t.
+        - [X] verify order of multiplication.
+        - [ ] check jacobian.
+        - [ ] check multiplication in step.
+        - [ ] check converstion.
+        
     - [ ] look for learning mechanism.
     - [ ] write test functions.
     - [ ] change variables to tensorflow variables.

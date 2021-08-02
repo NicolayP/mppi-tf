@@ -7,6 +7,9 @@ from static_cost import StaticCost
 from elipse_cost import ElipseCost
 from controller_base import ControllerBase
 import numpy as np
+from uuv_control_msgs import srv
+
+from quaternion import from_euler_angles
 
 class TestPointMassModel(tf.test.TestCase):
     def setUp(self):
@@ -230,27 +233,217 @@ class TestAUVModel(tf.test.TestCase):
         self.inertial["ixz"] = 2.0
         self.inertial["iyz"] = 3.0
         self.params["inertial"] = self.inertial
-        self.model = AUVModel(state_dim=12, action_dim=6, dt=0.1, k=1, parameters=self.params)
+        self.model_quat = AUVModel(quat=True, action_dim=6, dt=0.1, k=1, parameters=self.params)
+        self.model_euler = AUVModel(quat=False, action_dim=6, dt=0.1, k=1, parameters=self.params)
+
+    def test_B2I_transform(self):
+        ''' 
+            Quat representation is [w, x, y, z] 
+            quat: shape [k, 13, 1]
+            euler representation is [roll, pitch, yaw]
+            euler: shape [k, 12, 1]
+        '''
+
+        quat = np.array([[[0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]],
+                                  [[0.], [0.], [0.], [0.950510320581509], [0.0438308910967523], [0.25508068761447], [0.171880267220619], [0.], [0.], [0.], [0.], [0.], [0.]],
+                                  [[0.], [0.], [0.], [0.586824089619078], [-0.111618880991033], [0.633022223770408], [0.492403876367579], [0.], [0.], [0.], [0.], [0.], [0.]]])
+
+
+        euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]],
+                                   [[0.], [0.], [0.], [0.1949573], [0.4891167], [0.4065898], [0.], [0.], [0.], [0.], [0.], [0.]],
+                                   [[0.], [0.], [0.], [1.2317591], [1.0214548], [2.1513002], [0.], [0.], [0.], [0.], [0.], [0.]]])
+
+        inp = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]]])
+        pose_quat, speed_quat = self.model_quat.prepare_data(quat)
+        pose_euler, speed_euler = self.model_euler.prepare_data(euler)
+
+        # Quaternion section
+        rot_from_lib = np.array([
+                                 [
+                                  [1.0000000, 0.0000000, 0.0000000],
+                                  [0.0000000, 1.0000000, 0.0000000],
+                                  [0.0000000, 0.0000000, 1.0000000]
+                                 ],
+
+                                 [
+                                  [ 0.8107820, -0.3043871,  0.4999810],
+                                  [ 0.3491088,  0.9370720,  0.0043632],
+                                  [-0.4698463,  0.1710101,  0.8660254]
+                                 ],
+
+                                 [
+                                  [-0.2863574, -0.7192234,  0.6330222],
+                                  [ 0.4365945,  0.4901593,  0.7544065],
+                                  [-0.8528685,  0.4924039,  0.1736482]
+                                 ]
+                                ])
+        wid=3
+        xid=4
+        yid=5
+        zid=6
+
+        exp_rot = np.array([
+                            [
+                             [
+                              1.-2.*(quat[0, yid, 0]**2. + quat[0, zid, 0]**2.), 
+                              2*(quat[0, xid, 0]*quat[0, yid, 0] - quat[0, zid, 0]*quat[0, wid, 0]),
+                              2*(quat[0, xid, 0]*quat[0, zid, 0] + quat[0, yid, 0]*quat[0, wid, 0])
+                             ],
+
+                             [
+                              2*(quat[0, xid, 0]*quat[0, yid, 0] + quat[0, zid, 0]*quat[0, wid, 0]),
+                              1.-2.*(quat[0, xid, 0]**2. + quat[0, zid, 0]**2.),
+                              2*(quat[0, yid, 0]*quat[0, zid, 0] - quat[0, xid, 0]*quat[0, wid, 0])
+                             ],
+
+                             [
+                              2*(quat[0, xid, 0]*quat[0, zid, 0] - quat[0, yid, 0]*quat[0, wid, 0]),
+                              2*(quat[0, yid, 0]*quat[0, zid, 0] + quat[0, xid, 0]*quat[0, wid, 0]),
+                              1.-2.*(quat[0, xid, 0]**2. + quat[0, yid, 0]**2.)
+                             ]
+                            ],
+
+                            [
+                             [
+                              1.-2.*(quat[1, yid, 0]**2. + quat[1, zid, 0]**2.),
+                              2*(quat[1, xid, 0]*quat[1, yid, 0] - quat[1, zid, 0]*quat[1, wid, 0]),
+                              2*(quat[1, xid, 0]*quat[1, zid, 0] + quat[1, yid, 0]*quat[1, wid, 0])
+                             ],
+
+                             [
+                              2*(quat[1, xid, 0]*quat[1, yid, 0] + quat[1, zid, 0]*quat[1, wid, 0]),
+                              1.-2.*(quat[1, xid, 0]**2. + quat[1, zid, 0]**2.),
+                              2*(quat[1, yid, 0]*quat[1, zid, 0] - quat[1, xid, 0]*quat[1, wid, 0])
+                             ],
+
+                             [
+                              2*(quat[1, xid, 0]*quat[1, zid, 0] - quat[1, yid, 0]*quat[1, wid, 0]),
+                              2*(quat[1, yid, 0]*quat[1, zid, 0] + quat[1, xid, 0]*quat[1, wid, 0]),
+                              1.-2.*(quat[1, xid, 0]**2. + quat[1, yid, 0]**2.)
+                             ]
+                            ],
+                            
+                            [
+                             [
+                              1.-2.*(quat[2, yid, 0]**2. + quat[2, zid, 0]**2.),
+                              2*(quat[2, xid, 0]*quat[2, yid, 0] - quat[2, zid, 0]*quat[2, wid, 0]),
+                              2*(quat[2, xid, 0]*quat[2, zid, 0] + quat[2, yid, 0]*quat[2, wid, 0])
+                             ],
+
+                             [
+                              2*(quat[2, xid, 0]*quat[2, yid, 0] + quat[2, zid, 0]*quat[2, wid, 0]),
+                              1.-2.*(quat[2, xid, 0]**2. + quat[2, zid, 0]**2.),
+                              2*(quat[2, yid, 0]*quat[2, zid, 0] - quat[2, xid, 0]*quat[2, wid, 0])
+                             ],
+
+                             [
+                              2*(quat[2, xid, 0]*quat[2, zid, 0] - quat[2, yid, 0]*quat[2, wid, 0]),
+                              2*(quat[2, yid, 0]*quat[2, zid, 0] + quat[2, xid, 0]*quat[2, wid, 0]),
+                              1.-2.*(quat[2, xid, 0]**2. + quat[2, yid, 0]**2.)
+                             ]
+                            ]
+                           ])
+
+
+        exp_TB2Iquat = np.zeros(shape=(3, 4, 3))
+
+        exp_TB2Iquat[:, 0, 0] = -quat[:, xid, 0]
+        exp_TB2Iquat[:, 0, 1] = -quat[:, yid, 0]
+        exp_TB2Iquat[:, 0, 2] = -quat[:, zid, 0]
+
+        exp_TB2Iquat[:, 1, 0] = quat[:, wid, 0]
+        exp_TB2Iquat[:, 1, 1] = -quat[:, zid, 0]
+        exp_TB2Iquat[:, 1, 2] = quat[:, yid, 0]
+
+        exp_TB2Iquat[:, 2, 0] = quat[:, zid, 0]
+        exp_TB2Iquat[:, 2, 1] = quat[:, wid, 0]
+        exp_TB2Iquat[:, 2, 2] = -quat[:, xid, 0]
+
+        exp_TB2Iquat[:, 3, 0] = -quat[:, yid, 0]
+        exp_TB2Iquat[:, 3, 1] = quat[:, xid, 0]
+        exp_TB2Iquat[:, 3, 2] = quat[:, wid, 0]
+        
+        exp_TB2Iquat = 0.5*exp_TB2Iquat
+        # Euler section 
+        rid=3
+        pid=4
+        yid=5
+
+
+        cr = np.cos(euler[:, rid, 0])
+        cp = np.cos(euler[:, pid, 0])
+        cy = np.cos(euler[:, yid, 0])
+
+        sr = np.sin(euler[:, rid, 0])
+        sp = np.sin(euler[:, pid, 0])
+        sy = np.sin(euler[:, yid, 0])
+
+
+
+        exp_rot_euler = np.array([
+                                  [
+                                   [cy[0]*cp[0], -sy[0]*cr[0]+cy[0]*sp[0]*sr[0], sy[0]*sr[0]+cy[0]*cr[0]*sp[0]],
+                                   [sy[0]*cp[0], cy[0]*cr[0]+sr[0]*sp[0]*sy[0], -cy[0]*sr[0]+sp[0]*sy[0]*cr[0]],
+                                   [-sp[0], cp[0]*sr[0], cp[0]*cr[0]]
+                                  ],
+
+                                  [
+                                   [cy[1]*cp[1], -sy[1]*cr[1]+cy[1]*sp[1]*sr[1], sy[1]*sr[1]+cy[1]*cr[1]*sp[1]],
+                                   [sy[1]*cp[1], cy[1]*cr[1]+sr[1]*sp[1]*sy[1], -cy[1]*sr[1]+sp[1]*sy[1]*cr[1]],
+                                   [-sp[1], cp[1]*sr[1], cp[1]*cr[1]]
+                                  ],
+
+                                  [
+                                   [cy[2]*cp[2], -sy[2]*cr[2]+cy[2]*sp[2]*sr[2], sy[2]*sr[2]+cy[2]*cr[2]*sp[2]],
+                                   [sy[2]*cp[2], cy[2]*cr[2]+sr[2]*sp[2]*sy[2], -cy[2]*sr[2]+sp[2]*sy[2]*cr[2]],
+                                   [-sp[2], cp[2]*sr[2], cp[2]*cr[2]]
+                                  ]
+                                 ])
+
+        exp_TB2Ieuler = np.zeros(shape=(3, 3, 3))
+
+        exp_TB2Ieuler[:, 0, 0] = 1.
+        exp_TB2Ieuler[:, 0, 1] = sr*sp/cp
+        exp_TB2Ieuler[:, 0, 2] = cr*sp/cp
+        
+        exp_TB2Ieuler[:, 1, 1] = cr
+        exp_TB2Ieuler[:, 1, 2] = -sr
+        
+        exp_TB2Ieuler[:, 2, 1] = sr/cp
+        exp_TB2Ieuler[:, 2, 2] = cr/cp
+
+        self.model_quat.body2inertial_transform_q(pose_quat)
+        self.model_euler.body2inertial_transform(pose_euler)
+
+        self.assertAllClose(self.model_quat._rotBtoI, exp_rot)
+        self.assertAllClose(self.model_quat._rotBtoI, exp_rot_euler)
+        self.assertAllClose(self.model_quat._rotBtoI, rot_from_lib)
+
+        self.assertAllClose(self.model_euler._rotBtoI, exp_rot)
+        self.assertAllClose(self.model_euler._rotBtoI, exp_rot_euler)
+        self.assertAllClose(self.model_euler._rotBtoI, rot_from_lib)
+        
+        self.assertAllClose(self.model_quat._TBtoIquat, exp_TB2Iquat)
+
+        self.assertAllClose(self.model_euler._TBtoIeuler, exp_TB2Ieuler)
 
     def test_restoring(self):
         pose = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
-        rotBtoI, TBtoI = self.model.body2inertial_transform(pose)
-        self.model.rotBtoI = rotBtoI
-        self.TBtoI = TBtoI
-        rest = self.model.restoring_forces("rest")
-        print("*"*10 + " Rest " + "*"*10)
-        print(rest)
-        print("*"*20)
+        self.model_euler.body2inertial_transform(pose)
+        rest = self.model_euler.restoring_forces("rest")
+        #print("*"*10 + " Rest " + "*"*10)
+        #print(rest)
+        #print("*"*20)
         pass
 
     def test_damping(self):
         pass
         vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
-        d = self.model.damping_matrix("damp", vel)
+        d = self.model_euler.damping_matrix("damp", vel)
 
-        print("*"*10 + " Damping " + "*"*10)
-        print(d)
-        print("*"*20)
+        #print("*"*10 + " Damping " + "*"*10)
+        #print(d)
+        #print("*"*20)
         pass
 
     def test_corrolis(self):
@@ -274,7 +467,7 @@ class TestAUVModel(tf.test.TestCase):
                        [Mav[2, 0, 0], 0., -Mav[0, 0, 0], Mav[5, 0, 0], 0., -Mav[3, 0, 0]],
                        [-Mav[1, 0, 0], Mav[0, 0, 0], 0., -Mav[4, 0, 0], Mav[3, 0, 0], 0.]]])
 
-        c = self.model.coriolis_matrix("coriolis", vel)
+        c = self.model_euler.coriolis_matrix("coriolis", vel)
 
         self.assertAllClose(c, crb + ca)
         pass
@@ -283,11 +476,11 @@ class TestAUVModel(tf.test.TestCase):
         state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
                            [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]])
         action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]])
-        next_state = self.model.buildStepGraph("step", state, action)
+        next_state = self.model_euler.buildStepGraph("step", state, action)
 
-        print("*"*10 + " Next State " + "*"*10)
-        print(next_state)
-        print("*"*20)
+        #print("*"*10 + " Next State " + "*"*10)
+        #print(next_state)
+        #print("*"*20)
         pass
 
     def test_step1_k5_s12_a6(self):
@@ -312,10 +505,10 @@ class TestAUVModel(tf.test.TestCase):
                            [ [2.0], [2.0], [2.0], [2.0], [2.0], [2.0] ],
                            [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]])
 
-        next_state = self.model.buildStepGraph("step", state, action)
-        print("*"*10 + " Next State Many " + "*"*10)
-        print(next_state)
-        print("*"*20)
+        next_state = self.model_euler.buildStepGraph("step", state, action)
+        #print("*"*10 + " Next State Many " + "*"*10)
+        #print(next_state)
+        #print("*"*20)
         pass
 
 class TestCost(tf.test.TestCase):

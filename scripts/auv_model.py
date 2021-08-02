@@ -1,6 +1,10 @@
 import tensorflow as tf
 import numpy as np
+#from quaternion import as_euler_angles
+from quaternion import from_euler_angles, as_euler_angles
 from model_base import ModelBase
+
+import matplotlib.pyplot as plt
 
 gpu = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
@@ -221,7 +225,6 @@ class AUVModel(ModelBase):
         with tf.name_scope(scope) as scope:
             pose, speed = self.prepare_data(state)
             self.body2inertial_transform_q(pose)
-
             pose_dot = tf.matmul(self.get_jacobian_q(), speed)
 
             speed_dot = self.acc("acceleration", speed, action)
@@ -259,8 +262,10 @@ class AUVModel(ModelBase):
         O_pad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
 
         jac_r1 = tf.concat([self._rotBtoI, O_pad3x3], axis=-1)
+
         jac_r2 = tf.concat([O_pad4x3, self._TBtoIquat], axis=-1)
         jac = tf.concat([jac_r1, jac_r2], axis=1)
+
         return jac
 
     def body2inertial_transform(self, pose):
@@ -286,6 +291,7 @@ class AUVModel(ModelBase):
         # cos(pitch)/sin(pitch)
         cp = c[:, 1]
         sp = s[:, 1]
+        tp = tf.divide(sp, cp)
 
         # cos(yaw)/sin(yaw)
         cy = c[:, 2]
@@ -307,10 +313,9 @@ class AUVModel(ModelBase):
 
         Ry = tf.concat([ry_r1, ry_r2, ry_r3], axis=1)
 
-
-        rx_r1 = tf.expand_dims(tf.concat([cr, -sr, O_pad], axis=-1), axis=1)
-        rx_r2 = tf.expand_dims(tf.concat([sr, cr, O_pad], axis=-1), axis=1)
-        rx_r3 = tf.expand_dims(tf.concat([O_pad, O_pad, I_pad], axis=-1), axis=1)
+        rx_r1 = tf.expand_dims(tf.concat([I_pad, O_pad, O_pad], axis=-1), axis=1)
+        rx_r2 = tf.expand_dims(tf.concat([O_pad, cr, -sr], axis=-1), axis=1)
+        rx_r3 = tf.expand_dims(tf.concat([O_pad, sr, cr], axis=-1), axis=1)
 
         Rx = tf.concat([rx_r1, rx_r2, rx_r3], axis=1)
 
@@ -334,7 +339,7 @@ class AUVModel(ModelBase):
 
         '''
         k = pose.shape[0]
-        quat = tf.squeeze(pose[:, 3:7, :], axis=-1)
+        quat = pose[:, 3:7, :]
 
         w = quat[:, 0]
         x = quat[:, 1]
@@ -343,30 +348,27 @@ class AUVModel(ModelBase):
 
         r1 = tf.expand_dims(tf.concat([1 - 2 * (tf.pow(y, 2) + tf.pow(z, 2)),
                                         2 * (x * y - z * w),
-                                        2 * (x * z + y * w)], axis=-1), axis=0)
+                                        2 * (x * z + y * w)], axis=-1), axis=1)
 
         r2 = tf.expand_dims(tf.concat([2 * (x * y + z * w),
                                         1 - 2 * (tf.pow(x, 2) + tf.pow(z, 2)),
-                                        2 * (y * z - x * w)], axis=-1), axis=0)
+                                        2 * (y * z - x * w)], axis=-1), axis=1)
 
         r3 = tf.expand_dims(tf.concat([2 * (x * z - y * w),
                                         2 * (y * z + x * w),
-                                        1 - 2 * (tf.pow(x, 2) + tf.pow(z, 2))], axis=-1), axis=0)
+                                        1 - 2 * (tf.pow(x, 2) + tf.pow(y, 2))], axis=-1), axis=1)
+        self._rotBtoI = tf.concat([r1, r2, r3], axis=1)
 
-        self._rotBtoI = tf.concat([r1, r2, r3], axis=0)
 
-        r1_t = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=0)
+        r1_t = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
 
-        r2_t = tf.expand_dims(tf.concat([w, -z, -y], axis=-1), axis=0)
+        r2_t = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
 
-        r3_t = tf.expand_dims(tf.concat([z, w, -x], axis=-1), axis=0)
+        r3_t = tf.expand_dims(tf.concat([z, w, -x], axis=-1), axis=1)
 
-        r4_t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=0)
+        r4_t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
 
-        self._TBtoIquat = 0.5 * tf.concat([r1_t, r2_t, r3_t, r4_t], axis=0)
-
-        self._rotBtoI = tf.expand_dims(self._rotBtoI, axis=0)
-        self._TBtoIquat = tf.expand_dims(self._TBtoIquat, axis=0)
+        self._TBtoIquat = 0.5 * tf.concat([r1_t, r2_t, r3_t, r4_t], axis=1)
 
     def prepare_data(self, state):
         if self._quat:
@@ -396,7 +398,10 @@ class AUVModel(ModelBase):
         k_s = speed_next.shape[0]
         # On the first step, the pose is only of size k=1.
         if k_p < k_s:
-            pose_next = tf.broadcast_to(pose_next, [k_s, 6, 1])
+            if self._quat:
+                pose_next = tf.broadcast_to(pose_next, [k_s, 7, 1])
+            else:
+                pose_next = tf.broadcast_to(pose_next, [k_s, 6, 1])
         state = tf.concat([pose_next, speed_next], axis=1)
         return state
 
@@ -406,11 +411,16 @@ class AUVModel(ModelBase):
 
             input:
             ------
-
+                - pose. Float64 Tensor. Shape [k, 13, 1]
+            
+            ouput:
+            ------
+                - the pose with normalized quaternion. Float64 Tensor. Shape [k, 13, 1]
         '''
+
         pos = pose[:, 0:3]
         quat = pose[:, 3:7]
-        quat = tf.divide(quat, tf.linalg.norm(quat))
+        quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
         pose = tf.concat([pos, quat], axis=1)
         return pose
 
@@ -464,12 +474,11 @@ class AUVModel(ModelBase):
         '''
         with tf.name_scope(scope) as scope:
             if use_sname:
-                Fg = -self.mass * self.gravity * self.unit_z
-                Fb = self.volume * self.density * self.gravity * self.unit_z
-            else:
                 Fg = self.mass * self.gravity * self.unit_z
                 Fb = -self.volume * self.density * self.gravity * self.unit_z
-
+            else:
+                Fg = -self.mass * self.gravity * self.unit_z
+                Fb = self.volume * self.density * self.gravity * self.unit_z
             restoring = tf.concat([-1 * tf.matmul(tf.transpose(self._rotBtoI, perm=[0, 2, 1]), tf.expand_dims(Fg + Fb, axis=-1)), 
                             -1 * tf.matmul(tf.transpose(self._rotBtoI, perm=[0, 2, 1]), tf.expand_dims(tf.linalg.cross(self.cog, Fg) +
                                                                     tf.linalg.cross(self.cob, Fb), axis=-1))],
@@ -535,7 +544,7 @@ class AUVModel(ModelBase):
             tens_gen_forces = np.zeros(shape=(6, 1))
             if gen_forces is not None:
                 tens_gen_forces = gen_forces
-            
+
             D = self.damping_matrix("Damping", vel)
             C = self.coriolis_matrix("Coriolis", vel)
             g = self.restoring_forces("Restoring")
@@ -550,19 +559,23 @@ class AUVModel(ModelBase):
             return acc
 
 
-def dummpy_plot():
-    import matplotlib.pyplot as plt
-    with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/traj.npy", "rb") as f:
-        traj = np.load(f)
-    with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/applied.npy", "rb") as f:
-        applied = np.load(f)
+def dummpy_plot(traj=None, applied=None):
 
-    print(traj.shape)
-    print(applied.shape)
+
+    if traj is None:
+        with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/traj.npy", "rb") as f:
+            traj = np.load(f)
+    
+    if applied is None:
+        with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/applied.npy", "rb") as f:
+            applied = np.load(f)
+
+    #print(traj.shape)
+    #print(applied.shape)
 
     state_new = traj[:, 0, :, :]
-    '''
-    traj_plot = np.squeeze(traj)
+
+    traj_plot = np.squeeze(traj, axis=-1)
 
     x = traj_plot[:, :, 0]
     y = traj_plot[:, :, 1]
@@ -582,65 +595,55 @@ def dummpy_plot():
 
     shape = traj_plot.shape
 
-    print(x.shape)
-    print(y.shape)
-    print(z.shape)
+    #print(x.shape)
+    #print(y.shape)
+    #print(z.shape)
 
     #for i in range(shape[0]):
-    #    ax.plot3D(x[i, :], y[i, :], z[i, :])
+    #    ax.plot3D(x[i, :], y[''' :], z[i, :])
 
     # plt.show()
 
 
     fig, axs = plt.subplots(3, 2)
     for i in range(shape[0]):
-        axs[0, 0].set_ylim(-50, 50)
+
         axs[0, 0].plot(x[i, :])
 
-        axs[1, 0].set_ylim(-50, 50)
+
         axs[1, 0].plot(y[i, :])
 
-        axs[2, 0].set_ylim(-50, 50)
         axs[2, 0].plot(z[i, :])
 
-        axs[0, 1].set_ylim(-50, 50)
         axs[0, 1].plot(r[i, :])
 
-        axs[1, 1].set_ylim(-50, 50)
         axs[1, 1].plot(p[i, :])
 
-        axs[2, 1].set_ylim(-50, 50)
         axs[2, 1].plot(ya[i, :])
 
 
     fig1, axs1 = plt.subplots(3, 2)
     for i in range(shape[0]):
 
-        axs1[0, 0].set_ylim(-50, 50)
         axs1[0, 0].plot(vx[i, :])
 
 
-        axs1[0, 1].set_ylim(-50, 50)
         axs1[0, 1].plot(vy[i, :])
 
 
-        axs1[1, 0].set_ylim(-50, 50)
         axs1[1, 0].plot(vz[i, :])
 
 
-        axs1[1, 1].set_ylim(-50, 50)
         axs1[1, 1].plot(vr[i, :])
 
 
-        axs1[2, 0].set_ylim(-50, 50)
         axs1[2, 0].plot(vp[i, :])
 
 
-        axs1[2, 1].set_ylim(-50, 50)
         axs1[2, 1].plot(vya[i, :])
 
 
-    applied_plot = np.squeeze(applied)
+    applied_plot = np.squeeze(applied, axis=-1)
 
     fx = applied_plot[:, :, 0]
     fy = applied_plot[:, :, 1]
@@ -652,9 +655,9 @@ def dummpy_plot():
 
     shape = applied_plot.shape
 
-    print(fx.shape)
-    print(fy.shape)
-    print(fz.shape)
+    #print(fx.shape)
+    #print(fy.shape)
+    #print(fz.shape)
 
     fig2, axs2 = plt.subplots(3, 2)
     for i in range(shape[0]):
@@ -667,9 +670,43 @@ def dummpy_plot():
         axs2[2, 0].plot(ty[i, :])
         axs2[2, 1].plot(tz[i, :])
 
-    plt.show()
-    '''
+
     pass
+
+def to_quat(state_euler):
+    k = state_euler.shape[0]
+    pos = state_euler[:, 0:3]
+    euler = np.squeeze(state_euler[:, 3:6])
+    vel = state_euler[:, 6:12]
+    
+    quat = from_euler_angles(euler)
+    quats = np.zeros(shape=(k, 4, 1))
+    for i, q in enumerate(quat):
+        quats[i, 0, 0] = q.w
+        quats[i, 1, 0] = q.x
+        quats[i, 2, 0] = q.y
+        quats[i, 3, 0] = q.z
+
+    return np.concatenate([pos, quats, vel], axis=1)
+
+def to_euler(state_quat):
+    k = state_quat.shape[0]
+    steps = state_quat.shape[1]
+    #print(state_quat.shape)
+    pos = state_quat[:, :, 0:3, :]
+    quats_samp = np.squeeze(state_quat[:, :, 3:7, :], axis=-1)
+    euler = np.zeros(shape=(k, steps, 3, 1))
+    for j, quats in enumerate(quats_samp):
+        for i, q in enumerate(quats):
+            quat = np.quaternion(q[0], q[1], q[2], q[3])
+            euler[j, i, :, :] = np.expand_dims(as_euler_angles(quat), axis=-1)
+
+    vel = state_quat[:, :, 7:13, :]
+    #print(pos.shape)
+    #print(euler.shape)
+    #print(vel.shape)
+    state_euler =  np.concatenate([pos, euler, vel], axis=2)
+    return state_euler
 
 def main():
 
@@ -705,18 +742,47 @@ def main():
 
     print("*"*5 + " Initial state " + "*"*5)
     #fake input.
-    fake_out_quat = np.array([[[0.], [0.], [0.], [1.], [0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.]]])
-    fake_out_euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.]]])
+    fake_state_quat_list = []
+    fake_state_euler_list = []
+    fake_applied_list = []
+
+    fake_out_quat = np.array([[[0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
+    fake_out_euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
+    fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
+                        [[1.], [2.], [0.], [0.], [1.], [0.]]])
+
     fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]]])
+    fake_in_expand = np.expand_dims(fake_in, axis=1)
 
-    for i in range(30):
+    fake_state_quat_list.append(to_euler(np.expand_dims(fake_out_quat, axis=1)))
+    fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
+
+
+    for i in range(1000):
         fake_out_euler = auv_euler.buildStepGraph("foo", fake_out_euler, fake_in)
-        print(fake_out_euler)
-
+        #print(fake_out_euler)
+        #fake_out_euler_to_quat = to_quat(fake_out_euler)
+        
         fake_out_quat = auv_quat.buildStepGraph("foo", fake_out_quat, fake_in)
-        print(fake_out_quat)
+        
+        fake_state_quat_list.append(to_euler(np.expand_dims(fake_out_quat, axis=1)))
+        fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
+        fake_applied_list.append(fake_in_expand)
+        #print(fake_out_quat)
 
-        input()
+        #print(fake_out_euler_to_quat-fake_out_quat)
+
+        #input()
+    fake_state_quat_list = np.concatenate(fake_state_quat_list, axis=1)
+    fake_state_euler_list = np.concatenate(fake_state_euler_list, axis=1)
+
+    fake_states_list = np.concatenate([fake_state_euler_list, fake_state_quat_list], axis=0)
+    fake_applied_list = np.concatenate(fake_applied_list, axis=1)
+    
+    dummpy_plot(fake_states_list, fake_applied_list)
+    #dummpy_plot(fake_state_euler_list, fake_applied_list)
+    #dummpy_plot(fake_state_quat_list, fake_applied_list)
+    plt.show()
 
 if __name__ == "__main__":
     main()
