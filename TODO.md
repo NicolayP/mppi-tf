@@ -120,26 +120,27 @@
       - [X] quadratic damping.
       - [X] build mass matrix
     - [X] test step function.
-    - [ ] Why is model exploding
+    - [X] Why is model exploding (sign error in the restoring forces).
       - [X] Damping matrix computation had an error. Done, compared with the UUV implementation and have no diff anymore.
       - [X] Rerun the data gen process and see if it still explodes. It still explodes. Need to look at the angles as they are not normalized.
       - [X] Implement quaternions. 
-      - [ ] Test quaternions.
+      - [X] Test quaternions.
         - [X] check rot.
         - [X] check t.
         - [X] verify order of multiplication.
         - [X] check jacobian.
-        - [ ] check multiplication in step.
+        - [X] check multiplication in step.
         - [X] check converstion.
-        
     - [ ] look for learning mechanism.
-    - [ ] write test functions.
+    - [X] write test functions.
     - [ ] change variables to tensorflow variables.
     - [X] find solution to skew operation concat .
 
   - [ ] Performance testing.
   - [ ] go to real robot.
 
+### Idea
+  - Start the input mean for the z axis such that it counteracts the gravity/boyancy (the highest one). 
 
 ## Testing
 

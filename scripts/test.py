@@ -224,7 +224,7 @@ class TestAUVModel(tf.test.TestCase):
                              [0., 0., 0., 0., 0., 500.]]
         self.params["linear_damping"] = [-70., -70., -700., -300., -300., -100.]
         self.params["quad_damping"] = [-740., -990., -1800., -670., -770., -520.]
-        self.params["linear_damping_forward_speed"] = [0., 0., 0., 0., 0., 0.]
+        self.params["linear_damping_forward_speed"] = [1., 2., 3., 4., 5., 6.]
         self.inertial = dict()
         self.inertial["ixx"] = 650.0
         self.inertial["iyy"] = 750.0
@@ -442,8 +442,6 @@ class TestAUVModel(tf.test.TestCase):
         jac_euler = self.model_euler.get_jacobian()
         self.assertAllClose(jac_euler, exp_jac_euler)
 
-
-
     def test_restoring(self):
         pose = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
         self.model_euler.body2inertial_transform(pose)
@@ -454,14 +452,18 @@ class TestAUVModel(tf.test.TestCase):
         pass
 
     def test_damping(self):
-        pass
-        vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
+        vel = np.array([
+                        [[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]],
+                        [[2.0], [1.5], [1.0], [3.0], [3.5], [2.5]],
+                        [[-2.0], [-1.5], [-1.0], [-3.0], [-3.5], [-2.5]]
+                       ])
         d = self.model_euler.damping_matrix("damp", vel)
+        exp_damp = np.zeros(shape=(vel.shape[0], 6, 6))
+        for i in range(vel.shape[0]):
+            exp_damp[i, :, :] = -1* np.diag(self.params["linear_damping"]) - vel[i, 0, 0]*np.diag(self.params["linear_damping_forward_speed"])
 
-        #print("*"*10 + " Damping " + "*"*10)
-        #print(d)
-        #print("*"*20)
-        pass
+        exp_damp += np.expand_dims(-1*np.diag(self.params['quad_damping']), axis=0) * np.abs(vel)
+        self.assertAllClose(d, exp_damp)
 
     def test_corrolis(self):
         vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
@@ -487,7 +489,6 @@ class TestAUVModel(tf.test.TestCase):
         c = self.model_euler.coriolis_matrix("coriolis", vel)
 
         self.assertAllClose(c, crb + ca)
-        pass
 
     def test_step1_k1_s12_a6(self):
         state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
