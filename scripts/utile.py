@@ -260,6 +260,11 @@ def log_control(writer, control_items):
                 tf.summary.histogram("noise", noises, step=control_step)
                 pass
 
+            elif key == "dist":
+                dist = control_items[key]
+                for i, el in enumerate(dist.numpy()):
+                    tf.summary.scalar("goal/dist_{}".format(i), el[0], step=control_step)
+
             elif key == "action_seq":
                 pass
 
