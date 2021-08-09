@@ -12,7 +12,7 @@ class ModelBase(object):
         Every model should inherit this class.
     '''
     def __init__(self, state_dim=2,
-                 action_dim=1, name="model", k=1):
+                 action_dim=1, name="model", k=1, inertial_frame_id="world"):
         '''
             Model constructor. 
             
@@ -23,6 +23,7 @@ class ModelBase(object):
                 - name: string. the model name. Used for logging.
         '''
         self.k = k
+        self.inertial_frame_id = inertial_frame_id
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.model_vars = {}

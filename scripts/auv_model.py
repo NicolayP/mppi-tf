@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 gpu = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 
+import time as t
 
 def skew_op(vec):     
     S = np.zeros(shape=(3, 3))
@@ -79,7 +80,7 @@ class AUVModel(ModelBase):
             self._quat=False
             state_dim=12
 
-        ModelBase.__init__(self, state_dim, action_dim, name, k)
+        ModelBase.__init__(self, state_dim, action_dim, name, k, inertial_frame_id)
 
         assert  inertial_frame_id in ['world', 'world_ned']
 
@@ -178,6 +179,17 @@ class AUVModel(ModelBase):
         self.mass_lower =  self.mass * tf_skew_op("Skew_cog", self.cog)
         self.rb_mass = self.rigid_body_mass()
         self._Mtot = self.total_mass()
+        self.invMtot = tf.linalg.inv(self._Mtot)
+
+        self.elapsed_pdot = 0.
+        self.elapsed_acce = 0.
+        self.elapsed_damp = 0.
+        self.elapsed_cori = 0.
+        self.elapsed_rest = 0.
+        self.elasped_solv = 0.
+        self.elasped_trans = 0.
+
+        self.steps = 0
 
     def rigid_body_mass(self):
         upper = tf.concat([self.mass_eye, -self.mass_lower], axis=1)
@@ -224,10 +236,24 @@ class AUVModel(ModelBase):
     def step_q(self, scope, state, action):
         with tf.name_scope(scope) as scope:
             pose, speed = self.prepare_data(state)
-            self.body2inertial_transform_q(pose)
-            pose_dot = tf.matmul(self.get_jacobian_q(), speed)
 
+            start = t.perf_counter()
+            self.body2inertial_transform_q(pose)
+            end = t.perf_counter()
+            self.elasped_trans += end-start
+
+            start = t.perf_counter()
+            pose_dot = tf.matmul(self.get_jacobian_q(), speed)
+            end = t.perf_counter()
+            self.elapsed_pdot += end-start
+
+
+            start = t.perf_counter()
             speed_dot = self.acc("acceleration", speed, action)
+            end = t.perf_counter()
+            self.elapsed_acce += end-start
+            self.steps += 1
+
 
             pose_next = tf.add(self.dt*pose_dot, pose)
             speed_next = tf.add(self.dt*speed_dot, speed)
@@ -369,6 +395,18 @@ class AUVModel(ModelBase):
         r4_t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
 
         self._TBtoIquat = 0.5 * tf.concat([r1_t, r2_t, r3_t, r4_t], axis=1)
+
+    def rotBtoInp(self, quat):
+        w = quat[0]
+        x = quat[1]
+        y = quat[2]
+        z = quat[3]
+
+        return np.array([
+                         [1 - 2 * (y**2 + z**2), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                         [2 * (x * y + z * w), 1 - 2 * (x**2 + z**2), 2 * (y * z - x * w)],
+                         [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x**2 + y**2)]
+                        ])
 
     def prepare_data(self, state):
         if self._quat:
@@ -545,19 +583,43 @@ class AUVModel(ModelBase):
             if gen_forces is not None:
                 tens_gen_forces = gen_forces
 
+            start = t.perf_counter()
             D = self.damping_matrix("Damping", vel)
-            C = self.coriolis_matrix("Coriolis", vel)
-            g = self.restoring_forces("Restoring")
+            end = t.perf_counter()
+            self.elapsed_damp += end-start
 
-            self.invMtot = tf.linalg.inv(self._Mtot)
+            start = t.perf_counter()
+            C = self.coriolis_matrix("Coriolis", vel)
+            end = t.perf_counter()
+            self.elapsed_cori += end-start
+
+            start = t.perf_counter()
+            g = self.restoring_forces("Restoring")
+            end = t.perf_counter()
+            self.elapsed_rest += end-start
+
+
+            start = t.perf_counter()
 
             rhs = tens_gen_forces - tf.matmul(C, vel) - tf.matmul(D, vel) - g
             lhs = tf.broadcast_to(self.invMtot, [self.k, 6, 6])
 
             acc = tf.matmul(lhs, rhs)
 
+            end = t.perf_counter()
+            self.elasped_solv += end-start
+
             return acc
 
+    def stats(self):
+        print("*"*5 + " Model Time stats " + "*"*5)
+        print("* Transfor dot: {:.4f} (sec)".format(30*self.elasped_trans/self.steps))
+        print("* Position dot: {:.4f} (sec)".format(30*self.elapsed_pdot/self.steps))
+        print("* Accelaration: {:.4f} (sec)".format(30*self.elapsed_acce/self.steps))
+        print("* Damping     : {:.4f} (sec)".format(30*self.elapsed_damp/self.steps))
+        print("* Coriolis    : {:.4f} (sec)".format(30*self.elapsed_cori/self.steps))
+        print("* Restoring   : {:.4f} (sec)".format(30*self.elapsed_rest/self.steps))
+        print("* Solving     : {:.4f} (sec)".format(30*self.elasped_solv/self.steps))
 
 def dummpy_plot(traj=None, applied=None):
 
@@ -664,16 +726,16 @@ def dummpy_plot(traj=None, applied=None):
     #print(fy.shape)
     #print(fz.shape)
 
-#    fig2, axs2 = plt.subplots(3, 2)
-#    for i in range(shape[0]):
-#        axs2[0, 0].plot(fx[i, :])
-#        axs2[0, 1].plot(fy[i, :])
-#
-#        axs2[1, 0].plot(fz[i, :])
-#
-#        axs2[1, 1].plot(tx[i, :])
-#        axs2[2, 0].plot(ty[i, :])
-#        axs2[2, 1].plot(tz[i, :])
+    #fig2, axs2 = plt.subplots(3, 2)
+    #for i in range(shape[0]):
+        #axs2[0, 0].plot(fx[i, :])
+        #axs2[0, 1].plot(fy[i, :])
+
+        #axs2[1, 0].plot(fz[i, :])
+        #axs2[1, 1].plot(tx[i, :])
+
+        #axs2[2, 0].plot(ty[i, :])
+        #axs2[2, 1].plot(tz[i, :])
 
 
     pass

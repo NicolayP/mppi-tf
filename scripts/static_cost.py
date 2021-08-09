@@ -68,5 +68,5 @@ class StaticCost(CostBase):
 
     def dist(self, state):
         return_dict = {}
-        return_dict["dist"] = tf.linalg.normalize(state-self.goal, axis=-1)
+        return_dict["dist"] = state-self.goal
         return return_dict
