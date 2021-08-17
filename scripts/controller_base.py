@@ -168,7 +168,7 @@ class ControllerBase(object):
         if self.log:
             return_dict = self.predict(x, u, self.action_seq, x_next)
             self.log_dict = {**self.log_dict, **return_dict}
-            log_control(self.writer, self.log_dict)
+            log_control(self.writer, self.log_dict, [0, 1, 2, 3, 4, 5, 6], [7, 8 ,9, 10, 11, 12])
         if self.gif:
             plt_paths(self.log_dict["paths"], self.log_dict["weights"], self.log_dict["noises"],
                       self.log_dict["action_seq"], self.cost)
