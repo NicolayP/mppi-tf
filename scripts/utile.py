@@ -116,7 +116,7 @@ def gif_path(len, gif):
     return
 
 
-def log_control(writer, control_items):
+def log_control(writer, control_items, pose_id, speed_id):
     # TODO: Log position error, goal distance, predicted cost.
     # TODO: generate gifs if asked.
     global control_step
@@ -241,9 +241,10 @@ def log_control(writer, control_items):
             
             elif key == "state":
                 state = control_items[key]
-                for i in range(int(state.shape[0]/2)):
-                    tf.summary.scalar("state/position_{}".format(i), state[2*i+0, 0], step=control_step)
-                    tf.summary.scalar("state/speed_{}".format(i), state[2*i+1, 0], step=control_step)
+                for i in pose_id:
+                    tf.summary.scalar("state/position_{}".format(i), state[i, 0], step=control_step)
+                for i in speed_id:
+                    tf.summary.scalar("state/speed_{}".format(i), state[i, 0], step=control_step)
                 
             elif key == "x_dist":
                 x_dist = control_items[key]
