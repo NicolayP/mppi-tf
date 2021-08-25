@@ -88,6 +88,22 @@
   - [ ] Train simple network on Point mass system.
   - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
   - [ ] Experiment agent learning parameters. (dont know enough about the rest to make a prediction)
+
+### NN_AUV implementation:
+  Main Idea: We don't want to predict in the inertial frame because this would lead to a lack of generalization when far from the origin in unexplored state space regions. So the dataset is as follos: A state is defined by: [pose_I_Bt.T, vel_Bt_Bt.T].T where pose_I_Bt is the pose of the body at time t expressed in inertial frame and vel_Bt_Bt is the velocity of the body frame as time t expressed in the body frame at time t. For 2 states, s_{t}, s_{t+1} as well as the input action a_{t} the network training data is as follows: (X, y) \simeq ([rot_I_Bt.T, vel_Bt_Bt.T, a_Bt_Bt.T].T, [pose_Bt_Bt1.t, vel_Bt1_Bt1.T].T). Where pose_Bt_Bt1 is the pose of the body at time t+1 expressin in the body frame at time t.
+  - [X] Batch transform.
+  - [X] Batch invsere.
+  - [X] Batch quaternion inverse.
+  - [X] Batch pure quaternion.
+  - [X] Batch rotate vector.
+  - [X] Batch quaternion multiplication.
+  - [X] Data Preparation.
+  - [X] Training Data Preparation
+  - [X] Prediction to Inertial Frame.
+  - [ ] Create network.
+  - [ ] Training routine.
+  - [ ] Collect training data from gazebo.
+  - [ ] Train simple network on the training data.
   
 
 ## ROS Integration
@@ -142,6 +158,10 @@
 ### Idea
   - Start the input mean for the z axis such that it counteracts the gravity/boyancy (the highest one). 
 
+## Troubleshooting:
+
+  - [ ] check why the acceleration in x is positive while the yaw angle is 180 and the input is 100N. The x acceleration should be negative.
+
 ## Testing
 
   - [X] Test Model.
@@ -150,3 +170,4 @@
   - [X] Test shift and init.
   - [X] Test elips cost.
   - [X] Test gamma and upsilon.
+
