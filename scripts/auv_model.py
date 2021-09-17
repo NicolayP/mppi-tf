@@ -1,3 +1,4 @@
+#from typing import Optional
 import tensorflow as tf
 import numpy as np
 #from quaternion import as_euler_angles
@@ -68,10 +69,11 @@ def tf_skew_op_k(scope, batch):
     controller.
 '''
 class AUVModel(ModelBase):
-    def __init__(self, inertial_frame_id='world', quat=False, action_dim=6, name="AUV", k=1, dt=0.1, parameters=dict()):
+    def __init__(self, inertial_frame_id='world', quat=False, action_dim=6, name="AUV", k=1, dt=0.1, rk=1, parameters=dict()):
         '''
             Class constructor
         '''
+        self.rk = rk
         self.dt = dt
         if quat:
             self._quat=True
@@ -171,7 +173,7 @@ class AUVModel(ModelBase):
 
         self.inertial = self.getInertial(inertial_arg)
 
-        self.unit_z = tf.constant([0., 0., 1.], dtype=tf.float64)        
+        self.unit_z = tf.constant([[[0.], [0.], [1.]]], dtype=tf.float64)
 
         self.gravity = 9.81
 
@@ -180,6 +182,7 @@ class AUVModel(ModelBase):
         self.rb_mass = self.rigid_body_mass()
         self._Mtot = self.total_mass()
         self.invMtot = tf.linalg.inv(self._Mtot)
+        self.inv_mrb = tf.linalg.inv(self.rb_mass)
 
         self.elapsed_pdot = 0.
         self.elapsed_acce = 0.
@@ -190,6 +193,19 @@ class AUVModel(ModelBase):
         self.elasped_trans = 0.
 
         self.steps = 0
+
+    def print_info(self):
+        """Print the vehicle's parameters."""
+        print('Body frame: {}'.format(self.body_frame_id))
+        print('Mass: {0:.3f} kg'.format(self.mass.numpy()))
+        print('System inertia matrix:\n{}'.format(self.rb_mass))
+        print('Added-mass:\n{}'.format(self.added_mass))
+        print('M:\n{}'.format(self._Mtot))
+        print('Linear damping: {}'.format(self.linear_damping))
+        print('Quad. damping: {}'.format(self.quad_damping))
+        print('Center of gravity: {}'.format(self.cog))
+        print('Center of buoyancy: {}'.format(self.cob))
+        print('Inertial:\n{}'.format(self.inertial))
 
     def rigid_body_mass(self):
         upper = tf.concat([self.mass_eye, -self.mass_lower], axis=1)
@@ -216,9 +232,9 @@ class AUVModel(ModelBase):
 
         return inertial
 
-    def buildStepGraph(self, scope, state, action):
+    def buildStepGraph(self, scope, state, action, ret_acc=False):
         if self._quat:
-            return self.step_q(scope, state, action)
+            return self.step_q(scope, state, action, rk=self.rk, acc=ret_acc)
         return self.step(scope, state, action)
 
     def step(self, scope, state, action):
@@ -233,31 +249,96 @@ class AUVModel(ModelBase):
             speed_next = tf.add(self.dt*speed_dot, speed)
             return self.get_state(pose_next, speed_next)
 
-    def step_q(self, scope, state, action):
+    def step_proxy(self, scope, state, acc):
+        state_dot = self.state_dot_proxy(state, acc)
+        next_state = tf.add(state, state_dot)
+        if self._quat:
+            next_state =self.normalize_quat(next_state)
+        return next_state
+
+    def step_q(self, scope, state, action, rk=1, acc=False):
+        # Forward and backward euler integration.
         with tf.name_scope(scope) as scope:
-            pose, speed = self.prepare_data(state)
-
-            start = t.perf_counter()
-            self.body2inertial_transform_q(pose)
-            end = t.perf_counter()
-            self.elasped_trans += end-start
-
-            start = t.perf_counter()
-            pose_dot = tf.matmul(self.get_jacobian_q(), speed)
-            end = t.perf_counter()
-            self.elapsed_pdot += end-start
+            if rk == 1:
+                k1 = self.state_dot(state, action)
+                next_state = tf.add(state, k1*self.dt)
 
 
-            start = t.perf_counter()
-            speed_dot = self.acc("acceleration", speed, action)
-            end = t.perf_counter()
-            self.elapsed_acce += end-start
-            self.steps += 1
+            elif rk == 2:
+                k1 = self.state_dot(state, action)
+                k2 = self.state_dot(tf.add(state, self.dt*k1), action)
+                next_state = tf.add(state, self.dt/2. * tf.add(k1, k2))
 
+            elif rk == 4:
+                k1 = self.state_dot(state, action)
+                k2 = self.state_dot(tf.add(state, self.dt*k1/2.), action)
+                k3 = self.state_dot(tf.add(state, self.dt*k2/2.), action)
+                k4 = self.state_dot(tf.add(state, self.dt*k3), action)
+                tmp = 1./6. * tf.add(tf.add(k1, 2.*k2), tf.add(2.*k3, k4*self.dt))*self.dt
+                next_state = tf.add(state, tmp)
 
-            pose_next = tf.add(self.dt*pose_dot, pose)
-            speed_next = tf.add(self.dt*speed_dot, speed)
-            return self.get_state(pose_next, speed_next)
+            if self._quat:
+                next_state = self.normalize_quat(next_state)
+
+            if not acc:
+                return next_state
+            return next_state, k1[:, 7:13]
+
+    def int_state_q(self, state, state_dot):
+        q = state[:, 3:7]
+        q_dot = state_dot[:, 3:7]
+
+        pass
+
+    def mult_q(self, q1, q2):
+        '''
+            Multpiplies two quaternions together: q1*q2 not q2*q1!!
+
+            - input:
+            --------
+                - q1, quaternion batch [k, 4, 1] <w, x, y, z>
+                - q2, quaternion batch [k, 4, 1] <w, x, y, z>
+
+            - output:
+            ---------
+                - q1*q2
+        NOTE: Should eventually be replaced by tfg imlementation of quaternions
+        if we keep the tensorflow implementaiton.
+        '''
+
+        w1 = q1[:, 0]
+        s1 = q1[:, 1:4]
+
+        w2 = q2[:, 1]
+        s2 = q2[:, 1:4]
+        pass
+
+    def state_dot(self, state, action):
+        '''
+            Computes x_dot = f(x, u)
+        '''
+        pose, speed = self.prepare_data(state)
+
+        self.body2inertial_transform_q(pose)
+
+        pose_dot = tf.matmul(self.get_jacobian_q(), speed)
+        speed_dot = self.acc("acceleration", speed, action)
+
+        return self.get_state_dot(pose_dot, speed_dot)
+
+    def state_dot_proxy(self, state, acc):
+        pose, speed = self.prepare_data(state)
+        self.body2inertial_transform_q(pose)
+        pose_dot = tf.matmul(self.get_jacobian_q(), speed)
+        speed_dot = acc
+
+        return self.get_state_dot(pose_dot, speed_dot)
+
+    def set_prev_vel(self, vel, use_sname=True):
+        if use_sname:
+            self.prev_vel = self.to_SNAME(vel)
+        else:
+            self.prev_vel = vel
 
     def get_jacobian(self):
         '''
@@ -361,7 +442,7 @@ class AUVModel(ModelBase):
 
             input:
             ------
-                - pose the robot pose expressed in inertial frame. Shape [k, 6, 1]
+                - pose the robot pose expressed in inertial frame. Shape [k, 7, 1]
 
         '''
         k = pose.shape[0]
@@ -408,6 +489,15 @@ class AUVModel(ModelBase):
                          [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x**2 + y**2)]
                         ])
 
+    def tItoBnp(self, euler):
+        r = euler[0]
+        p = euler[1]
+        y = euler[2]
+        T = np.array([[1., 0., -np.sin(p)],
+                      [0., np.cos(r), np.cos(p) * np.sin(r)],
+                      [0., -np.sin(r), np.cos(p) * np.cos(r)]])
+        return T
+
     def prepare_data(self, state):
         if self._quat:
             pose = state[:, 0:7]
@@ -443,6 +533,30 @@ class AUVModel(ModelBase):
         state = tf.concat([pose_next, speed_next], axis=1)
         return state
 
+    def get_state_dot(self, pose_dot, speed_dot):
+        '''
+            Return the state of the system after propagating it for one timestep.
+
+            input:
+            ------
+                - pose_next: float64 tensor. Shape [k/1, 6/7, 1]. 6 If euler representation, 7 if quaternion.
+                - speed_next: float64 tensor. Shape [k, 6, 1]
+
+            output:
+            -------
+                - next_state: float64 tensor. Shape [k, 12/13, 1]
+        '''
+        k_p = pose_dot.shape[0]
+        k_s = speed_dot.shape[0]
+        # On the first step, the pose is only of size k=1.
+        if k_p < k_s:
+            if self._quat:
+                pose_dot = tf.broadcast_to(pose_dot, [k_s, 7, 1])
+            else:
+                pose_dot = tf.broadcast_to(pose_dot, [k_s, 6, 1])
+        state_dot = tf.concat([pose_dot, speed_dot], axis=1)
+        return state_dot
+
     def normalize_quat(self, pose):
         '''
             Normalizes the quaternions.
@@ -458,8 +572,9 @@ class AUVModel(ModelBase):
 
         pos = pose[:, 0:3]
         quat = pose[:, 3:7]
+        vel = pose[:, 7:13]
         quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
-        pose = tf.concat([pos, quat], axis=1)
+        pose = tf.concat([pos, quat, vel], axis=1)
         return pose
 
     def to_SNAME(self, x):
@@ -475,15 +590,16 @@ class AUVModel(ModelBase):
                 - the tensor in the SNAME convention.
 
         '''
-
-        if self._body_frame_id == 'base_link_ned':
+        if self.body_frame_id == 'base_link_ned':
             return x
         try:
             if x.shape[1] == 3:
-                return tf.concat([x[:, 0, :], -1*x[:, 1, :], -1*x[:, 2, :]], axis=1)
+                ret = tf.expand_dims(tf.concat([x[:, 0], -1*x[:, 1], -1*x[:, 2]], axis=1), axis=-1)
+                return ret
             elif x.shape[1] == 6:
-                return tf.concat([x[:, 0, :], -1*x[:, 1, :], -1*x[:, 2, :],
-                                 x[:, 3, :], -1*x[:, 4, :], -1*x[:, 5, :]], axis=1)
+                ret = tf.expand_dims(tf.concat([x[:, 0], -1*x[:, 1], -1*x[:, 2],
+                                                x[:, 3], -1*x[:, 4], -1*x[:, 5]], axis=1), axis=-1)
+                return ret
 
         except Exception as e:
             print('Invalid input vector, v=' + str(x))
@@ -491,37 +607,35 @@ class AUVModel(ModelBase):
             return None
 
     def from_SNAME(self, x):
-        if self._body_frame_id == 'base_link_ned':
+        if self.body_frame_id == 'base_link_ned':
             return x
         return self.to_SNAME(x)
 
-    def restoring_forces(self, scope, q=None, use_sname=False):
-        '''
-            computes the restoring forces. 
-
-            input:
-            ------
-                - mass, float, the mass of the vehicle. in kg.
-                - gravity, float, the gravity constant. in $\frac{N}{t^{2}}$
-                - volume, float, the volume of the of the vehicle. In m^{3}.
-                - density, float, the liquid density. In $\frac{kg}{m^{3}}$
-                - cog center of gravity expressed in the body frame. In m. Shape [3].
-                - cob center of boyency expressed in the body frame. In m. Shape [3].
-                - rotItoB, rotational transform from inertial frame to the body frame. Shape [k, 3, 3]
-
-        '''
+    def restoring_forces(self, scope):
         with tf.name_scope(scope) as scope:
-            if use_sname:
-                Fg = self.mass * self.gravity * self.unit_z
-                Fb = -self.volume * self.density * self.gravity * self.unit_z
-            else:
-                Fg = -self.mass * self.gravity * self.unit_z
-                Fb = self.volume * self.density * self.gravity * self.unit_z
-            restoring = tf.concat([-1 * tf.matmul(tf.transpose(self._rotBtoI, perm=[0, 2, 1]), tf.expand_dims(Fg + Fb, axis=-1)), 
-                            -1 * tf.matmul(tf.transpose(self._rotBtoI, perm=[0, 2, 1]), tf.expand_dims(tf.linalg.cross(self.cog, Fg) +
-                                                                    tf.linalg.cross(self.cob, Fb), axis=-1))],
-                            axis=1)
-        return restoring
+            cog = tf.expand_dims(self.cog, axis=0)
+            cob = tf.expand_dims(self.cob, axis=0)
+
+            fng = - self.mass*self.gravity*self.unit_z
+            fnb = self.volume*self.density*self.gravity*self.unit_z
+
+            rotItoB = tf.transpose(self._rotBtoI, perm=[0, 2, 1])
+
+            fbg = tf.matmul(rotItoB, fng)
+            fbb = tf.matmul(rotItoB, fnb)
+
+            k = rotItoB.shape[0]
+
+            cog = tf.broadcast_to(cog, [k, 3])
+            cob = tf.broadcast_to(cob, [k, 3])
+
+            mbg = tf.expand_dims(tf.linalg.cross(cog, tf.squeeze(fbg, axis=-1)), axis=-1)
+            mbb = tf.expand_dims(tf.linalg.cross(cob, tf.squeeze(fbb, axis=-1)), axis=-1)
+
+            restoring = -tf.concat([fbg+fbb,
+                                    mbg+mbb], axis=1)
+
+            return restoring
 
     def damping_matrix(self, scope, vel=None):
         '''
@@ -577,7 +691,7 @@ class AUVModel(ModelBase):
 
             return C
 
-    def acc(self, scope, vel, gen_forces=None, use_sname=True):
+    def acc(self, scope, vel, gen_forces=None):
         with tf.name_scope(scope) as scope:
             tens_gen_forces = np.zeros(shape=(6, 1))
             if gen_forces is not None:
@@ -597,7 +711,6 @@ class AUVModel(ModelBase):
             g = self.restoring_forces("Restoring")
             end = t.perf_counter()
             self.elapsed_rest += end-start
-
 
             start = t.perf_counter()
 
@@ -621,124 +734,153 @@ class AUVModel(ModelBase):
         print("* Restoring   : {:.4f} (sec)".format(30*self.elapsed_rest/self.steps))
         print("* Solving     : {:.4f} (sec)".format(30*self.elasped_solv/self.steps))
 
-def dummpy_plot(traj=None, applied=None):
 
-
-    if traj is None:
-        with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/traj.npy", "rb") as f:
-            traj = np.load(f)
+def dummpy_plot(traj=None, applied=None, accs=None, labels=[""], time=0):
     
-    if applied is None:
-        with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/applied.npy", "rb") as f:
-            applied = np.load(f)
-
-    #print(traj.shape)
-    #print(applied.shape)
-
-    state_new = traj[:, 0, :, :]
-
-    traj_plot = np.squeeze(traj, axis=-1)
-
-    x = traj_plot[:, :, 0]
-    y = traj_plot[:, :, 1]
-    z = traj_plot[:, :, 2]
-
-    r = traj_plot[:, :, 3]*180/np.pi
-    p = traj_plot[:, :, 4]*180/np.pi
-    ya = traj_plot[:, :, 5]*180/np.pi
-
-    vx = traj_plot[:, :, 6]
-    vy = traj_plot[:, :, 7]
-    vz = traj_plot[:, :, 8]
-
-    vr = traj_plot[:, :, 9]*180/np.pi
-    vp = traj_plot[:, :, 10]*180/np.pi
-    vya = traj_plot[:, :, 11]*180/np.pi
-
-    shape = traj_plot.shape
-
-    #print(x.shape)
-    #print(y.shape)
-    #print(z.shape)
-
-    #for i in range(shape[0]):
-    #    ax.plot3D(x[i, :], y[''' :], z[i, :])
-
-    # plt.show()
-
-
     fig, axs = plt.subplots(3, 2)
-    for i in range(shape[0]):
+    fig.suptitle("Pose")
+    fig.tight_layout()
+    lines = []
+    for states in traj:
 
-        axs[0, 0].plot(x[i, :])
+        x = states[:, :, 0]
+        y = states[:, :, 1]
+        z = states[:, :, 2]
+
+        r = states[:, :, 3]*180/np.pi
+        p = states[:, :, 4]*180/np.pi
+        ya = states[:, :, 5]*180/np.pi
+
+        steps = states.shape[1]
+        absc = np.linspace(0, time, steps)
+        lines.append(axs[0, 0].plot(absc, x[0, :])[0])
+        #axs[0, 0].set_ylim(-5, 5)
         axs[0, 0].title.set_text(' X (m)')
+        axs[0, 0].set_xlabel(' Steps (0.1 sec)')
 
-        axs[1, 0].plot(y[i, :])
+        axs[1, 0].plot(absc, y[0, :])
+        #axs[1, 0].set_ylim(-5, 5)
         axs[1, 0].title.set_text(' Y (m)')
+        axs[1, 0].set_xlabel(' Steps (0.1 sec)')
 
-        axs[2, 0].plot(z[i, :])
+        axs[2, 0].plot(absc, z[0, :])
+        #axs[2, 0].set_ylim(-20, 5)
         axs[2, 0].title.set_text(' Z (m)')
+        axs[2, 0].set_xlabel(' Steps (0.1 sec)')
 
-        axs[0, 1].plot(r[i, :])
+        axs[0, 1].plot(absc, r[0, :])
         axs[0, 1].title.set_text(' Roll (Degrees)')
+        axs[0, 1].set_xlabel(' Steps (0.1 sec)')
 
-        axs[1, 1].plot(p[i, :])
+        axs[1, 1].plot(absc, p[0, :])
         axs[1, 1].title.set_text(' Pitch (Degrees)')
+        axs[1, 1].set_xlabel(' Steps (0.1 sec)')
 
-        axs[2, 1].plot(ya[i, :])
+        axs[2, 1].plot(absc, ya[0, :])
         axs[2, 1].title.set_text(' Yaw (Degrees)')
+        axs[2, 1].set_xlabel(' Steps (0.1 sec)')
+
+    fig.legend(lines, labels=labels, loc="center right", title="Legend Title", borderaxespad=0.1)
 
 
     fig1, axs1 = plt.subplots(3, 2)
-    for i in range(shape[0]):
+    fig1.suptitle("Velocity")
+    fig1.tight_layout()
+    lines1 = []
+    for states in traj:
+        vx = states[:, :, 6]
+        vy = states[:, :, 7]
+        vz = states[:, :, 8]
 
-        axs1[0, 0].plot(vx[i, :])
+        vr = states[:, :, 9]*180/np.pi
+        vp = states[:, :, 10]*180/np.pi
+        vya = states[:, :, 11]*180/np.pi
+
+        steps = states.shape[1]
+        absc = np.linspace(0, time, steps)
+
+        lines1.append(axs1[0, 0].plot(absc, vx[0, :])[0])
+        #axs1[0, 0].set_ylim(-5, 5)
         axs1[0, 0].title.set_text(' Vel_x (m/s)')
+        axs1[0, 0].set_xlabel(' Steps (0.1 sec)')
 
-        axs1[1, 0].plot(vy[i, :])
+        axs1[1, 0].plot(absc, vy[0, :])
+        #axs1[1, 0].set_ylim(-5, 5)
         axs1[1, 0].title.set_text(' Vel_y (m/s)')
+        axs1[1, 0].set_xlabel(' Steps (0.1 sec)')
 
-        axs1[2, 0].plot(vz[i, :])
+        axs1[2, 0].plot(absc, vz[0, :])
+        #axs1[2, 0].set_ylim(-5, 5)
         axs1[2, 0].title.set_text(' Vel_z (m/s)')
+        axs1[2, 0].set_xlabel(' Steps (0.1 sec)')
 
-        axs1[0, 1].plot(vr[i, :])
+        axs1[0, 1].plot(absc, vr[0, :])
+        #axs1[0, 1].set_ylim(-5, 5)
         axs1[0, 1].title.set_text(' Ang vel_p (deg/s)')
+        axs1[0, 1].set_xlabel(' Steps (0.1 sec)')
 
-        axs1[1, 1].plot(vp[i, :])
+        axs1[1, 1].plot(absc, vp[0, :])
+        #axs1[1, 1].set_ylim(-5, 5)
         axs1[1, 1].title.set_text(' Ang_vel_q (deg/s)')
+        axs1[1, 1].set_xlabel(' Steps (0.1 sec)')
 
-        axs1[2, 1].plot(vya[i, :])
+        axs1[2, 1].plot(absc, vya[0, :])
+        #axs1[2, 1].set_ylim(-5, 5)
         axs1[2, 1].title.set_text(' Ang_vel_r (deg/s)')
+        axs1[2, 1].set_xlabel(' Steps (0.1 sec)')
 
-    applied_plot = np.squeeze(applied, axis=-1)
-
-    fx = applied_plot[:, :, 0]
-    fy = applied_plot[:, :, 1]
-    fz = applied_plot[:, :, 2]
-
-    tx = applied_plot[:, :, 3]
-    ty = applied_plot[:, :, 4]
-    tz = applied_plot[:, :, 5]
-
-    shape = applied_plot.shape
-
-    #print(fx.shape)
-    #print(fy.shape)
-    #print(fz.shape)
-
-    #fig2, axs2 = plt.subplots(3, 2)
-    #for i in range(shape[0]):
-        #axs2[0, 0].plot(fx[i, :])
-        #axs2[0, 1].plot(fy[i, :])
-
-        #axs2[1, 0].plot(fz[i, :])
-        #axs2[1, 1].plot(tx[i, :])
-
-        #axs2[2, 0].plot(ty[i, :])
-        #axs2[2, 1].plot(tz[i, :])
+    fig1.legend(lines, labels=labels, loc="center right", title="Legend Title", borderaxespad=0.1)
 
 
-    pass
+    fig3, axs3 = plt.subplots(3, 2)
+    fig3.suptitle("Acceleration")
+    fig3.tight_layout()
+    lines3 = []
+    if accs is not None:
+
+        for acc in accs:
+            accx = acc[:, :, 0]
+            accy = acc[:, :, 1]
+            accz = acc[:, :, 2]
+            accp = acc[:, :, 3]
+            accq = acc[:, :, 4]
+            accr = acc[:, :, 5]
+
+            steps = accx.shape[1]
+            absc = np.linspace(0, time, steps)
+
+            lines3.append(axs3[0, 0].plot(absc, accx[0, :])[0])
+
+            #axs1[0, 0].set_ylim(-5, 5)
+            axs3[0, 0].title.set_text(' Acc_x (m/s^2)')
+            axs3[0, 0].set_xlabel(' Steps (0.1 sec)')
+
+            axs3[1, 0].plot(absc, accy[0, :])
+            #axs1[1, 0].set_ylim(-5, 5)
+            axs3[1, 0].title.set_text(' Acc_y (m/s^2)')
+            axs3[1, 0].set_xlabel(' Steps (0.1 sec)')
+
+            axs3[2, 0].plot(absc, accz[0, :])
+            #axs1[2, 0].set_ylim(-5, 5)
+            axs3[2, 0].title.set_text(' Acc_z (m/s^2)')
+            axs3[2, 0].set_xlabel(' Steps (0.1 sec)')
+
+            axs3[0, 1].plot(absc, accp[0, :])
+            #axs1[0, 1].set_ylim(-5, 5)
+            axs3[0, 1].title.set_text(' Ang acc_p (deg/s^2)')
+            axs3[0, 1].set_xlabel(' Steps (0.1 sec)')
+
+            axs3[1, 1].plot(absc, accq[0, :])
+            #axs1[1, 1].set_ylim(-5, 5)
+            axs3[1, 1].title.set_text(' Ang acc_q (deg/s^2)')
+            axs3[1, 1].set_xlabel(' Steps (0.1 sec)')
+            axs3[2, 1].plot(absc, accr[0, :])
+            #axs1[2, 1].set_ylim(-5, 5)
+            axs3[2, 1].title.set_text(' Ang acc_r (deg/s^2)')
+            axs3[2, 1].set_xlabel(' Steps (0.1 sec)')
+
+    fig3.legend(lines, labels=labels, loc="center right", title="Legend Title", borderaxespad=0.1)
+    return
 
 def to_quat(state_euler):
     k = state_euler.shape[0]
@@ -796,18 +938,131 @@ def to_euler(state_quat):
     state_euler =  np.concatenate([pos, euler, vel], axis=2)
     return state_euler
 
+def test_data(auv_model_rk1, auv_model_rk2, auv_model_rk4, auv_model_proxy):
+    with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/init_state.npy", "rb") as f:
+        inital_state = np.expand_dims(np.load(f), axis=0)
+    with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/applied.npy", "rb") as f:
+        applied = np.load(f)
+    with open("/home/pierre/workspace/uuv_ws/src/mppi-ros/log/states.npy", "rb") as f:
+        states_ = np.load(f)
+
+    tau = applied.shape[0]
+
+    horizon = 20
+
+    applied = np.expand_dims(applied, axis=(-1, 0))
+    state_rk1 = inital_state
+    state_rk2 = inital_state
+    state_rk4 = inital_state
+    state_proxy = inital_state
+
+    auv_model_rk1.set_prev_vel(inital_state[:, 7:13])
+    rot_rk1 = auv_model_rk1.rotBtoInp(np.squeeze(state_rk1[0, 3:7]))
+    rot_rk1 = np.expand_dims(rot_rk1, axis=0)
+
+    auv_model_rk2.set_prev_vel(inital_state[:, 7:13])
+    rot_rk2 = auv_model_rk2.rotBtoInp(np.squeeze(state_rk2[0, 3:7]))
+    rot_rk2 = np.expand_dims(rot_rk2, axis=0)
+
+    auv_model_rk4.set_prev_vel(inital_state[:, 7:13])
+    rot_rk4 = auv_model_rk4.rotBtoInp(np.squeeze(state_rk4[0, 3:7]))
+    rot_rk4 = np.expand_dims(rot_rk4, axis=0)
+
+    auv_model_proxy.set_prev_vel(inital_state[:, 7:13])
+    rot_proxy = auv_model_proxy.rotBtoInp(np.squeeze(state_rk4[0, 3:7]))
+    rot_proxy = np.expand_dims(rot_proxy, axis=0)
+
+    states_rk1=[]
+    accs_rk1=[]
+
+    states_rk2=[]
+    accs_rk2=[]
+
+    states_rk4=[]
+    accs_rk4=[]
+
+    accs_est=[]
+    states_uuv=[]
+
+    states_proxy=[]
+
+    # get Gazebo-uuv_sim data
+    for t in range(tau-1):
+        rot1 = auv_model_rk1.rotBtoInp(np.squeeze(states_[t, 3:7]))
+        lin_vel = states_[t, 7:10]
+
+        s_uuv = np.expand_dims(np.concatenate([states_[t, 0:7], lin_vel, states_[t, 10:13]]), axis=0)
+
+        acc_est = np.expand_dims((states_[t+1, 7:13] - states_[t, 7:13])/0.1, axis=0)
+
+        rot1 = np.expand_dims(rot1, axis=0)
+
+        states_uuv.append(euler_rot(np.expand_dims(s_uuv, axis=0), rot1))
+        accs_est.append(np.expand_dims(acc_est, axis=0))
+
+
+    tau = int(horizon/auv_model_rk1.dt)
+
+    for t in range(tau):
+        next_state_rk1, acc_rk1 = auv_model_rk1.buildStepGraph("foo", state_rk1, applied[:, t, :, :], ret_acc=True)
+        states_rk1.append(euler_rot(np.expand_dims(next_state_rk1, axis=1), auv_model_rk1._rotBtoI))
+        accs_rk1.append(np.expand_dims(acc_rk1, axis=0))
+        state_rk1 = next_state_rk1.numpy().copy()
+
+        next_state_rk2, acc_rk2 = auv_model_rk2.buildStepGraph("foo", state_rk2, applied[:, t, :, :], ret_acc=True)
+        states_rk2.append(euler_rot(np.expand_dims(next_state_rk2, axis=1), auv_model_rk2._rotBtoI))
+        accs_rk2.append(np.expand_dims(acc_rk2, axis=0))
+        state_rk2 = next_state_rk2.numpy().copy()
+
+        #next_state_rk4, acc_rk4 = auv_model_rk4.buildStepGraph("foo", state_rk4, applied[:, 0, :, :], acc=True)
+        #states_rk4.append(euler_rot(np.expand_dims(next_state_rk4, axis=1), auv_model_rk4._rotBtoI))
+        #accs_rk4.append(np.expand_dims(acc_rk4, axis=0))
+        #state_rk4 = next_state_rk4.numpy().copy()
+
+    states_rk1 = np.concatenate(states_rk1, axis=1)
+    states_rk2 = np.concatenate(states_rk2, axis=1)
+    #states_rk4 = np.concatenate(states_rk4, axis=1)
+
+    accs_rk1 = np.concatenate(accs_rk1, axis=1)
+    accs_rk2 = np.concatenate(accs_rk2, axis=1)
+    #accs_rk4 = np.concatenate(accs_rk4, axis=1)
+
+    states_uuv = np.concatenate(states_uuv, axis=1)
+    accs_est = np.concatenate(accs_est, axis=1)
+
+    print("*"*5 + " States " + "*"*5)
+    print(states_rk1.shape)
+    print(states_rk2.shape)
+    #print(states_rk4.shape)
+    print(states_uuv.shape)
+
+    print("*"*5 + " Acc " + "*"*5)
+    print(accs_rk1.shape)
+    print(accs_rk2.shape)
+    #print(accs_rk4.shape)
+    print(accs_est.shape)
+
+    dummpy_plot([states_rk2, states_uuv], applied,
+                [accs_rk2, accs_est],
+                labels=["rk2", "uuv_sim"],
+                time=horizon)
+
+    plt.show()
+
 def main():
-    k = 100
+    k = 1
     tau = 1000
     params = dict()
     params["mass"] = 1862.87
     params["volume"] = 1.83826
+    params["volume"] = 1.8121303501945525 # makes the vehicle neutraly buoyant.
     params["density"] = 1028.0
     params["height"] = 1.6
     params["length"] = 2.6
     params["width"] = 1.5
-    params["cog"] = [0, 0, 0]
-    params["cob"] = [0, 0, 0.3]
+    params["cog"] = [0.0, 0.0, 0.0]
+    params["cob"] = [0.0, 0.0, 0.3]
+    #params["cob"] = [0.0, 0.0, 0.0]
     params["Ma"] = [[779.79, -6.8773, -103.32,  8.5426, -165.54, -7.8033],
                     [-6.8773, 1222, 51.29, 409.44, -5.8488, 62.726],
                     [-103.32, 51.29, 3659.9, 6.1112, -386.42, 10.774],
@@ -825,55 +1080,14 @@ def main():
     inertial["ixz"] = 33.41
     inertial["iyz"] = 2.6
     params["inertial"] = inertial
-    auv_quat = AUVModel(quat=True, action_dim=6, dt=0.1, k=k, parameters=params)
-    #auv_euler = AUVModel(quat=False, action_dim=6, dt=0.1, k=1, parameters=params)
+    dt = 0.1
+    auv_quat = AUVModel(quat=True, action_dim=6, dt=dt, k=k, parameters=params)
+    auv_quat_rk2 = AUVModel(quat=True, action_dim=6, dt=dt, k=k, rk=2, parameters=params)
+    auv_quat_rk4 = AUVModel(quat=True, action_dim=6, dt=dt, k=k, rk=4, parameters=params)
+    auv_quat_proxy = AUVModel(quat=True, action_dim=6, dt=dt, k=k, rk=4, parameters=params)
 
-
-    #fake input.
-    fake_state_quat_list = []
-    #fake_state_euler_list = []
-    fake_applied_list = []
-
-    fake_out_quat = np.array([[[0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
-    fake_out_quat = np.broadcast_to(fake_out_quat, shape=(k, 13, 1))
-    #fake_out_euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]]])
-    #fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
-    #                    [[1.], [2.], [0.], [0.], [1.], [0.]]])
-
-    #fake_in = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]]])
-    fake_in = np.random.normal(loc=0.0, scale=1000.0, size=(k, tau, 6, 1))
-
-    #fake_in_expand = np.expand_dims(fake_in, axis=1)
-
-    fake_state_quat_list.append(to_euler(np.expand_dims(fake_out_quat, axis=1)))
-    #fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
-
-
-    for i in range(tau):
-        #fake_out_euler = auv_euler.buildStepGraph("foo", fake_out_euler, fake_in)
-        #print(fake_out_euler)
-        #fake_out_euler_to_quat = to_quat(fake_out_euler)
-        fake_out_quat = auv_quat.buildStepGraph("foo", fake_out_quat, fake_in[:, i, :, :])
-        
-        fake_state_quat_list.append(euler_rot(np.expand_dims(fake_out_quat, axis=1), auv_quat._rotBtoI))
-        #fake_state_euler_list.append(np.expand_dims(fake_out_euler, axis=1))
-        fake_applied_list.append(fake_in)
-        #print(fake_out_quat)
-
-        #print(fake_out_euler_to_quat-fake_out_quat)
-
-        #input()
-    fake_state_quat_list = np.concatenate(fake_state_quat_list, axis=1)
-    #fake_state_euler_list = np.concatenate(fake_state_euler_list, axis=1)
-
-    #fake_states_list = np.concatenate([fake_state_euler_list, fake_state_quat_list], axis=0)
-    fake_states_list = fake_state_quat_list
-    fake_applied_list = np.concatenate(fake_applied_list, axis=1)
-    
-    dummpy_plot(fake_states_list, fake_applied_list)
-    #dummpy_plot(fake_state_euler_list, fake_applied_list)
-    #dummpy_plot(fake_state_quat_list, fake_applied_list)
-    plt.show()
+    test_data(auv_quat, auv_quat_rk2, auv_quat_rk4, auv_quat_proxy)
+    exit()
 
 if __name__ == "__main__":
     main()
