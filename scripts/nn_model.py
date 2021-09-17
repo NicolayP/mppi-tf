@@ -99,7 +99,7 @@ class NNModel(ModelBase):
         return tf.Variable(self.initializer(shape, dtype=tf.float64), name=name, trainable=True, dtype=tf.float64)
 
 
-class NNAUVModel(ModelBase):
+class NNAUVModel(NNModel):
     '''
         Neural network representation for AUV model. Assumes that
         the model uses quaternion representation. The network predicts
