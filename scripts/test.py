@@ -444,10 +444,14 @@ class TestAUVModel(tf.test.TestCase):
         self.assertAllClose(jac_euler, exp_jac_euler)
 
     def test_restoring(self):
-        roll = 45*(np.pi/180.)
-        pitch = 0.
-        yaw = 0.
-        pose = np.array([[[1.0], [1.0], [1.0], [roll], [pitch], [yaw]]])
+        roll = np.array([45., 13., 280.])*(np.pi/180.)
+        pitch = np.array([0., 110., 50.])*(np.pi/180.)
+        yaw = np.array([0., 25., 325.])*(np.pi/180.)
+        pose = np.array([
+                         [[1.0], [1.0], [1.0], [roll[0]], [pitch[0]], [yaw[0]]],
+                         [[1.5], [2.3], [0.7], [roll[1]], [pitch[1]], [yaw[1]]],
+                         [[5.2], [-2.], [1.7], [roll[2]], [pitch[2]], [yaw[2]]]
+                        ])
 
         rotItoB = np.array([
                             [
@@ -482,16 +486,16 @@ class TestAUVModel(tf.test.TestCase):
         mbg = np.cross(r_g, fbg)
         mbb = np.cross(r_b, fbb)
 
-        exp_rest = np.zeros((1, 6, 1))
+        exp_rest = np.zeros((3, 6, 1))
         fb = -(fbb+fbg)
         mb = -(mbb+mbg)
-        exp_rest[0, 0, 0] = fb[0]
-        exp_rest[0, 1, 0] = fb[1]
-        exp_rest[0, 2, 0] = fb[2]
+        exp_rest[:, 0, 0] = fb[:, 0]
+        exp_rest[:, 1, 0] = fb[:, 1]
+        exp_rest[:, 2, 0] = fb[:, 2]
 
-        exp_rest[0, 3, 0] = mb[0]
-        exp_rest[0, 4, 0] = mb[1]
-        exp_rest[0, 5, 0] = mb[2]
+        exp_rest[:, 3, 0] = mb[:, 0]
+        exp_rest[:, 4, 0] = mb[:, 1]
+        exp_rest[:, 5, 0] = mb[:, 2]
 
         self.model_euler.body2inertial_transform(pose)
 
