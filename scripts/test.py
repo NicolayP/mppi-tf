@@ -444,13 +444,60 @@ class TestAUVModel(tf.test.TestCase):
         self.assertAllClose(jac_euler, exp_jac_euler)
 
     def test_restoring(self):
-        pose = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
+        roll = 45*(np.pi/180.)
+        pitch = 0.
+        yaw = 0.
+        pose = np.array([[[1.0], [1.0], [1.0], [roll], [pitch], [yaw]]])
+
+        rotItoB = np.array([
+                            [
+                             np.cos(yaw)*np.cos(pitch),
+                             -np.sin(yaw)*np.cos(roll)+np.cos(yaw)*np.sin(pitch)*np.sin(roll),
+                             np.sin(yaw)*np.sin(roll)+np.cos(yaw)*np.cos(roll)*np.sin(pitch)
+                            ],
+                            [
+                             np.sin(yaw)*np.cos(pitch),
+                             np.cos(yaw)*np.cos(roll)+np.sin(roll)*np.sin(pitch)*np.sin(yaw),
+                             -np.cos(yaw)*np.sin(roll)+np.sin(pitch)*np.sin(yaw)*np.cos(roll)
+                            ],
+                            [
+                             -np.sin(pitch),
+                             np.cos(pitch)*np.sin(roll),
+                             np.cos(pitch)*np.cos(roll)
+                            ]
+                           ]).T
+
+        W = self.model_euler.mass*self.model_euler.gravity
+        B = self.model_euler.volume*self.model_euler.density*self.model_euler.gravity
+
+        r_g = self.model_euler.cog
+        r_b = self.model_euler.cob
+
+        fng = np.array([0.0, 0.0, - W])
+        fnb = np.array([0.0, 0.0, B])
+
+        fbg = np.dot(rotItoB, fng)
+        fbb = np.dot(rotItoB, fnb)
+
+        mbg = np.cross(r_g, fbg)
+        mbb = np.cross(r_b, fbb)
+
+        exp_rest = np.zeros((1, 6, 1))
+        fb = -(fbb+fbg)
+        mb = -(mbb+mbg)
+        exp_rest[0, 0, 0] = fb[0]
+        exp_rest[0, 1, 0] = fb[1]
+        exp_rest[0, 2, 0] = fb[2]
+
+        exp_rest[0, 3, 0] = mb[0]
+        exp_rest[0, 4, 0] = mb[1]
+        exp_rest[0, 5, 0] = mb[2]
+
         self.model_euler.body2inertial_transform(pose)
+
         rest = self.model_euler.restoring_forces("rest")
-        #print("*"*10 + " Rest " + "*"*10)
-        #print(rest)
-        #print("*"*20)
-        pass
+
+        self.assertAllClose(rest, exp_rest)
 
     def test_damping(self):
         vel = np.array([
