@@ -12,6 +12,26 @@ from uuv_control_msgs import srv
 
 from quaternion import from_euler_angles
 
+def qmul(q1, q2):
+    mul = []
+    for p, q in zip(q1, q2):
+        w0, x0, y0, z0 = p
+        w1, x1, y1, z1 = q
+        res = np.array([
+                        [
+                            w0*w1 - x0*x1 - y0*y1 - z0*z1,
+                            w0*x1 + x0*w1 + y0*z1 - z0*y1,
+                            w0*y1 - x0*z1 + y0*w1 + z0*x1,
+                            w0*z1 + x0*y1 - y0*x1 + z0*w1
+                        ]
+                        ], dtype=np.float64)
+
+        mul.append(res)
+
+    mul = np.concatenate(mul, axis=0)
+    return mul
+
+
 class TestPointMassModel(tf.test.TestCase):
     def setUp(self):
         self.dt=0.1
@@ -34,7 +54,7 @@ class TestPointMassModel(tf.test.TestCase):
 
         x_pred = model.buildFreeStepGraph("", state_in)
         u_pred = model.buildActionStepGraph("", action_in)
-        pred = model.buildStepGraph("", state_in, action_in)
+        pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
         self.assertAllClose(exp_x, x_pred)
@@ -57,7 +77,7 @@ class TestPointMassModel(tf.test.TestCase):
 
         x_pred = model.buildFreeStepGraph("", state_in)
         u_pred = model.buildActionStepGraph("", action_in)
-        pred = model.buildStepGraph("", state_in, action_in)
+        pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
         self.assertAllClose(exp_x, x_pred)
@@ -97,7 +117,7 @@ class TestPointMassModel(tf.test.TestCase):
 
         x_pred = model.buildFreeStepGraph("", state_in)
         u_pred = model.buildActionStepGraph("", action_in)
-        pred = model.buildStepGraph("", state_in, action_in)
+        pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
         self.assertAllClose(exp_x, x_pred)
@@ -136,7 +156,7 @@ class TestPointMassModel(tf.test.TestCase):
 
         x_pred = model.buildFreeStepGraph("", state_in)
         u_pred = model.buildActionStepGraph("", action_in)
-        pred = model.buildStepGraph("", state_in, action_in)
+        pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
         self.assertAllClose(exp_x, x_pred)
@@ -183,9 +203,9 @@ class TestPointMassModel(tf.test.TestCase):
 
         exp = B_u + exp_x
 
-        pred = model.buildStepGraph("", state_in, action_in)
-        pred = model.buildStepGraph("", pred, action_in)
-        pred = model.buildStepGraph("", pred, action_in)
+        pred = model.build_step_graph("", state_in, action_in)
+        pred = model.build_step_graph("", pred, action_in)
+        pred = model.build_step_graph("", pred, action_in)
 
         self.assertAllClose(exp, pred)
 
@@ -546,7 +566,7 @@ class TestAUVModel(tf.test.TestCase):
         state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
                            [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]])
         action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]])
-        next_state = self.model_euler.buildStepGraph("step", state, action)
+        next_state = self.model_euler.build_step_graph("step", state, action)
 
         #print("*"*10 + " Next State " + "*"*10)
         #print(next_state)
@@ -575,30 +595,11 @@ class TestAUVModel(tf.test.TestCase):
                            [ [2.0], [2.0], [2.0], [2.0], [2.0], [2.0] ],
                            [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]])
 
-        next_state = self.model_euler.buildStepGraph("step", state, action)
+        next_state = self.model_euler.build_step_graph("step", state, action)
         #print("*"*10 + " Next State Many " + "*"*10)
         #print(next_state)
         #print("*"*20)
         pass
-
-def qmul(q1, q2):
-    mul = []
-    for p, q in zip(q1, q2):
-        w0, x0, y0, z0 = p
-        w1, x1, y1, z1 = q
-        res = np.array([
-                        [
-                            w0*w1 - x0*x1 - y0*y1 - z0*z1,
-                            w0*x1 + x0*w1 + y0*z1 - z0*y1,
-                            w0*y1 - x0*z1 + y0*w1 + z0*x1,
-                            w0*z1 + x0*y1 - y0*x1 + z0*w1
-                        ]
-                        ], dtype=np.float64)
-
-        mul.append(res)
-
-    mul = np.concatenate(mul, axis=0)
-    return mul
 
 
 class TestNNAUVModel(tf.test.TestCase):

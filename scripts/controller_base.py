@@ -138,7 +138,7 @@ class ControllerBase(object):
             Saves the graph in tensorboard.
 
         '''
-        state = np.zeros((1, self.s_dim, 1))
+        state = np.zeros((self.s_dim, 1))
         seq = np.zeros((5, self.a_dim, 1))
         with self.writer.as_default():
             # get graph from function
@@ -214,7 +214,7 @@ class ControllerBase(object):
             with tf.name_scope("Prepare_data_" + str(i)) as pd:
                 action = self.prepareAction(pd, action_seq, i)
             with tf.name_scope("Step_" + str(i)) as s:
-                next_state = self.model.buildStepGraph(s, state, action)
+                next_state = self.model.build_step_graph(s, state, action)
             with tf.name_scope("Cost_" + str(i)) as c:
                 tmp_dict = self.cost.state_cost(c, next_state)
                 cost_dict = self.cost.add_cost(c, tmp_dict, cost_dict)
@@ -534,7 +534,7 @@ class ControllerBase(object):
                 noise = self.prepareNoise(pd, noises, i)
                 to_apply = tf.add(action, noise, name="to_apply")
             with tf.name_scope("Step_" + str(i)) as s:
-                next_state = self.model.buildStepGraph(s, state, to_apply)
+                next_state = self.model.build_step_graph(s, state, to_apply)
                 #print("*"*5 + " Step: " + str(i) + " " + "*"*5)
                 #print(next_state)
             with tf.name_scope("Cost_" + str(i)) as c:

@@ -143,8 +143,6 @@ def log_control(writer, control_items, pose_id, speed_id):
     best_id = np.argmin(cost)
     best_cost = cost[best_id, 0, 0]
 
-    #print(control_items.keys())
-
     with writer.as_default():
         for key in control_items:
             if key == "cost":

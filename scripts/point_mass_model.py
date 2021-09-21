@@ -53,7 +53,7 @@ class PointMassModel(ModelBase):
         with tf.name_scope("Const") as c:
             self.create_const(c)
 
-    def buildStepGraph(self, scope, state, action):
+    def build_step_graph(self, scope, state, action):
         '''
             Abstract method, need to be overwritten in child class.
             Step graph for the model. This computes the prediction for $\hat{f}(x, u)$

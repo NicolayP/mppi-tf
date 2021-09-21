@@ -65,7 +65,7 @@ class ModelBase(object):
                 - the loss function between one step prediction "model(x, a)" and gt.
         '''
 
-        pred = self.buildStepGraph("train", x, a)
+        pred = self.build_step_graph("train", x, a)
         return tf.reduce_mean(tf.math.squared_difference(pred, gt),
                               name="Loss")
 
@@ -126,7 +126,7 @@ class ModelBase(object):
                                   self.current_loss.numpy(),
                                   step=step)
 
-    def buildStepGraph(self, scope, state, action):
+    def build_step_graph(self, scope, state, action):
         '''
             Abstract method, need to be overwritten in child class.
             Step graph for the model. This computes the prediction for $\hat{f}(x, u)$
@@ -157,7 +157,7 @@ class ModelBase(object):
                 - the predicted next state. Shape [1, s_dim, 1]
         '''
         self.k = 1
-        return self.buildStepGraph("step", state, action)
+        return self.build_step_graph("step", state, action)
 
     def getName(self):
         '''

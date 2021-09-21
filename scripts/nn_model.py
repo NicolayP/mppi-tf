@@ -27,7 +27,7 @@ class NNModel(ModelBase):
         self.addModelVars("second", self.getWeights((5, 5), "second"))
         self.addModelVars("final", self.getWeights((5, state_dim), "final"))
 
-    def buildStepGraph(self, scope, state, action):
+    def build_step_graph(self, scope, state, action):
         '''
             Abstract method, need to be overwritten in child class.
             Step graph for the model. This computes the prediction for $\hat{f}(x, u)$
@@ -122,7 +122,7 @@ class NNAUVModel(NNModel):
 
         pass
 
-    def buildStepGraph(self, scope, state, action):
+    def build_step_graph(self, scope, state, action):
         '''
             Predicts the next step using the neural network model.
 
