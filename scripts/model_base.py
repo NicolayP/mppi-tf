@@ -69,7 +69,7 @@ class ModelBase(object):
         return tf.reduce_mean(tf.math.squared_difference(pred, gt),
                               name="Loss")
 
-    def isTrained(self):
+    def is_trained(self):
         '''
             Tells whether the model is trained or not. 
 
@@ -159,7 +159,7 @@ class ModelBase(object):
         self.k = 1
         return self.build_step_graph("step", state, action)
 
-    def getName(self):
+    def get_name(self):
         '''
             Get the name of the model.
 
@@ -168,6 +168,9 @@ class ModelBase(object):
                 - String, the name of the model
         '''
         return self.name
+
+    def get_stats(self):
+        raise NotImplementedError
 
     def set_k(self, k):
         self.k = k

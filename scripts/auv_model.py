@@ -186,14 +186,14 @@ class AUVModel(ModelBase):
 
 
         self.elapsed_dict = {}
-        self.elapsed_dict["pdot"] = 0.
-        self.elapsed_dict["acc"] = 0.
-        self.elapsed_dict["damp"] = 0.
-        self.elapsed_dict["cori"] = 0.
-        self.elapsed_dict["rest"] = 0.
-        self.elapsed_dict["solv"] = 0.
-        self.elapsed_dict["trans"] = 0.
-        self.steps = 0
+        self.elapsed_dict["time_pdot"] = 0.
+        self.elapsed_dict["time_acc"] = 0.
+        self.elapsed_dict["time_damp"] = 0.
+        self.elapsed_dict["time_cori"] = 0.
+        self.elapsed_dict["time_rest"] = 0.
+        self.elapsed_dict["time_solv"] = 0.
+        self.elapsed_dict["time_trans"] = 0.
+        self._steps = 0
 
     def print_info(self):
         """Print the vehicle's parameters."""
@@ -274,6 +274,8 @@ class AUVModel(ModelBase):
             if self._quat:
                 next_state = self.normalize_quat(next_state)
 
+            self._steps += 1
+
             if not acc:
                 return next_state
             return next_state, k1[:, 7:13]
@@ -285,10 +287,20 @@ class AUVModel(ModelBase):
         # mostily used for rk integration methods.
         pose, speed = self.prepare_data(state)
 
+        start = t.perf_counter()
         self.body2inertial_transform_q(pose)
+        end = t.perf_counter()
+        self.elapsed_dict["time_trans"] += end-start
 
+        start = t.perf_counter()
         pose_dot = tf.matmul(self.get_jacobian_q(), speed)
+        end = t.perf_counter()
+        self.elapsed_dict["time_pdot"] += end-start
+
+        start = t.perf_counter()
         speed_dot = self.acc("acceleration", speed, action)
+        end = t.perf_counter()
+        self.elapsed_dict["time_acc"] += end-start
 
         return self.get_state_dot(pose_dot, speed_dot)
 
@@ -621,17 +633,17 @@ class AUVModel(ModelBase):
             start = t.perf_counter()
             D = self.damping_matrix("Damping", vel)
             end = t.perf_counter()
-            self.elapsed_dict["damp"] += end-start
+            self.elapsed_dict["time_damp"] += end-start
 
             start = t.perf_counter()
             C = self.coriolis_matrix("Coriolis", vel)
             end = t.perf_counter()
-            self.elapsed_dict["cori"] += end-start
+            self.elapsed_dict["time_cori"] += end-start
 
             start = t.perf_counter()
             g = self.restoring_forces("Restoring")
             end = t.perf_counter()
-            self.elapsed_dict["rest"] += end-start
+            self.elapsed_dict["time_rest"] += end-start
 
             start = t.perf_counter()
 
@@ -641,19 +653,31 @@ class AUVModel(ModelBase):
             acc = tf.matmul(lhs, rhs)
 
             end = t.perf_counter()
-            self.elapsed_dict["solv"] += end-start
+            self.elapsed_dict["time_solv"] += end-start
 
             return acc
 
-    def stats(self):
+    def print_stats(self):
         print("*"*5 + " Model Time stats " + "*"*5)
-        print("* Transfor dot: {:.4f} (sec)".format(30*self.elapsed_dict["trans"]/self.steps))
-        print("* Position dot: {:.4f} (sec)".format(30*self.elapsed_dict["pdot"]/self.steps))
-        print("* Accelaration: {:.4f} (sec)".format(30*self.elapsed_dict["acc"]/self.steps))
-        print("* Damping     : {:.4f} (sec)".format(30*self.elapsed_dict["damp"]/self.steps))
-        print("* Coriolis    : {:.4f} (sec)".format(30*self.elapsed_dict["cori"]/self.steps))
-        print("* Restoring   : {:.4f} (sec)".format(30*self.elapsed_dict["rest"]/self.steps))
-        print("* Solving     : {:.4f} (sec)".format(30*self.elapsed_dict["solv"]/self.steps))
+        print("* Transfor dot: {:.4f} (sec)".format(self.elapsed_dict["time_trans"]/self._steps))
+        print("* Position dot: {:.4f} (sec)".format(self.elapsed_dict["time_pdot"]/self._steps))
+        print("* Accelaration: {:.4f} (sec)".format(self.elapsed_dict["time_acc"]/self._steps))
+        print("* Damping     : {:.4f} (sec)".format(self.elapsed_dict["time_damp"]/self._steps))
+        print("* Coriolis    : {:.4f} (sec)".format(self.elapsed_dict["time_cori"]/self._steps))
+        print("* Restoring   : {:.4f} (sec)".format(self.elapsed_dict["time_rest"]/self._steps))
+        print("* Solving     : {:.4f} (sec)".format(self.elapsed_dict["time_solv"]/self._steps))
+
+    def get_stats(self):
+        stats_dict = {}
+        stats_dict["time_trans"] = self.elapsed_dict["time_trans"]/self._steps
+        stats_dict["time_pdot"] = self.elapsed_dict["time_pdot"]/self._steps
+        stats_dict["time_acc"] = self.elapsed_dict["time_acc"]/self._steps
+        stats_dict["time_damp"] = self.elapsed_dict["time_damp"]/self._steps
+        stats_dict["time_cori"] = self.elapsed_dict["time_cori"]/self._steps
+        stats_dict["time_rest"] = self.elapsed_dict["time_rest"]/self._steps
+        stats_dict["time_solv"] = self.elapsed_dict["time_solv"]/self._steps
+
+        return stats_dict
 
 
 def dummpy_plot(traj=None, applied=None, accs=None, labels=[""], time=0):

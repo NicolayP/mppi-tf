@@ -252,7 +252,7 @@ def log_control(writer, control_items, pose_id, speed_id):
             elif key == "next":
                 action = control_items[key][0]
                 for i in range(action.shape[0]):
-                    tf.summary.scalar("input_{}".format(i), action[i, 0], step=control_step)
+                    tf.summary.scalar("input/input_{}".format(i), action[i, 0], step=control_step)
             
             elif key == "state":
                 state = control_items[key]
@@ -269,6 +269,37 @@ def log_control(writer, control_items, pose_id, speed_id):
                 v_dist = control_items[key]
                 tf.summary.scalar("goal/speed_to_goal_distance", v_dist, step=control_step)
 
+            elif key == "time_trans":
+                t_trans = control_items[key]
+                tf.summary.scalar("bench/transformation_timeing", t_trans, step=control_step)
+
+            elif key == "time_pdot":
+                t_pdot = control_items[key]
+                tf.summary.scalar("bench/p_dot_timeing", t_pdot, step=control_step)
+
+            elif key == "time_acc":
+                t_acc = control_items[key]
+                tf.summary.scalar("bench/acc_timeing", t_acc, step=control_step)
+
+            elif key == "time_damp":
+                t_damp = control_items[key]
+                tf.summary.scalar("bench/damping_timeing", t_damp, step=control_step)
+
+            elif key == "time_cori":
+                t_cori = control_items[key]
+                tf.summary.scalar("bench/coriolis_timeing", t_cori, step=control_step)
+
+            elif key == "time_rest":
+                t_rest = control_items[key]
+                tf.summary.scalar("bench/restoring_timeing", t_rest, step=control_step)
+
+            elif key == "time_solv":
+                t_solv = control_items[key]
+                tf.summary.scalar("bench/solve_timeing", t_solv, step=control_step)
+
+            elif key == "time_steps":
+                t_steps = control_items[key]
+                tf.summary.scalar("bench/mean_step_timing", t_steps, step=control_step)
             # The following remaining entries are used foor the gif generation
             # just put them here for completness.
             elif key == "noises":

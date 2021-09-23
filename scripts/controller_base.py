@@ -14,6 +14,7 @@ from shutil import copyfile
 import scipy.signal
 
 from utile import log_control, plt_paths, assert_shape
+import time as t
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
@@ -84,6 +85,9 @@ class ControllerBase(object):
         self.sigma = tf.convert_to_tensor(sigma, dtype=tf.float64)
         
         self.log_dict = {}
+        self.elapsed = {}
+        self.elapsed["steps"] = 0.
+        self._steps = 0
 
         if init_seq.size == 0:
             self.action_seq = np.zeros((self.tau, self.a_dim, 1))
@@ -114,7 +118,7 @@ class ControllerBase(object):
             path = 'graphs/python/'
             if self.debug:
                 path = os.path.join(log_path, path, 'debug')
-            logdir = os.path.join(path, model.getName(), "k" + str(k),
+            logdir = os.path.join(path, model.get_name(), "k" + str(k),
                                   "T" + str(tau), "L" + str(lam), stamp)
 
             os.makedirs(logdir)
@@ -167,7 +171,8 @@ class ControllerBase(object):
         
         if self.log:
             return_dict = self.predict(x, u, self.action_seq, x_next)
-            self.log_dict = {**self.log_dict, **return_dict}
+            elapsed_dict = self.model.get_stats()
+            self.log_dict = {**self.log_dict, **return_dict, **elapsed_dict}
             log_control(self.writer, self.log_dict, [0, 1, 2, 3, 4, 5, 6], [7, 8 ,9, 10, 11, 12])
         if self.gif:
             plt_paths(self.log_dict["paths"], self.log_dict["weights"], self.log_dict["noises"],
@@ -240,7 +245,7 @@ class ControllerBase(object):
         plt.show()
 
     def train(self):
-        if self.rb.get_stored_size() < 32 or self.model.isTrained():
+        if self.rb.get_stored_size() < 32 or self.model.is_trained():
             return
 
         epochs = 500
@@ -320,6 +325,7 @@ class ControllerBase(object):
 
         #if not tf.ensure_shape(state, [self.s_dim, 1]):
         #    raise AssertionError("State tensor doesn't have the expected shape.\n Expected [{}, 1], got {}".format(self.s_dim, state.shape))
+        start = t.perf_counter()
         return_dict = self._next(self.k, state, self.action_seq, self.normalize_cost)
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
@@ -332,8 +338,13 @@ class ControllerBase(object):
                             return_dict["action_seq"].numpy()[:, :, 0],
                             29, 9, deriv=0, delta=1.0, axis=0),
                     axis=-1)
+        end = t.perf_counter()
+        self.elapsed["steps"] += end-start
+        self._steps += 1
+
         self.action_seq = return_dict["action_seq"]
         self.log_dict = return_dict
+        self.log_dict["time_steps"] = self.elapsed["steps"]/self._steps
 
         return np.squeeze(return_dict["next"].numpy())
 
