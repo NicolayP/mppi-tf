@@ -43,6 +43,8 @@
 
 # Python Implementation
 
+## implementations:
+
   - [X] add elements to replay buffer.
   - [X] finish training method.
   - [X] Rewrite Testing.
@@ -82,8 +84,6 @@
   - [ ] tune filtering process.
   - [ ] log disturbances.
   - [ ] add current. Needs to be parameterizable.
-  - [ ] complexify mujoco simulation with friction and drag etc. (Need to find model for this.) (~(1-2) day)
-  - [ ] learn more complex mujoco simulations. (~(2-3) days, need to learn the physics and derive the equations and  implement them)
   - [ ] Test Cpu. (probably inference on GPU, learning on CPU)
   - [ ] Train simple network on Point mass system.
   - [ ] Complexify learning (NN, GP etc). (~1-2 weeks) need to implement model, search the hyperparameters, same if we try Gaussian processes (GPflow) probably not a priority.
@@ -109,8 +109,8 @@
 ## ROS Integration
 
   - [x] run a tf-graph in ros with python3.
-  - [ ] adapt static cost and eliptic cost to 3d problems.
-  - [ ] vehicle modelling.
+  - [X] adapt static cost and eliptic cost to 3d problems.
+  - [X] vehicle modelling.
     - [X] step function.
     - [X] compute acceleration.
     - [X] compute damping.
@@ -154,9 +154,6 @@
 
   - [ ] Performance testing.
   - [ ] go to real robot.
-
-### Idea
-  - Start the input mean for the z axis such that it counteracts the gravity/boyancy (the highest one). 
 
 ## Troubleshooting:
 
