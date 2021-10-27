@@ -113,14 +113,17 @@ class ControllerBase(object):
 
         self.train_step = 0
         self.writer = None
+
         if self.log or self.debug:
             stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
             path = 'graphs/python/'
             if self.debug:
-                path = os.path.join(log_path, path, 'debug')
-            logdir = os.path.join(path, model.get_name(), "k" + str(k),
+                path = os.path.join(path, 'debug')
+            logdir = os.path.join(log_path, path, model.get_name(), "k" + str(k),
                                   "T" + str(tau), "L" + str(lam), stamp)
 
+
+            print(logdir)
             os.makedirs(logdir)
 
             self.writer = tf.summary.create_file_writer(logdir)
@@ -171,7 +174,7 @@ class ControllerBase(object):
         
         if self.log:
             return_dict = self.predict(x, u, self.action_seq, x_next)
-            elapsed_dict = self.model.get_stats()
+            elapsed_dict = self.model.get_stats(self.tau)
             self.log_dict = {**self.log_dict, **return_dict, **elapsed_dict}
             log_control(self.writer, self.log_dict, [0, 1, 2, 3, 4, 5, 6], [7, 8 ,9, 10, 11, 12])
         if self.gif:

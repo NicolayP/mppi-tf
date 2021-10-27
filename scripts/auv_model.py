@@ -667,15 +667,20 @@ class AUVModel(ModelBase):
         print("* Restoring   : {:.4f} (sec)".format(self.elapsed_dict["time_rest"]/self._steps))
         print("* Solving     : {:.4f} (sec)".format(self.elapsed_dict["time_solv"]/self._steps))
 
-    def get_stats(self):
+    def get_stats(self, steps):
+        '''
+            Returns a dictionaary containing the profiling of the model.
+            The model can only profile one prediction step, thus we multiply it
+            by the number of steps to have a better idea of the overall time.
+        '''
         stats_dict = {}
-        stats_dict["time_trans"] = self.elapsed_dict["time_trans"]/self._steps
-        stats_dict["time_pdot"] = self.elapsed_dict["time_pdot"]/self._steps
-        stats_dict["time_acc"] = self.elapsed_dict["time_acc"]/self._steps
-        stats_dict["time_damp"] = self.elapsed_dict["time_damp"]/self._steps
-        stats_dict["time_cori"] = self.elapsed_dict["time_cori"]/self._steps
-        stats_dict["time_rest"] = self.elapsed_dict["time_rest"]/self._steps
-        stats_dict["time_solv"] = self.elapsed_dict["time_solv"]/self._steps
+        stats_dict["time_trans"] = steps*self.elapsed_dict["time_trans"]/self._steps
+        stats_dict["time_pdot"] = steps*self.elapsed_dict["time_pdot"]/self._steps
+        stats_dict["time_acc"] = steps*self.elapsed_dict["time_acc"]/self._steps
+        stats_dict["time_damp"] = steps*self.elapsed_dict["time_damp"]/self._steps
+        stats_dict["time_cori"] = steps*self.elapsed_dict["time_cori"]/self._steps
+        stats_dict["time_rest"] = steps*self.elapsed_dict["time_rest"]/self._steps
+        stats_dict["time_solv"] = steps*self.elapsed_dict["time_solv"]/self._steps
 
         return stats_dict
 
@@ -1051,7 +1056,7 @@ def main():
     inertial["ixz"] = 33.41
     inertial["iyz"] = 2.6
     params["inertial"] = inertial
-    dt = 0.01
+    dt = 0.1
     dt_gz = 0.1
     auv_quat = AUVModel(quat=True, action_dim=6, dt=dt, k=k, parameters=params)
     auv_quat_rk2 = AUVModel(quat=True, action_dim=6, dt=dt, k=k, rk=2, parameters=params)
