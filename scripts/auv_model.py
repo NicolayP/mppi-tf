@@ -185,15 +185,20 @@ class AUVModel(ModelBase):
         self.inv_mrb = tf.linalg.inv(self.rb_mass)
 
 
-        self.elapsed_dict = {}
-        self.elapsed_dict["time_pdot"] = 0.
-        self.elapsed_dict["time_acc"] = 0.
-        self.elapsed_dict["time_damp"] = 0.
-        self.elapsed_dict["time_cori"] = 0.
-        self.elapsed_dict["time_rest"] = 0.
-        self.elapsed_dict["time_solv"] = 0.
-        self.elapsed_dict["time_trans"] = 0.
-        self._steps = 0
+        self.timing_dict = {}
+        self.timing_dict["total"] = 0.
+        self.timing_dict["b2i_trans"] = 0.
+        self.timing_dict["pose_dot"] = 0.
+        self.timing_dict["calls"] = 0.
+
+        self.acc_timing_dict = {}
+        self.acc_timing_dict['total'] = 0.
+        self.acc_timing_dict["cori"] = 0.
+        self.acc_timing_dict["rest"] = 0.
+        self.acc_timing_dict["solv"] = 0.
+        self.acc_timing_dict["damp"] = 0.
+        self.acc_timing_dict["calls"] = 0.
+        
 
     def print_info(self):
         """Print the vehicle's parameters."""
@@ -274,8 +279,6 @@ class AUVModel(ModelBase):
             if self._quat:
                 next_state = self.normalize_quat(next_state)
 
-            self._steps += 1
-
             if not acc:
                 return next_state
             return next_state, k1[:, 7:13]
@@ -290,17 +293,20 @@ class AUVModel(ModelBase):
         start = t.perf_counter()
         self.body2inertial_transform_q(pose)
         end = t.perf_counter()
-        self.elapsed_dict["time_trans"] += end-start
+        self.timing_dict["b2i_trans"] += end-start
 
         start = t.perf_counter()
         pose_dot = tf.matmul(self.get_jacobian_q(), speed)
         end = t.perf_counter()
-        self.elapsed_dict["time_pdot"] += end-start
+        self.timing_dict["pose_dot"] += end-start
 
         start = t.perf_counter()
         speed_dot = self.acc("acceleration", speed, action)
         end = t.perf_counter()
-        self.elapsed_dict["time_acc"] += end-start
+        self.acc_timing_dict["total"] += end-start
+        self.acc_timing_dict["calls"] += 1
+
+        self.timing_dict["calls"] += 1
 
         return self.get_state_dot(pose_dot, speed_dot)
 
@@ -633,17 +639,17 @@ class AUVModel(ModelBase):
             start = t.perf_counter()
             D = self.damping_matrix("Damping", vel)
             end = t.perf_counter()
-            self.elapsed_dict["time_damp"] += end-start
+            self.acc_timing_dict["damp"] += end-start
 
             start = t.perf_counter()
             C = self.coriolis_matrix("Coriolis", vel)
             end = t.perf_counter()
-            self.elapsed_dict["time_cori"] += end-start
+            self.acc_timing_dict["cori"] += end-start
 
             start = t.perf_counter()
             g = self.restoring_forces("Restoring")
             end = t.perf_counter()
-            self.elapsed_dict["time_rest"] += end-start
+            self.acc_timing_dict["rest"] += end-start
 
             start = t.perf_counter()
 
@@ -653,37 +659,14 @@ class AUVModel(ModelBase):
             acc = tf.matmul(lhs, rhs)
 
             end = t.perf_counter()
-            self.elapsed_dict["time_solv"] += end-start
+            self.acc_timing_dict["solv"] += end-start
 
             return acc
 
-    def print_stats(self):
-        print("*"*5 + " Model Time stats " + "*"*5)
-        print("* Transfor dot: {:.4f} (sec)".format(self.elapsed_dict["time_trans"]/self._steps))
-        print("* Position dot: {:.4f} (sec)".format(self.elapsed_dict["time_pdot"]/self._steps))
-        print("* Accelaration: {:.4f} (sec)".format(self.elapsed_dict["time_acc"]/self._steps))
-        print("* Damping     : {:.4f} (sec)".format(self.elapsed_dict["time_damp"]/self._steps))
-        print("* Coriolis    : {:.4f} (sec)".format(self.elapsed_dict["time_cori"]/self._steps))
-        print("* Restoring   : {:.4f} (sec)".format(self.elapsed_dict["time_rest"]/self._steps))
-        print("* Solving     : {:.4f} (sec)".format(self.elapsed_dict["time_solv"]/self._steps))
-
-    def get_stats(self, steps):
-        '''
-            Returns a dictionaary containing the profiling of the model.
-            The model can only profile one prediction step, thus we multiply it
-            by the number of steps to have a better idea of the overall time.
-        '''
-        stats_dict = {}
-        stats_dict["time_trans"] = steps*self.elapsed_dict["time_trans"]/self._steps
-        stats_dict["time_pdot"] = steps*self.elapsed_dict["time_pdot"]/self._steps
-        stats_dict["time_acc"] = steps*self.elapsed_dict["time_acc"]/self._steps
-        stats_dict["time_damp"] = steps*self.elapsed_dict["time_damp"]/self._steps
-        stats_dict["time_cori"] = steps*self.elapsed_dict["time_cori"]/self._steps
-        stats_dict["time_rest"] = steps*self.elapsed_dict["time_rest"]/self._steps
-        stats_dict["time_solv"] = steps*self.elapsed_dict["time_solv"]/self._steps
-
-        return stats_dict
-
+    def getProfile(self):
+        profile = self.timing_dict.copy()
+        profile['acc'] = self.acc_timing_dict.copy()
+        return profile
 
 def dummpy_plot(traj=None, applied=None, accs=None, labels=[""], time=0):
     print("\n\n" + "*"*5 + " Dummy plot " + "*"*5)

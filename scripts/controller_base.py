@@ -87,6 +87,19 @@ class ControllerBase(object):
         self.log_dict = {}
         self.elapsed = {}
         self.elapsed["steps"] = 0.
+
+        self.timing_dict = {}
+        self.timing_dict['total'] = 0.
+        self.timing_dict['rand'] = 0.
+        self.timing_dict['update'] = 0.
+        self.timing_dict['calls'] = 0.
+
+        self.rollout_timing_dict = {}
+        self.rollout_timing_dict['total'] =0.
+        self.rollout_timing_dict['model_t'] = 0.
+        self.rollout_timing_dict['cost'] = 0.
+        self.rollout_timing_dict['calls'] = 0.
+
         self._steps = 0
 
         if init_seq.size == 0:
@@ -106,10 +119,10 @@ class ControllerBase(object):
         self.rb = ReplayBuffer(self.buffer_size,
                                env_dict={"obs": {"shape": (self.s_dim, 1)},
                                          "act": {"shape": (self.a_dim, 1)},
-                                         "rew": {},
                                          "next_obs": {"shape": (self.s_dim,
-                                                                1)},
-                                         "done": {}})
+                                                                1)}
+                                        }
+                              )
 
         self.train_step = 0
         self.writer = None
@@ -170,7 +183,7 @@ class ControllerBase(object):
            assert_shape(x_next, (self.s_dim, 1)) ):
            raise AssertionError("Input shape missmatch, x.shape = {}; expected {}, u.shape = {}; expected {}, x_next.shape = {}; expected {}". format(x.shape, (self.s_dim, 1), u.shape, (self.a_dim, 1), x_next.shape, (self.s_dim, 1)))
 
-        self.rb.add(obs=x, act=u, rew=0, next_obs=x_next, done=False)
+        self.rb.add(obs=x, act=u, next_obs=x_next)
         
         if self.log:
             return_dict = self.predict(x, u, self.action_seq, x_next)
@@ -180,6 +193,16 @@ class ControllerBase(object):
         if self.gif:
             plt_paths(self.log_dict["paths"], self.log_dict["weights"], self.log_dict["noises"],
                       self.log_dict["action_seq"], self.cost)
+
+    def save_rp(self, filename):
+        '''
+            Save the replay buffer transitions to a file.
+
+            - input:
+            --------
+                - filename, string.
+        '''
+        self.rb.save_transitions(filename)
 
     def ch_dict_prefix(self, prefix, cur_dict):
         return_dict = {}
@@ -341,7 +364,12 @@ class ControllerBase(object):
                             return_dict["action_seq"].numpy()[:, :, 0],
                             29, 9, deriv=0, delta=1.0, axis=0),
                     axis=-1)
+
         end = t.perf_counter()
+
+        self.timing_dict['total'] += end-start
+        self.timing_dict['calls'] += 1
+
         self.elapsed["steps"] += end-start
         self._steps += 1
 
@@ -496,12 +524,32 @@ class ControllerBase(object):
         return_dict = {}
         with tf.name_scope(scope) as scope:
             with tf.name_scope("random") as rand:
+                
+                start = t.perf_counter()
+                
                 noises = self.buildNoise(rand, k)
+                
+                end = t.perf_counter()
+                self.timing_dict["rand"] += end-start
+
             with tf.name_scope("Rollout") as roll:
+                
+                start = t.perf_counter()
+                
                 cost_dict = self.buildModel(roll, state, noises, action_seq)
+                
+                end = t.perf_counter()
+                self.rollout_timing_dict['total'] += end-start
+
             with tf.name_scope("Update") as up:
+                start = t.perf_counter()
+                
                 update_dict = self.update(up, cost_dict["cost"], noises,
                                           normalize=normalize)
+                
+                end = t.perf_counter()
+                self.timing_dict['update'] += end-start
+
             with tf.name_scope("Next") as n:
                 next = self.getNext(n, update_dict["update"], 1)
             with tf.name_scope("shift_and_init") as si:
@@ -539,21 +587,22 @@ class ControllerBase(object):
         paths = [tf.broadcast_to(state, [k, sshape[0], sshape[1], sshape[2]])]
         applied = []
 
-        #print("*"*5 + " Initial state " + "*"*5)
-        #print(state)
-
         for i in range(self.tau):
             with tf.name_scope("Prepare_data_" + str(i)) as pd:
                 action = self.prepareAction(pd, action_seq, i)
                 noise = self.prepareNoise(pd, noises, i)
                 to_apply = tf.add(action, noise, name="to_apply")
             with tf.name_scope("Step_" + str(i)) as s:
+                start = t.perf_counter()
                 next_state = self.model.build_step_graph(s, state, to_apply)
-                #print("*"*5 + " Step: " + str(i) + " " + "*"*5)
-                #print(next_state)
+                end = t.perf_counter()
+                self.rollout_timing_dict['model_t'] += end-start
             with tf.name_scope("Cost_" + str(i)) as c:
+                start = t.perf_counter()
                 tmp_dict = self.cost.build_step_cost_graph(c, next_state,
                                                            action, noise)
+                end = t.perf_counter()
+                self.rollout_timing_dict['cost'] += end-start
                 cost_dict = self.cost.add_cost(c, tmp_dict, return_dict)
 
             state = next_state
@@ -571,6 +620,9 @@ class ControllerBase(object):
         return_dict["paths"] = paths
         return_dict["applied"] = applied
         return_dict = {**return_dict, **sample_costs_dict}
+
+        self.rollout_timing_dict['calls'] += 1
+
         return return_dict
 
     def buildNoise(self, scope, k):
@@ -598,3 +650,16 @@ class ControllerBase(object):
         # shape: out [size, a_dim, 1]
         return tf.zeros([size, self.a_dim, 1], dtype=tf.float64)
 
+    def getProfile(self):
+        profile = self.timing_dict.copy()
+        print(profile)
+        # Update the model profile first
+        model_rollout = self.model.getProfile()
+        model_rollout['total'] = self.rollout_timing_dict['model_t']
+        print(model_rollout)
+
+        profile['rollout'] = self.rollout_timing_dict.copy()
+        print(profile)
+        profile['rollout']['model'] = model_rollout
+        profile['rollout']['horizon'] = self.tau
+        return profile
