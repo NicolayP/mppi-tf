@@ -36,10 +36,12 @@ def elipse3d(task_dic, lam, gamma, upsilon, sigma):
     return ElipseCost3D(lam, gamma, upsilon, sigma, a, b, center_x,
                       center_y, -10., speed, 0., m_state, m_vel)
 
+
 def waypoints(task_dict, lam, gamma, upsilon, sigma):
     waypoins = task_dict['waypoints']
     dist = task_dict['dist']
     return WapointCost(lam, gamma, upsilon, sigma, waypoins, dist)
+
 
 def getCost(task, lam, gamma, upsilon, sigma):
 
