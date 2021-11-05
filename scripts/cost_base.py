@@ -1,5 +1,6 @@
 import tensorflow as tf
 from utile import assert_shape
+import numpy as np
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class CostBase(object):
@@ -194,4 +195,81 @@ class CostBase(object):
             ---------
                 - the "distance" from the state to the goal.
         '''
+        raise NotImplementedError
+
+
+class WayPointsCost(object):
+    '''
+        Cost function for reference tracking.
+        The class recieves a set of waypoints, interpolates a
+        trajectory that will be used as reference to track.
+
+        First implementation. Similar to the static cost, we consider the distance between
+        the trajectory and the two first points. Do a weighted average between the two. Revert to
+        Static cost if only one waypoint left.
+    '''
+
+    def __init__(self, lam, gamma, upsilon, sigma, waypoints=None):
+        CostBase.__init__(self, lam, gamma, upsilon, sigma, alpha=0.2)
+        if waypoints is not None:
+            self.waypoints = waypoints
+        else:
+            self.waypoints = []
+
+        self.alpha=0.2
+
+    def add_waypoints(self, waypoints):
+        for waypoint in waypoints:
+            self.waypoints.append(waypoint)
+
+    def add_waypoint(self, waypoint):
+        self.waypoints.append(waypoint)
+
+    def pop(self):
+        self.waypoints.pop()
+
+    def state_cost(self, scope, state, t):
+        '''
+            Computes the state cost for the waypoints cost.
+
+            - input:
+            --------
+                - scope: the tensroflow scope.
+                - State: current state of the system, Shape: [k/1, goal_dim, 1]
+
+            - output:
+            ---------
+                dict with entry:
+                    "state_cost"
+        '''
+        return_dict = {}
+
+        if not assert_shape(state, (-1, self.q_shape[0], 1)):
+            raise AssertionError("State tensor shape error, expected: [k/1, {}, 1], got {}".format(self.q_shape[0], state.shape))
+        if len(self.waypoints) < 2:
+            goal = self.waypoints[0]
+            state_cost = self.dist_waypoint(state, goal)
+            return_dict["state_cost"] = state_cost
+            return return_dict
+        first = self.waypoints[0]
+        second = self.waypoints[1]
+        d_first = self.dist_waypoint(state, first)
+        d_sec = self.dist_waypoint(state, second)
+
+        state_cost = (self.alpha-1)*d_first + self.alpha*d_sec
+
+        return_dict["state_cost"] = state_cost
+        return return_dict
+
+    def dist_waypoint(self, state, waypoint):
+
+        return_dict = {}
+
+        diff = tf.math.subtract(state, waypoint, name="diff")
+        state_cost = tf.linalg.matmul(diff, tf.linalg.matmul(self.Q, diff, name="right"), transpose_a=True, name="left")
+
+        return_dict["state_cost"] = state_cost
+        return return_dict
+
+    def dist(self, state):
         raise NotImplementedError
