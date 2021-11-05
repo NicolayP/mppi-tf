@@ -9,7 +9,7 @@ class NNModel(ModelBase):
     '''
         Neural network based model class.
     '''
-    def __init__(self, state_dim=2, action_dim=1, name="nn_model"):
+    def __init__(self, state_dim=2, action_dim=1, k=1, name="nn_model", inertial_frame_id="world"):
         '''
             Neural network model constructor.
 
@@ -20,7 +20,7 @@ class NNModel(ModelBase):
                 - name: string the model name.
         '''
 
-        ModelBase.__init__(self, state_dim, action_dim, name)
+        ModelBase.__init__(self, state_dim, action_dim, k, name, inertial_frame_id)
         self.leaky_relu_alpha = 0.2
         self.initializer = tf.initializers.glorot_uniform()
         self.addModelVars("first", self.getWeights((state_dim+action_dim, 5), "first"))
@@ -42,7 +42,7 @@ class NNModel(ModelBase):
             ---------
                 - the next state.
         '''
-        # expand and broadcast state vector to match dim of action
+                # expand and broadcast state vector to match dim of action
         sshape = state.shape
         ashape = action.shape
 
@@ -50,9 +50,12 @@ class NNModel(ModelBase):
         if len(sshape) < 3 and len(ashape) == 3:
             state = tf.broadcast_to(state, [ashape[0], sshape[0], sshape[1]])
         
-        inputs = tf.squeeze(tf.concat([state, action], axis=1), -1)
+        input = tf.squeeze(tf.concat([state, action], axis=1), -1)
+        return self.predict(scope, input)
 
-        init = self.dense(inputs, self.model_vars["first"])
+    def predict(self, scope, input):
+
+        init = self.dense(input, self.model_vars["first"])
         second = self.dense(init, self.model_vars["second"])
         return tf.expand_dims(self.final(second, self.model_vars["final"]), -1)
 
@@ -108,11 +111,16 @@ class NNAUVModel(NNModel):
         (in body frame) and the input forces.
     '''
 
-    def __init__(self, inertial_frame_id="world", k=1, state_dim=13, action_dim=6, name="nn_model"):
+    def __init__(self,
+                 inertial_frame_id="world",
+                 k=1,
+                 state_dim=13,
+                 action_dim=6,
+                 name="nn_model"):
         '''
 
         '''
-        ModelBase.__init__(self, state_dim, action_dim, name, k, inertial_frame_id)
+        NNModel.__init__(self, state_dim, action_dim, name, k)
         assert inertial_frame_id in ["world", "world_ned"]
         self.inertial_frame_id = inertial_frame_id
         if self.inertial_frame_id == 'world':
@@ -211,20 +219,6 @@ class NNAUVModel(NNModel):
         X = tf.concat([state_t[:, 3:13], action], axis=1)
         y = tf.concat([pose_t1_Bt, state_t1[:, 7:13]], axis=1)
         return (X, y)
-
-    def predict(self, scope, x):
-        '''
-            Preforms a prediction with the neural network with input x.
-
-            Input:
-            ------
-                - x: The input generated with prepare data, [x_vel_t_Bt.T, u_t_Bt.T].T
-            Output:
-            -------
-        '''
-        with tf.name_scope(scope) as scope:
-            pass
-        pass
 
     def rotItoB(self, pose):
         return tf.transpose(self.rotBtoI(pose), perm=[0, 2, 1])
