@@ -12,7 +12,7 @@ class ModelBase(object):
         Every model should inherit this class.
     '''
     def __init__(self, state_dim=2,
-                 action_dim=1, name="model", k=1, inertial_frame_id="world"):
+                 action_dim=1, k=1, name="model", inertial_frame_id="world"):
         '''
             Model constructor. 
             
@@ -171,6 +171,12 @@ class ModelBase(object):
 
     def get_stats(self):
         raise NotImplementedError
+
+    def get_state_dim(self):
+        return self.state_dim
+
+    def get_action_dim(self):
+        return self.action_dim
 
     def set_k(self, k):
         self.k = k
