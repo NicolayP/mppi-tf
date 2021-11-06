@@ -28,10 +28,10 @@ def skew_op(vec):
 def tf_skew_op(scope, vec):
     with tf.name_scope(scope) as scope:
         vec = tf.expand_dims(vec, axis=-1)
-        O_pad = tf.zeros(shape=(1), dtype=tf.float64)
-        r0 = tf.expand_dims(tf.concat([O_pad, -vec[2], vec[1]], axis=-1), axis=1)
-        r1 = tf.expand_dims(tf.concat([vec[2], O_pad,  -vec[0]], axis=-1), axis=1)
-        r2 = tf.expand_dims(tf.concat([-vec[1], vec[0], O_pad], axis=-1), axis=1)
+        OPad = tf.zeros(shape=(1), dtype=tf.float64)
+        r0 = tf.expand_dims(tf.concat([OPad, -vec[2], vec[1]], axis=-1), axis=1)
+        r1 = tf.expand_dims(tf.concat([vec[2], OPad,  -vec[0]], axis=-1), axis=1)
+        r2 = tf.expand_dims(tf.concat([-vec[1], vec[0], OPad], axis=-1), axis=1)
 
         S = tf.concat([r0, r1, r2], axis=1)
         return S
@@ -55,10 +55,10 @@ def tf_skew_op_k(scope, batch):
         k = batch.shape[0]
         vec = tf.expand_dims(batch, axis=-1)
     
-        O_pad = tf.zeros(shape=(k, 1), dtype=tf.float64)
-        r0 = tf.expand_dims(tf.concat([O_pad, -vec[:, 2], vec[:, 1]], axis=-1), axis=1)
-        r1 = tf.expand_dims(tf.concat([vec[:, 2], O_pad,  -vec[:, 0]], axis=-1), axis=1)
-        r2 = tf.expand_dims(tf.concat([-vec[:, 1], vec[:, 0], O_pad], axis=-1), axis=1)
+        OPad = tf.zeros(shape=(k, 1), dtype=tf.float64)
+        r0 = tf.expand_dims(tf.concat([OPad, -vec[:, 2], vec[:, 1]], axis=-1), axis=1)
+        r1 = tf.expand_dims(tf.concat([vec[:, 2], OPad,  -vec[:, 0]], axis=-1), axis=1)
+        r2 = tf.expand_dims(tf.concat([-vec[:, 1], vec[:, 0], OPad], axis=-1), axis=1)
     
         S = tf.concat([r0, r1, r2], axis=1)
         return S
@@ -322,9 +322,9 @@ class AUVModel(ModelBase):
                      ---------------------------------------
         '''
         k = self._rotBtoI.shape[0]
-        O_pad = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
-        jac_r1 = tf.concat([self._rotBtoI, O_pad], axis=-1)
-        jac_r2 = tf.concat([O_pad, self._TBtoIeuler], axis=-1)
+        OPad = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
+        jac_r1 = tf.concat([self._rotBtoI, OPad], axis=-1)
+        jac_r2 = tf.concat([OPad, self._TBtoIeuler], axis=-1)
         jac = tf.concat([jac_r1, jac_r2], axis=1)
         return jac
 
@@ -338,12 +338,12 @@ class AUVModel(ModelBase):
         '''
         k = self._rotBtoI.shape[0]
 
-        O_pad3x3 = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
-        O_pad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
+        OPad3x3 = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
+        OPad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
 
-        jac_r1 = tf.concat([self._rotBtoI, O_pad3x3], axis=-1)
+        jac_r1 = tf.concat([self._rotBtoI, OPad3x3], axis=-1)
 
-        jac_r2 = tf.concat([O_pad4x3, self._TBtoIquat], axis=-1)
+        jac_r2 = tf.concat([OPad4x3, self._TBtoIquat], axis=-1)
         jac = tf.concat([jac_r1, jac_r2], axis=1)
 
         return jac
@@ -378,32 +378,32 @@ class AUVModel(ModelBase):
         sy = s[:, 2]
 
         # build rotation matrix.
-        O_pad = tf.zeros(shape=(k, 1), dtype=tf.float64)
+        OPad = tf.zeros(shape=(k, 1), dtype=tf.float64)
         I_pad = tf.ones(shape=(k, 1), dtype=tf.float64)
 
-        rz_r1 = tf.expand_dims(tf.concat([cy, -sy, O_pad], axis=-1), axis=1)
-        rz_r2 = tf.expand_dims(tf.concat([sy, cy, O_pad], axis=-1), axis=1)
-        rz_r3 = tf.expand_dims(tf.concat([O_pad, O_pad, I_pad], axis=-1), axis=1)
+        rz_r1 = tf.expand_dims(tf.concat([cy, -sy, OPad], axis=-1), axis=1)
+        rz_r2 = tf.expand_dims(tf.concat([sy, cy, OPad], axis=-1), axis=1)
+        rz_r3 = tf.expand_dims(tf.concat([OPad, OPad, I_pad], axis=-1), axis=1)
 
         Rz = tf.concat([rz_r1, rz_r2, rz_r3], axis=1)
 
-        ry_r1 = tf.expand_dims(tf.concat([cp, O_pad, sp], axis=-1), axis=1)
-        ry_r2 = tf.expand_dims(tf.concat([O_pad, I_pad, O_pad], axis=-1), axis=1)
-        ry_r3 = tf.expand_dims(tf.concat([-sp, O_pad, cp], axis=-1), axis=1)
+        ry_r1 = tf.expand_dims(tf.concat([cp, OPad, sp], axis=-1), axis=1)
+        ry_r2 = tf.expand_dims(tf.concat([OPad, I_pad, OPad], axis=-1), axis=1)
+        ry_r3 = tf.expand_dims(tf.concat([-sp, OPad, cp], axis=-1), axis=1)
 
         Ry = tf.concat([ry_r1, ry_r2, ry_r3], axis=1)
 
-        rx_r1 = tf.expand_dims(tf.concat([I_pad, O_pad, O_pad], axis=-1), axis=1)
-        rx_r2 = tf.expand_dims(tf.concat([O_pad, cr, -sr], axis=-1), axis=1)
-        rx_r3 = tf.expand_dims(tf.concat([O_pad, sr, cr], axis=-1), axis=1)
+        rx_r1 = tf.expand_dims(tf.concat([I_pad, OPad, OPad], axis=-1), axis=1)
+        rx_r2 = tf.expand_dims(tf.concat([OPad, cr, -sr], axis=-1), axis=1)
+        rx_r3 = tf.expand_dims(tf.concat([OPad, sr, cr], axis=-1), axis=1)
 
         Rx = tf.concat([rx_r1, rx_r2, rx_r3], axis=1)
 
         self._rotBtoI = tf.linalg.matmul(tf.matmul(Rz, Ry), Rx)
 
         TBtoI_r1 = tf.expand_dims(tf.concat([I_pad, tf.divide(tf.multiply(sr, sp), cp), tf.divide(tf.multiply(cr, sp), cp)], axis=-1), axis=1)
-        TBtoI_r2 = tf.expand_dims(tf.concat([O_pad, cr, -sr], axis=-1), axis=1)
-        TBtoI_r3 = tf.expand_dims(tf.concat([O_pad, tf.divide(sr, cp), tf.divide(cr, cp)], axis=-1), axis=1)
+        TBtoI_r2 = tf.expand_dims(tf.concat([OPad, cr, -sr], axis=-1), axis=1)
+        TBtoI_r3 = tf.expand_dims(tf.concat([OPad, tf.divide(sr, cp), tf.divide(cr, cp)], axis=-1), axis=1)
 
         self._TBtoIeuler = tf.concat([TBtoI_r1, TBtoI_r2, TBtoI_r3], axis=1)
 
@@ -609,7 +609,7 @@ class AUVModel(ModelBase):
         k = vel.shape[0]
         with tf.name_scope(scope) as scope:
 
-            O_pad = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
+            OPad = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
 
             S_12 = -tf_skew_op_k("Skew_coriolis",
                 tf.squeeze(
@@ -624,7 +624,7 @@ class AUVModel(ModelBase):
                     tf.matmul(self._Mtot[3:6, 3:6], vel[:, 3:6])
                 , axis=-1)
             )
-            r1 = tf.concat([O_pad, S_12], axis=-1)
+            r1 = tf.concat([OPad, S_12], axis=-1)
             r2 = tf.concat([S_12, S_22], axis=-1)
             C = tf.concat([r1, r2], axis=1)
 

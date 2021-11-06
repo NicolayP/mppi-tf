@@ -11,8 +11,12 @@ class ModelBase(object):
         Model base class for the MPPI controller.
         Every model should inherit this class.
     '''
-    def __init__(self, state_dim=2,
-                 action_dim=1, k=1, name="model", inertial_frame_id="world"):
+    def __init__(self,
+                 stateDim=2,
+                 actionDim=1, 
+                 k=1, 
+                 name="model", 
+                 inertialFrameId="world"):
         '''
             Model constructor. 
             
@@ -22,17 +26,17 @@ class ModelBase(object):
                 - action_dim: int. the action space dimension.
                 - name: string. the model name. Used for logging.
         '''
-        self.k = k
-        self.inertial_frame_id = inertial_frame_id
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        self.model_vars = {}
+        self._k = k
+        self._inertialFrameId = inertialFrameId
+        self._stateDim = stateDim
+        self._actionDim = actionDim
+        self._modelVars = {}
 
-        self.optimizer = tf.optimizers.Adam(learning_rate=0.5)
-        self.current_loss = None
-        self.name = name
+        self._optimizer = tf.optimizers.Adam(learning_rate=0.5)
+        self._currentLoss = None
+        self._name = name
 
-    def addModelVars(self, name, var):
+    def add_model_vars(self, name, var):
         '''
             Add model variables to the dictionnary of variables.
             Used for logging and learning (if enabled)
@@ -47,9 +51,9 @@ class ModelBase(object):
                 None.
         '''
 
-        self.model_vars[name] = var
+        self._modelVars[name] = var
 
-    def buildLossGraph(self, gt, x, a):
+    def build_loss_graph(self, gt, x, a):
         '''
             Computes the loss function for a given batch of samples. Can be overwritten by child
             classes. Standard is l2 loss function.
@@ -77,7 +81,7 @@ class ModelBase(object):
             ---------
                 - bool, true if training finished.
         '''
-        if (self.current_loss is not None) and self.current_loss < 5e-5:
+        if (self._currentLoss is not None) and self._currentLoss < 5e-5:
             return True
         return False
 
@@ -103,27 +107,27 @@ class ModelBase(object):
         x = tf.convert_to_tensor(x, dtype=tf.float64)
         a = tf.convert_to_tensor(a, dtype=tf.float64)
         with tf.GradientTape() as tape:
-            for key in self.model_vars:
-                tape.watch(self.model_vars[key])
-            self.current_loss = self.buildLossGraph(gt, x, a)
+            for key in self._modelVars:
+                tape.watch(self._modelVars[key])
+            self._currentLoss = self.buildLossGraph(gt, x, a)
 
-        grads = tape.gradient(self.current_loss, list(self.model_vars.values()))
-        self.optimizer.apply_gradients(list(zip(grads, list(self.model_vars.values()))))
+        grads = tape.gradient(self._currentLoss, list(self._modelVars.values()))
+        self._optimizer.apply_gradients(list(zip(grads, list(self._modelVars.values()))))
 
         if log:
             with writer.as_default():
-                for key in self.model_vars:
-                    if tf.size(self.model_vars[key]).numpy() == 1:
+                for key in self._modelVars:
+                    if tf.size(self._modelVars[key]).numpy() == 1:
                         tf.summary.scalar("training/{}".format(key),
-                                          self.model_vars[key].numpy()[0, 0],
+                                          self._modelVars[key].numpy()[0, 0],
                                           step=step)
                     else:
                         tf.summary.histogram("training/{}".format(key),
-                                                self.model_vars[key],
+                                                self._modelVars[key],
                                                 step=step)
 
                 tf.summary.scalar("training/loss",
-                                  self.current_loss.numpy(),
+                                  self._currentLoss.numpy(),
                                   step=step)
 
     def build_step_graph(self, scope, state, action):
@@ -156,7 +160,7 @@ class ModelBase(object):
             ---------
                 - the predicted next state. Shape [1, s_dim, 1]
         '''
-        self.k = 1
+        self._k = 1
         return self.build_step_graph("step", state, action)
 
     def get_name(self):
@@ -167,16 +171,16 @@ class ModelBase(object):
             ---------
                 - String, the name of the model
         '''
-        return self.name
+        return self._name
 
     def get_stats(self):
         raise NotImplementedError
 
     def get_state_dim(self):
-        return self.state_dim
+        return self._stateDim
 
     def get_action_dim(self):
-        return self.action_dim
+        return self._actionDim
 
     def set_k(self, k):
-        self.k = k
+        self._k = k

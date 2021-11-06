@@ -3,8 +3,8 @@ import numpy as np
 from model_base import ModelBase
 import pandas as pd
 
-def blockDiag(vec, pad, dim):
-    vec_np = np.array([])
+def block_diag(vec, pad, dim):
+    vecNp = np.array([])
     for h in range(dim):
 
         tmp = np.array([])
@@ -19,10 +19,10 @@ def blockDiag(vec, pad, dim):
                 tmp = np.hstack([tmp, pad])
 
         if h == 0:
-            vec_np = tmp
+            vecNp = tmp
         else:
-            vec_np = np.vstack([vec_np, tmp])
-    return vec_np
+            vecNp = np.vstack([vecNp, tmp])
+    return vecNp
 
 class PointMassModel(ModelBase):
     '''
@@ -30,7 +30,7 @@ class PointMassModel(ModelBase):
         This model is a simple LTI model of a point mass where the mass
         is a trainable variable.
     '''
-    def __init__(self, mass=1, dt=0.1, state_dim=2, action_dim=1, name="point_mass"):
+    def __init__(self, mass=1, dt=0.1, stateDim=2, actionDim=1, name="point_mass"):
         '''
             Constructor of the point mass model.
 
@@ -43,12 +43,12 @@ class PointMassModel(ModelBase):
 
         '''
 
-        ModelBase.__init__(self, state_dim, action_dim, name)
-        self.dt = dt
+        ModelBase.__init__(self, stateDim, actionDim, name)
+        self._dt = dt
         mass = tf.Variable([[mass]], name="mass",
                                 trainable=True, dtype=tf.float64)
 
-        self.addModelVars("mass", mass)
+        self.add_model_vars("mass", mass)
 
         with tf.name_scope("Const") as c:
             self.create_const(c)
@@ -70,10 +70,10 @@ class PointMassModel(ModelBase):
         '''
 
         with tf.name_scope("Model_Step"):
-            return tf.add(self.buildFreeStepGraph("free", state),
-                          self.buildActionStepGraph("action", action))
+            return tf.add(self.build_free_step_graph("free", state),
+                          self.build_action_step_graph("action", action))
 
-    def buildFreeStepGraph(self, scope, state):
+    def build_free_step_graph(self, scope, state):
         '''
             Control free update part of the model. From LTI notation this
             corresponds to A*x_{t}
@@ -89,9 +89,9 @@ class PointMassModel(ModelBase):
         '''
 
         with tf.name_scope(scope):
-            return tf.linalg.matmul(self.A, state, name="A_x")
+            return tf.linalg.matmul(self._A, state, name="A_x")
 
-    def buildActionStepGraph(self, scope, action):
+    def build_action_step_graph(self, scope, action):
         '''
             Control update part of the model. From LTI notation this
             this corresponds to B*u_{t}
@@ -107,8 +107,8 @@ class PointMassModel(ModelBase):
         '''
 
         with tf.name_scope(scope):
-            return tf.linalg.matmul(tf.divide(self.B,
-                                                self.model_vars["mass"],
+            return tf.linalg.matmul(tf.divide(self._B,
+                                                self._modelVars["mass"],
                                                 name="B"),
                                     action, name="B_u")
 
@@ -117,7 +117,7 @@ class PointMassModel(ModelBase):
             Return the mnodel estimated mass.
         '''
 
-        return self.model_vars["mass"].numpy()[0]
+        return self._modelVars["mass"].numpy()[0]
 
     def create_const(self, scope):
         '''
@@ -129,11 +129,11 @@ class PointMassModel(ModelBase):
         '''
 
         a = np.array([[1., self.dt], [0., 1.]])
-        a_pad = np.array([[0, 0], [0, 0]])
-        a_np = blockDiag(a, a_pad, int(self.state_dim/2))
-        self.A = tf.constant(a_np, dtype=tf.float64, name="A")
+        aPad = np.array([[0, 0], [0, 0]])
+        aNp = block_diag(a, aPad, int(self._stateDim/2))
+        self._A = tf.constant(aNp, dtype=tf.float64, name="A")
 
         b = np.array([[(self.dt*self.dt)/2.], [self.dt]])
-        b_pad = np.array([[0], [0]])
-        b_np = blockDiag(b, b_pad, self.action_dim)
-        self.B = tf.constant(b_np, dtype=tf.float64, name="B")
+        bPad = np.array([[0], [0]])
+        bNp = block_diag(b, bPad, self._actionDim)
+        self._B = tf.constant(bNp, dtype=tf.float64, name="B")
