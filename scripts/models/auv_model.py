@@ -310,9 +310,6 @@ class AUVModel(ModelBase):
 
         return self.get_state_dot(pose_dot, speed_dot)
 
-    def set_prev_vel(self, vel):
-            self.prev_vel = vel
-
     def get_jacobian(self):
         '''
         Returns J(\nu) \in $\mathbb{R}^{6 \cross 6}$ 
