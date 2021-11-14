@@ -1,9 +1,4 @@
 import tensorflow as tf
-import numpy as np
-from datetime import datetime
-import pandas as pd
-import matplotlib.pyplot as plt
-
 
 
 class ModelBase(object):
@@ -13,13 +8,14 @@ class ModelBase(object):
     '''
     def __init__(self,
                  stateDim=2,
-                 actionDim=1, 
-                 k=1, 
-                 name="model", 
+                 actionDim=1,
+                 k=1,
+                 dt=0.1,
+                 name="model",
                  inertialFrameId="world"):
         '''
-            Model constructor. 
-            
+            Model constructor.
+
             - input:
             --------
                 - state_dim: int. the state space dimension.
@@ -31,7 +27,7 @@ class ModelBase(object):
         self._stateDim = stateDim
         self._actionDim = actionDim
         self._modelVars = {}
-
+        self._dt = dt
         self._optimizer = tf.optimizers.Adam(learning_rate=0.5)
         self._currentLoss = None
         self._name = name
@@ -40,23 +36,24 @@ class ModelBase(object):
         '''
             Add model variables to the dictionnary of variables.
             Used for logging and learning (if enabled)
-            
+
             - input:
             --------
                 - name: string. Unique variable name for identification.
-                - var: the variable object. Tensorflow variable with trainable enabled.
+                - var: the variable object.
+                    Tensorflow variable with trainable enabled.
 
             - output:
             ---------
                 None.
         '''
-
         self._modelVars[name] = var
 
     def build_loss_graph(self, gt, x, a):
         '''
-            Computes the loss function for a given batch of samples. Can be overwritten by child
-            classes. Standard is l2 loss function.
+            Computes the loss function for a given batch of samples.
+            Can be overwritten by child classes.
+            Standard is l2 loss function.
 
             - input:
             --------
@@ -66,7 +63,8 @@ class ModelBase(object):
 
             - output:
             ---------
-                - the loss function between one step prediction "model(x, a)" and gt.
+                - the loss function between one step prediction
+                "model(x, a)" and gt.
         '''
 
         pred = self.build_step_graph("train", x, a)
@@ -75,7 +73,7 @@ class ModelBase(object):
 
     def is_trained(self):
         '''
-            Tells whether the model is trained or not. 
+            Tells whether the model is trained or not.
 
             - output:
             ---------
@@ -87,15 +85,15 @@ class ModelBase(object):
 
     def train_step(self, gt, x, a, step=None, writer=None, log=False):
         '''
-            Performs one step of training. 
-            
+            Performs one step of training.
+
             - input:
             --------
                 - gt. the ground truth tensor. Shape [batch_size, s_dim, 1]
                 - x. the input state tensor. Shape [batch_size, s_dim, 1]
                 - a. the input action tensor. Shape [batch_size, a_dim, 1]
                 - step. Int, The current learning step.
-                - writer. Tensorflow summary writer. 
+                - writer. Tensorflow summary writer.
                 - log. bool. If true, logs learning info in tensorboard.
 
             - output:
@@ -111,8 +109,13 @@ class ModelBase(object):
                 tape.watch(self._modelVars[key])
             self._currentLoss = self.buildLossGraph(gt, x, a)
 
-        grads = tape.gradient(self._currentLoss, list(self._modelVars.values()))
-        self._optimizer.apply_gradients(list(zip(grads, list(self._modelVars.values()))))
+        grads = tape.gradient(self._currentLoss,
+                              list(self._modelVars.values()))
+
+        self._optimizer.apply_gradients(list(
+                                         zip(
+                                          grads,
+                                          list(self._modelVars.values()))))
 
         if log:
             with writer.as_default():
@@ -123,8 +126,8 @@ class ModelBase(object):
                                           step=step)
                     else:
                         tf.summary.histogram("training/{}".format(key),
-                                                self._modelVars[key],
-                                                step=step)
+                                             self._modelVars[key],
+                                             step=step)
 
                 tf.summary.scalar("training/loss",
                                   self._currentLoss.numpy(),
@@ -133,7 +136,8 @@ class ModelBase(object):
     def build_step_graph(self, scope, state, action):
         '''
             Abstract method, need to be overwritten in child class.
-            Step graph for the model. This computes the prediction for $\hat{f}(x, u)$
+            Step graph for the model. This computes the prediction
+            for $hat{f}(x, u)$
 
             - input:
             --------
@@ -143,7 +147,7 @@ class ModelBase(object):
 
             - output:
             ---------
-                - the next state. 
+                - the next state.
         '''
         raise NotImplementedError
 

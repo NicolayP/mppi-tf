@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from model_base import ModelBase
-import pandas as pd
+
 
 def block_diag(vec, pad, dim):
     vecNp = np.array([])
@@ -24,13 +24,19 @@ def block_diag(vec, pad, dim):
             vecNp = np.vstack([vecNp, tmp])
     return vecNp
 
+
 class PointMassModel(ModelBase):
     '''
         Point mass model heritated from Model Base class.
         This model is a simple LTI model of a point mass where the mass
         is a trainable variable.
     '''
-    def __init__(self, mass=1, dt=0.1, stateDim=2, actionDim=1, name="point_mass"):
+    def __init__(self,
+                 mass=1,
+                 dt=0.1,
+                 stateDim=2,
+                 actionDim=1,
+                 name="point_mass"):
         '''
             Constructor of the point mass model.
 
@@ -43,10 +49,11 @@ class PointMassModel(ModelBase):
 
         '''
 
-        ModelBase.__init__(self, stateDim, actionDim, name)
-        self._dt = dt
-        mass = tf.Variable([[mass]], name="mass",
-                                trainable=True, dtype=tf.float64)
+        ModelBase.__init__(self, stateDim, actionDim, dt=dt, name=name)
+        mass = tf.Variable([[mass]],
+                           name="mass",
+                           trainable=True,
+                           dtype=tf.float64)
 
         self.add_model_vars("mass", mass)
 
@@ -56,7 +63,8 @@ class PointMassModel(ModelBase):
     def build_step_graph(self, scope, state, action):
         '''
             Abstract method, need to be overwritten in child class.
-            Step graph for the model. This computes the prediction for $\hat{f}(x, u)$
+            Step graph for the model. This computes the prediction
+            for $hat{f}(x, u)$
 
             - input:
             --------
@@ -108,11 +116,12 @@ class PointMassModel(ModelBase):
 
         with tf.name_scope(scope):
             return tf.linalg.matmul(tf.divide(self._B,
-                                                self._modelVars["mass"],
-                                                name="B"),
-                                    action, name="B_u")
+                                              self._modelVars["mass"],
+                                              name="B"),
+                                    action,
+                                    name="B_u")
 
-    def getMass(self):
+    def get_mass(self):
         '''
             Return the mnodel estimated mass.
         '''
