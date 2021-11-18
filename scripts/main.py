@@ -81,7 +81,7 @@ def main():
 
     cont = ControllerBase(model, cost_fc, k=conf['samples'],
                           tau=conf["horizon"], dt=conf["dt"],
-                          s_dim=conf['state-dim'], a_dim=conf['action-dim'],
+                          sDim=conf['state-dim'], aDim=conf['action-dim'],
                           lam=conf['lambda'], upsilon=conf['upsilon'],
                           sigma=conf['noise'], log=args.log, gif=args.gif,
                           normalize_cost=True, filter_seq=args.filter,
@@ -128,7 +128,7 @@ def plot_sgf():
 
     cont = ControllerBase(model, cost_fc, k=conf['samples'],
                           tau=conf["horizon"], dt=conf["dt"],
-                          s_dim=conf['state-dim'], a_dim=conf['action-dim'],
+                          sDim=conf['state-dim'], aDim=conf['action-dim'],
                           lam=conf['lambda'], sigma=conf['noise'],
                           log=args.log, config_file=args.config)
 

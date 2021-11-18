@@ -1,6 +1,5 @@
 import tensorflow as tf
-from utile import assert_shape
-import numpy as np
+from ..misc.utile import assert_shape
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class CostBase(object):
@@ -16,7 +15,7 @@ class CostBase(object):
                 - lam (lambda) the inverse temperature. 
                 - gamma: decoupling parameter between action and noise.
                 - upsilon: covariance augmentation for noise generation.
-                - sigma: the noise covariance matrix. shape [a_dim, a_dim]
+                - sigma: the noise covariance matrix. shape [aDim, aDim]
                 - TODO: add diag arg to feed sigma as the diag element if prefered.
             
             - output:
@@ -44,9 +43,9 @@ class CostBase(object):
             - input:
             --------
                 - scope: The tensorflow scope.
-                - state: the current state of the system. shape: [k/1, s_dim, 1]
-                - action: the action applied to reach the current state. shape: [k/1, a_dim, 1]
-                - noise: the noise applied to the sample. shape: [k/1, a_dim, 1]
+                - state: the current state of the system. shape: [k/1, sDim, 1]
+                - action: the action applied to reach the current state. shape: [k/1, aDim, 1]
+                - noise: the noise applied to the sample. shape: [k/1, aDim, 1]
 
             - output:
             ---------
@@ -57,10 +56,10 @@ class CostBase(object):
         '''
         return_dict = {}
         if not assert_shape(action, (self.sig_shape[0], 1)):
-            raise AssertionError("Bad shape for the action tensor, should be [a_dim, 1], got shape {}".format(action.shape))
+            raise AssertionError("Bad shape for the action tensor, should be [aDim, 1], got shape {}".format(action.shape))
         
         if not assert_shape(noise, (-1, self.sig_shape[0], 1)):
-            raise AssertionError("Bad shape for the noise tensor, should be [k/1, a_dim, 1], got shape {}".format(noise.shape))
+            raise AssertionError("Bad shape for the noise tensor, should be [k/1, aDim, 1], got shape {}".format(noise.shape))
 
         with tf.name_scope("step_cost") as s:
             state_cost_dict = self.state_cost(s, state)
@@ -102,7 +101,7 @@ class CostBase(object):
 
             - input:
             --------
-                - state: the current state of the system. shape: [k/1, s_dim, 1]
+                - state: the current state of the system. shape: [k/1, sDim, 1]
 
             - output:
             ---------
@@ -117,8 +116,8 @@ class CostBase(object):
 
             - input: 
             --------
-                - action: the action applied to reach the current state. shape: [k/1, a_dim, 1]
-                - noise: the noise applied to the sample. shape: [k/1, a_dim, 1]
+                - action: the action applied to reach the current state. shape: [k/1, aDim, 1]
+                - noise: the noise applied to the sample. shape: [k/1, aDim, 1]
 
             - output:
             ---------
@@ -169,7 +168,7 @@ class CostBase(object):
             - input:
             --------
                 - scope. tensorflow scope name.
-                - state. the current state tensor. Shape [k, s_dim, 1]
+                - state. the current state tensor. Shape [k, sDim, 1]
             
             - output:
             ---------
@@ -189,7 +188,7 @@ class CostBase(object):
             
             - input:
             --------
-                - state: The state tensor. Shape [s_dim, 1]
+                - state: The state tensor. Shape [sDim, 1]
 
             - output:
             ---------

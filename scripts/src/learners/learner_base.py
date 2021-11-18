@@ -1,16 +1,16 @@
 import numpy as np
 from cpprb import ReplayBuffer
-from nn_model import NNAUVModel
+from ..models.nn_model import NNAUVModel
 
 class Learner_base(object):
     def __init__(self, model, filename=None):
         self.model = model
-        self.s_dim = model.get_state_dim()
-        self.a_dim = model.get_action_dim()
+        self.sDim = model.get_state_dim()
+        self.aDim = model.get_action_dim()
         self.rb = ReplayBuffer(264,
-                               env_dict={"obs": {"shape": (self.s_dim, 1)},
-                               "act": {"shape": (self.a_dim, 1)},
-                               "next_obs": {"shape": (self.s_dim, 1)}
+                               env_dict={"obs": {"shape": (self.sDim, 1)},
+                               "act": {"shape": (self.aDim, 1)},
+                               "next_obs": {"shape": (self.sDim, 1)}
                                }
                               )
 

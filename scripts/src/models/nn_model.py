@@ -1,5 +1,5 @@
 import tensorflow as tf
-from model_base import ModelBase
+from .model_base import ModelBase
 
 
 class NNModel(ModelBase):
@@ -52,8 +52,8 @@ class NNModel(ModelBase):
             - input:
             --------
                 - scope: String, the tensorflow scope name.
-                - state: State tensor. Shape [k, s_dim, 1]
-                - action: Action tensor. Shape [k, a_dim, 1]
+                - state: State tensor. Shape [k, sDim, 1]
+                - action: Action tensor. Shape [k, aDim, 1]
 
             - output:
             ---------

@@ -1,9 +1,6 @@
-import numpy as np
-import yaml
-
-from nn_model import NNModel
-from point_mass_model import PointMassModel
-from auv_model import AUVModel
+from src.models.nn_model import NNModel
+from src.models.point_mass_model import PointMassModel
+from src.models.auv_model import AUVModel
 
 def nn(model_dic, samples, dt, state_dim, action_dim, name):
     return NNModel(state_dim=state_dim, 
@@ -18,17 +15,16 @@ def pm(model_dic, samples, dt, state_dim, action_dim, name):
                           action_dim=action_dim,
                           name=name)
 
-def auv(model_dic, samples, dt, state_dim, action_dim, name):
-    return AUVModel(inertial_frame_id=model_dic['frame_id'],
-                    quat=True,
-                    action_dim=action_dim,
+def auv(modelDict, samples, dt, stateDim, actionDim, name):
+    return AUVModel(inertialFrameId=modelDict['frame_id'],
+                    actionDim=actionDim,
                     name=name,
                     k=samples,
                     dt=dt,
-                    parameters=model_dic)
+                    parameters=modelDict)
 
 
-def getModel(model_dict, samples, dt, state_dim, action_dim, name):
+def get_model(model_dict, samples, dt, state_dim, action_dim, name):
 
     switcher = {
         "point_mass": pm,

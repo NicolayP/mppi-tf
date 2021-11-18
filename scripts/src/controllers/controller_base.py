@@ -10,7 +10,7 @@ import os
 from shutil import copyfile
 import scipy.signal
 
-from misc.utile import log_control, plt_paths, assert_shape
+from ..misc.utile import log_control, plt_paths, assert_shape
 import time as t
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
@@ -692,9 +692,12 @@ class ControllerBase(object):
             --------
                 None.
         '''
-        fake_state = np.zeros((self.s_dim, 1))
+        fake_state = np.zeros((self._sDim, 1))
         fake_state[6] = 1.
-        fake_sequence = np.zeros((self.tau, self.a_dim, 1))
+        fake_sequence = np.zeros((self._tau, self._aDim, 1))
 
-        _ = self._next(self.k, fake_state, fake_sequence, self.normalize_cost)
+        _ = self._next(self._k,
+                       fake_state,
+                       fake_sequence,
+                       self._normalizeCost)
         pass

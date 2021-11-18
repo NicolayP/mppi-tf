@@ -1,8 +1,7 @@
 import numpy as np
-import yaml
 
-from static_cost import StaticCost
-from elipse_cost import ElipseCost, ElipseCost3D
+from src.costs.static_cost import StaticCost
+from src.costs.elipse_cost import ElipseCost, ElipseCost3D
 
 
 
@@ -40,10 +39,10 @@ def elipse3d(task_dic, lam, gamma, upsilon, sigma):
 def waypoints(task_dict, lam, gamma, upsilon, sigma):
     waypoins = task_dict['waypoints']
     dist = task_dict['dist']
-    return WapointCost(lam, gamma, upsilon, sigma, waypoins, dist)
+    return WaypointCost(lam, gamma, upsilon, sigma, waypoins, dist)
 
 
-def getCost(task, lam, gamma, upsilon, sigma):
+def get_cost(task, lam, gamma, upsilon, sigma):
 
     switcher = {
         "static": static,

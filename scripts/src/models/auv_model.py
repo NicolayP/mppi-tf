@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from model_base import ModelBase
+from .model_base import ModelBase
 
 import time as t
 
@@ -88,7 +88,8 @@ class AUVModel(ModelBase):
     def __init__(self,
                  inertialFrameId='world',
                  actionDim=6,
-                 name="AUV", k=1,
+                 name="AUV",
+                 k=1,
                  dt=0.1,
                  rk=1,
                  parameters=dict()):
@@ -301,18 +302,18 @@ class AUVModel(ModelBase):
         with tf.name_scope(scope) as scope:
             k1 = self.state_dot(state, action)
             if rk == 1:
-                nextState = tf.add(state, k1*self.dt)
+                tmp = k1*self._dt
 
             elif rk == 2:
-                k2 = self.state_dot(tf.add(state, self.dt*k1), action)
-                tmp = self.dt/2. * tf.add(k1, k2)
+                k2 = self.state_dot(tf.add(state, self._dt*k1), action)
+                tmp = self._dt/2. * tf.add(k1, k2)
 
             elif rk == 4:
-                k2 = self.state_dot(tf.add(state, self.dt*k1/2.), action)
-                k3 = self.state_dot(tf.add(state, self.dt*k2/2.), action)
-                k4 = self.state_dot(tf.add(state, self.dt*k3), action)
+                k2 = self.state_dot(tf.add(state, self._dt*k1/2.), action)
+                k3 = self.state_dot(tf.add(state, self._dt*k2/2.), action)
+                k4 = self.state_dot(tf.add(state, self._dt*k3), action)
                 tmp = 1./6. * tf.add(tf.add(k1, 2.*k2),
-                                     tf.add(2.*k3, k4*self.dt))*self.dt
+                                     tf.add(2.*k3, k4*self._dt))*self._dt
 
             nextState = tf.add(state, tmp)
             nextState = self.normalize_quat(nextState)
@@ -594,9 +595,10 @@ class AUVModel(ModelBase):
             ------
                 - $ C(\nu)\nu $ the coriolis matrix. Shape [k, 6, 6]
         '''
+        k = vel.shape[0]
         with tf.name_scope(scope) as scope:
 
-            OPad = tf.zeros(shape=(self._k, 3, 3), dtype=tf.float64)
+            OPad = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
 
             start = t.perf_counter()
             skewCori = tf.squeeze(tf.matmul(self._mTot[0:3, 0:3],
@@ -649,7 +651,7 @@ class AUVModel(ModelBase):
             start = t.perf_counter()
             C = self.coriolis_matrix("Coriolis", vel)
             end = t.perf_counter()
-            self._accTimingDict["cori"] += end-start
+            self._coriTimingDict["total"] += end-start
 
             start = t.perf_counter()
             g = self.restoring_forces("Restoring")
@@ -659,7 +661,7 @@ class AUVModel(ModelBase):
             start = t.perf_counter()
 
             rhs = tensGenForce - tf.matmul(C, vel) - tf.matmul(D, vel) - g
-            lhs = tf.broadcast_to(self._invMTot, [self.k, 6, 6])
+            lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
 
             acc = tf.matmul(lhs, rhs)
 

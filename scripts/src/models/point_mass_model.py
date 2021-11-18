@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from model_base import ModelBase
+from .model_base import ModelBase
 
 
 def block_diag(vec, pad, dim):
@@ -69,8 +69,8 @@ class PointMassModel(ModelBase):
             - input:
             --------
                 - scope: String, the tensorflow scope name.
-                - state: State tensor. Shape [k, s_dim, 1]
-                - action: Action tensor. Shape [k, a_dim, 1]
+                - state: State tensor. Shape [k, sDim, 1]
+                - action: Action tensor. Shape [k, aDim, 1]
 
             - output:
             ---------
@@ -89,11 +89,11 @@ class PointMassModel(ModelBase):
             - input:
             --------
                 - scope: String, the tensorflow scope name.
-                - state: State tensor. Shape [k, s_dim, 1]
+                - state: State tensor. Shape [k, sDim, 1]
 
             - output:
             ---------
-                - A*x_{t}: the input free update tensor. Shape [k, s_dim, 1]
+                - A*x_{t}: the input free update tensor. Shape [k, sDim, 1]
         '''
 
         with tf.name_scope(scope):
@@ -107,11 +107,11 @@ class PointMassModel(ModelBase):
             - input:
             --------
                 - scope: String, the tensorflow scope name.
-                - action: the action tensor. Shape [k, a_dim, 1]
+                - action: the action tensor. Shape [k, aDim, 1]
 
             - output:
             ---------
-                - B*u_{t}: the input update tensor. Shape [k, s_dim, 1]
+                - B*u_{t}: the input update tensor. Shape [k, sDim, 1]
         '''
 
         with tf.name_scope(scope):

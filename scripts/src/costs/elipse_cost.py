@@ -1,13 +1,8 @@
-from cost_base import CostBase
-from utile import assert_shape
+from .cost_base import CostBase
+from ..misc.utile import assert_shape
 
 import numpy as np
 import tensorflow as tf
-
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
 
 
 class ElipseCost(CostBase):

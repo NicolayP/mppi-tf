@@ -1,6 +1,6 @@
 import tensorflow as tf
-from cost_base import CostBase
-from utile import assert_shape
+from .cost_base import CostBase
+from ..misc.utile import assert_shape
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class StaticCost(CostBase):
@@ -13,9 +13,9 @@ class StaticCost(CostBase):
                 - lam (lambda) the inverse temperature. 
                 - gamma: decoupling parameter between action and noise.
                 - upsilon: covariance augmentation for noise generation.
-                - sigma: the noise covariance matrix. shape [a_dim, a_dim].
-                - goal: target goal (psition; speed). shape [s_dim, 1].
-                - Q: weight matrix for the different part of the cost function. shape: [s_dim, s_dim]
+                - sigma: the noise covariance matrix. shape [aDim, aDim].
+                - goal: target goal (psition; speed). shape [sDim, 1].
+                - Q: weight matrix for the different part of the cost function. shape: [sDim, sDim]
         '''
 
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
@@ -44,7 +44,7 @@ class StaticCost(CostBase):
             - input:
             --------
                 - scope: the tensorflow scope.
-                - state: current state. Shape: [k/1, s_dim, 1]
+                - state: current state. Shape: [k/1, sDim, 1]
 
             - output:
             ---------

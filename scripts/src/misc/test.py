@@ -1,12 +1,12 @@
 import tensorflow as tf
-from model_base import ModelBase
-from point_mass_model import PointMassModel
-from auv_model import AUVModel
-from nn_model import NNAUVModel
-from cost_base import CostBase
-from static_cost import StaticCost
-from elipse_cost import ElipseCost
-from controller_base import ControllerBase
+from ..models.model_base import ModelBase
+from ..models.point_mass_model import PointMassModel
+from ..models.auv_model import AUVModel
+from ..models.nn_model import NNAUVModel
+from ..costs.cost_base import CostBase
+from ..costs.static_cost import StaticCost
+from ..costs.elipse_cost import ElipseCost
+from ..controllers.controller_base import ControllerBase
 import numpy as np
 from uuv_control_msgs import srv
 
@@ -1304,8 +1304,8 @@ class TestController(tf.test.TestCase):
     def setUp(self):
         self.k = 5
         self.tau = 3
-        self.a_dim = 2
-        self.s_dim = 4
+        self.aDim = 2
+        self.sDim = 4
         self.dt = 0.01
         self.mass = 1.
         self.lam = 1.
@@ -1327,15 +1327,15 @@ class TestController(tf.test.TestCase):
                            [[[-2.], [-3.]], [[-4.], [-1.]], [[0.], [0.]]]])
 
         self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
-        model = PointMassModel(self.mass, self.dt, self.s_dim, self.a_dim)
+        model = PointMassModel(self.mass, self.dt, self.sDim, self.aDim)
         cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
         self.cont = ControllerBase(model,
                                    cost,
                                    self.k,
                                    self.tau,
                                    self.dt,
-                                   self.s_dim,
-                                   self.a_dim,
+                                   self.sDim,
+                                   self.aDim,
                                    self.lam,
                                    self.sigma)
 

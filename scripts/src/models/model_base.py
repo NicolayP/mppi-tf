@@ -57,9 +57,9 @@ class ModelBase(object):
 
             - input:
             --------
-                - gt: the ground truth tensor. Shape [batch_size, s_dim, 1]
-                - x: the previous state. Shape [batch_size, s_dim, 1]
-                - a: the action to apply. Shape [batch_size, a_dim, 1]
+                - gt: the ground truth tensor. Shape [batch_size, sDim, 1]
+                - x: the previous state. Shape [batch_size, sDim, 1]
+                - a: the action to apply. Shape [batch_size, aDim, 1]
 
             - output:
             ---------
@@ -89,9 +89,9 @@ class ModelBase(object):
 
             - input:
             --------
-                - gt. the ground truth tensor. Shape [batch_size, s_dim, 1]
-                - x. the input state tensor. Shape [batch_size, s_dim, 1]
-                - a. the input action tensor. Shape [batch_size, a_dim, 1]
+                - gt. the ground truth tensor. Shape [batch_size, sDim, 1]
+                - x. the input state tensor. Shape [batch_size, sDim, 1]
+                - a. the input action tensor. Shape [batch_size, aDim, 1]
                 - step. Int, The current learning step.
                 - writer. Tensorflow summary writer.
                 - log. bool. If true, logs learning info in tensorboard.
@@ -142,8 +142,8 @@ class ModelBase(object):
             - input:
             --------
                 - scope: String, the tensorflow scope name.
-                - state: State tensor. Shape [k, s_dim, 1]
-                - action: Action tensor. Shape [k, a_dim, 1]
+                - state: State tensor. Shape [k, sDim, 1]
+                - action: Action tensor. Shape [k, aDim, 1]
 
             - output:
             ---------
@@ -157,12 +157,12 @@ class ModelBase(object):
 
             - input:
             --------
-                - state: the state tensor. Shape [1, s_dim, 1]
-                - action: the action tensor. Shape [1, a_dim, 1]
+                - state: the state tensor. Shape [1, sDim, 1]
+                - action: the action tensor. Shape [1, aDim, 1]
 
             - output:
             ---------
-                - the predicted next state. Shape [1, s_dim, 1]
+                - the predicted next state. Shape [1, sDim, 1]
         '''
         self._k = 1
         return self.build_step_graph("step", state, action)
