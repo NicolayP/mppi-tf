@@ -310,7 +310,7 @@ class ControllerBase(object):
         plt.show()
         '''
 
-    #@tf.function
+    @tf.function
     def _next(self, k, state, action_seq, normalize_cost=False):
         '''
             Internal tensorflow part of the controller. 
@@ -330,6 +330,7 @@ class ControllerBase(object):
                     'next' the next action to be applied. Shape: [a_dim, 1]
 
         '''
+        print("Tracing with {}".format(state))
         self.model.set_k(k)
         # every input has already been check in parent function calls
         with tf.name_scope("Controller") as cont:
@@ -664,3 +665,24 @@ class ControllerBase(object):
         profile['rollout']['horizon'] = self.tau
         del profile['rollout']['model_t']
         return profile
+
+    def trace(self):
+        '''
+            Runs the controller "a blanc" to build the tensorflow
+            computational graph. After that it resets the controller
+            internal variables for a fresh start.
+
+            inputs:
+            -------
+                None.
+
+            outputs:
+            --------
+                None.
+        '''
+        fake_state = np.zeros((self.s_dim, 1))
+        fake_state[6] = 1.
+        fake_sequence = np.zeros((self.tau, self.a_dim, 1))
+
+        _ = self._next(self.k, fake_state, fake_sequence, self.normalize_cost)
+        pass
