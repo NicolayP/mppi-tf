@@ -662,4 +662,5 @@ class ControllerBase(object):
         print(profile)
         profile['rollout']['model'] = model_rollout
         profile['rollout']['horizon'] = self.tau
+        del profile['rollout']['model_t']
         return profile
