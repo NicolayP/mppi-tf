@@ -4,6 +4,8 @@ from model_base import ModelBase
 
 import time as t
 
+gpu = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 
 def skew_op(vec):
     S = np.zeros(shape=(3, 3))
@@ -231,17 +233,27 @@ class AUVModel(ModelBase):
 
         self._timingDict = {}
         self._timingDict["total"] = 0.
-        self._timingDict["b2i_trans"] = 0.
         self._timingDict["pose_dot"] = 0.
         self._timingDict["calls"] = 0.
 
         self._accTimingDict = {}
         self._accTimingDict['total'] = 0.
-        self._accTimingDict["cori"] = 0.
         self._accTimingDict["rest"] = 0.
         self._accTimingDict["solv"] = 0.
         self._accTimingDict["damp"] = 0.
         self._accTimingDict["calls"] = 0.
+
+        self._coriTimingDict = {}
+        self._coriTimingDict['cori-skew'] = 0.
+        self._coriTimingDict['cori-skew-data'] = 0.
+        self._coriTimingDict['cori-concat'] = 0.
+        self._coriTimingDict['total'] = 0.
+
+        
+        self._b2iTimingDict = {}
+        self._b2iTimingDict['rotb2i'] = 0.
+        self._b2iTimingDict['tb2i'] = 0.
+        self._b2iTimingDict['total'] = 0.
 
     def print_info(self):
         """Print the vehicle's parameters."""
@@ -319,7 +331,7 @@ class AUVModel(ModelBase):
         start = t.perf_counter()
         self.body2inertial_transform(pose)
         end = t.perf_counter()
-        self._timingDict["b2i_trans"] += end-start
+        self._b2iTimingDict['total'] += end-start
 
         start = t.perf_counter()
         poseDot = tf.matmul(self.get_jacobian(), speed)
@@ -375,6 +387,8 @@ class AUVModel(ModelBase):
         y = quat[:, 2]
         z = quat[:, 3]
 
+        start = t.perf_counter()
+
         r1 = tf.expand_dims(tf.concat([1 - 2 * (tf.pow(y, 2) + tf.pow(z, 2)),
                                        2 * (x * y - z * w),
                                        2 * (x * z + y * w)], axis=-1),
@@ -393,6 +407,11 @@ class AUVModel(ModelBase):
 
         self._rotBtoI = tf.concat([r1, r2, r3], axis=1)
 
+        end = t.perf_counter()
+        self._b2iTimingDict["rotb2i"] += end-start
+
+        start = t.perf_counter()
+
         r1t = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
 
         r2t = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
@@ -402,6 +421,9 @@ class AUVModel(ModelBase):
         r4t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
 
         self._TBtoIquat = 0.5 * tf.concat([r1t, r2t, r3t, r4t], axis=1)
+
+        end = t.perf_counter()
+        self._b2iTimingDict["tb2i"] += end-start
 
     def rotBtoI_np(self, quat):
         w = quat[0]
@@ -576,25 +598,40 @@ class AUVModel(ModelBase):
 
             OPad = tf.zeros(shape=(self._k, 3, 3), dtype=tf.float64)
 
-            S12 = -tf_skew_op_k("Skew_coriolis",
-                                tf.squeeze(
-                                    tf.matmul(self._mTot[0:3, 0:3],
-                                              vel[:, 0:3]) +
-                                    tf.matmul(self._mTot[0:3, 3:6],
-                                              vel[:, 3:6]),
-                                    axis=-1))
+            start = t.perf_counter()
+            skewCori = tf.squeeze(tf.matmul(self._mTot[0:3, 0:3],
+                                            vel[:, 0:3]) +
+                                  tf.matmul(self._mTot[0:3, 3:6],
+                                            vel[:, 3:6]),
+                                  axis=-1)
+            end = t.perf_counter()
+            self._coriTimingDict["cori-skew-data"] += end-start
 
-            S22 = -tf_skew_op_k("Skew_coriolis_diag",
-                                tf.squeeze(
-                                    tf.matmul(self._mTot[3:6, 0:3],
-                                              vel[:, 0:3]) +
-                                    tf.matmul(self._mTot[3:6, 3:6],
-                                              vel[:, 3:6]),
-                                    axis=-1))
+            start = t.perf_counter()
+            S12 = -tf_skew_op_k("Skew_coriolis", skewCori)
+            end = t.perf_counter()
+            self._coriTimingDict["cori-skew-data"] += end-start
 
+            start = t.perf_counter()
+            skewCoriDiag = tf.squeeze(tf.matmul(self._mTot[3:6, 0:3],
+                                                vel[:, 0:3]) +
+                                      tf.matmul(self._mTot[3:6, 3:6],
+                                                vel[:, 3:6]),
+                                      axis=-1)
+            end = t.perf_counter()
+            self._coriTimingDict["cori-skew-data"] += end-start
+
+            start = t.perf_counter()
+            S22 = -tf_skew_op_k("Skew_coriolis_diag", skewCoriDiag)
+            end = t.perf_counter()
+            self._coriTimingDict["cori-skew"] += end-start
+
+            start = t.perf_counter()
             r1 = tf.concat([OPad, S12], axis=-1)
             r2 = tf.concat([S12, S22], axis=-1)
             C = tf.concat([r1, r2], axis=1)
+            end = t.perf_counter()
+            self._coriTimingDict["cori-concat"] += end-start
 
             return C
 
@@ -632,6 +669,9 @@ class AUVModel(ModelBase):
             return acc
 
     def get_profile(self):
+        self._timingDict["b2i_trans"] = self._b2iTimingDict.copy()
         profile = self._timingDict.copy()
         profile['acc'] = self._accTimingDict.copy()
+        profile['acc']['cori'] = self.cori_timing_dict.copy()
+
         return profile
