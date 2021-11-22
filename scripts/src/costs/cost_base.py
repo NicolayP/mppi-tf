@@ -2,7 +2,7 @@ import tensorflow as tf
 from ..misc.utile import assert_shape
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
-class CostBase(object):
+class CostBase(tf.Module):
     '''
         Cost base class for the mppi controller. 
         This is an abstract class and should be heritated by every specific cost.

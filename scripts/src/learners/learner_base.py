@@ -2,7 +2,7 @@ import numpy as np
 from cpprb import ReplayBuffer
 from ..models.nn_model import NNAUVModel
 
-class Learner_base(object):
+class Learner_base(tf.Module):
     def __init__(self, model, filename=None):
         self.model = model
         self.sDim = model.get_state_dim()

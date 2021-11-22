@@ -10,14 +10,16 @@ import os
 from shutil import copyfile
 import scipy.signal
 
-from ..misc.utile import log_control, plt_paths, assert_shape
+from ..misc.utile import log_control, assert_shape
 import time as t
+
+import warnings
 
 gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
-class ControllerBase(object):
+class ControllerBase(tf.Module):
 
     def __init__(self,
                  model,
@@ -36,6 +38,7 @@ class ControllerBase(object):
                  log=False,
                  logPath=None,
                  gif=False,
+                 graphMode=False,
                  configFile=None,
                  taskFile=None,
                  debug=False):
@@ -74,42 +77,31 @@ class ControllerBase(object):
         '''
         # TODO: Check parameters and make the tensors.
         # This is needed to create a correct trace.
-        self._k = k
+        self._k = tf.Variable(k, trainable=False, dtype=tf.int32)
         self._tau = tau
         self._sDim = sDim
         self._aDim = aDim
-        self._lam = lam
-        self._upsilon = upsilon
+        self._lam = tf.Variable(lam, trainable=False, dtype=tf.float64)
+        self._upsilon = tf.Variable(upsilon, trainable=False, dtype=tf.float64)
         self._normalizeCost = normalizeCost
         self._filterSeq = filterSeq
         self._log = log
-        self._gif = gif
         self._debug = debug
+        self._graphMode = graphMode
+
+        if self._graphMode:
+            self._next_graph = tf.function(self._next)
 
         self._sigma = tf.convert_to_tensor(sigma, dtype=tf.float64)
 
         self._logDict = {}
-        self._elapsed = {}
-        self._elapsed["steps"] = 0.
-
-        self._timingDict = {}
-        self._timingDict['total'] = 0.
-        self._timingDict['rand'] = 0.
-        self._timingDict['update'] = 0.
-        self._timingDict['calls'] = 0.
-
-        self._rolloutTimingDict = {}
-        self._rolloutTimingDict['total'] = 0.
-        self._rolloutTimingDict['model_t'] = 0.
-        self._rolloutTimingDict['cost'] = 0.
-        self._rolloutTimingDict['calls'] = 0.
 
         self._steps = 0
 
         if initSeq.size == 0:
-            self._actionSeq = np.zeros((self._tau, self._aDim, 1))
+            self._actionSeq = tf.zeros((tau, aDim, 1), dtype=tf.float64)
         else:
-            if assert_shape(initSeq, (self._tau, self._aDim, 1)):
+            if assert_shape(initSeq, (tau, aDim, 1)):
                 self._actionSeq = initSeq
             else:
                 raise AssertionError
@@ -161,11 +153,12 @@ class ControllerBase(object):
             Saves the graph in tensorboard.
 
         '''
-        state = np.zeros((self._sDim, 1))
-        seq = np.zeros((5, self._aDim, 1))
+        state = tf.zeros((self._sDim, 1))
+        seq = tf.zeros((5, self._aDim, 1))
         with self._writer.as_default():
             # get graph from function
-            graph = self._next.get_concrete_function(1, state, seq).graph
+            graph = tf.function(
+                self._next).get_concrete_function(1, state, seq).graph
             # visualize
             summary_ops_v2.graph(graph.as_graph_def())
 
@@ -200,12 +193,6 @@ class ControllerBase(object):
                         self._logDict,
                         [0, 1, 2, 3, 4, 5, 6],
                         [7, 8, 9, 10, 11, 12])
-        if self._gif:
-            plt_paths(self._logDict["paths"],
-                      self._logDict["weights"],
-                      self._logDict["noises"],
-                      self._logDict["actionSeq"],
-                      self._cost)
 
     def save_rp(self, filename):
         '''
@@ -294,10 +281,6 @@ class ControllerBase(object):
 
         self._trainStep += 1
 
-    # @tf.function(input_signature=(tf.TensorSpec(shape=[None], dtype=tf.int32),
-    #                               tf.TensorSpec(shape=[None, 1], dtype=tf.float64),
-    #                               tf.TensorSpec(shape=[None, None, 1], dtype=tf.float64)))
-    @tf.function
     def _next(self, k, state, actionSeq, normalizeCost=False):
         '''
             Internal tensorflow part of the controller.
@@ -307,10 +290,11 @@ class ControllerBase(object):
 
             - input:
             --------
-                - k: int, the number of samples to use.
-                - state: np array, the current state of the system.
+                - k: tf.Variable, dtype=int, the number of samples to use.
+                - state: tf.Placeholder, the current state of the system.
                     Shape: [sDim, 1]
-                - actionSeq: np array, the current optimized action sequence.
+                - actionSeq: tf.Placeholder, the current optimized action
+                sequence.
                     Shape: [tau, aDim ,1]
                 - normalizeCost: Bool, if true the cost are normalized
                     before the expodential.
@@ -325,7 +309,6 @@ class ControllerBase(object):
         self._model.set_k(k)
         # every input has already been check in parent function calls
         with tf.name_scope("Controller") as cont:
-            state = tf.convert_to_tensor(state, dtype=tf.float64, name=cont)
             return self.build_graph(cont, k, state, actionSeq,
                                     normalize=normalizeCost)
 
@@ -348,10 +331,16 @@ class ControllerBase(object):
         #                         shape.\n Expected [{}, 1], got {}".
         # format(self._sDim, state.shape))
         start = t.perf_counter()
-        returnDict = self._next(self._k,
-                                 state,
-                                 self._actionSeq,
-                                 self._normalizeCost)
+        if self._graphMode:
+            returnDict = self._next_graph(self._k,
+                                          state,
+                                          self._actionSeq,
+                                          self._normalizeCost)
+        else:
+            returnDict = self._next(self._k,
+                                    state,
+                                    self._actionSeq,
+                                    self._normalizeCost)
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
         # since we expect smooth inputs, need to be played around with.
@@ -398,8 +387,7 @@ class ControllerBase(object):
 
     def exp_arg(self, scope, arg):
         # shapes: in [k, 1, 1], [1, 1]; out [k, 1, 1]
-        return tf.math.multiply(np.array([-1./self._lam]),
-                                arg)
+        return tf.math.multiply(-1./self._lam, arg)
 
     def exp(self, scope, arg):
         # shapes: in [k, 1, 1]; out [k, 1, 1]
@@ -433,7 +421,8 @@ class ControllerBase(object):
 
             - output:
             ---------
-                - the action to apply: float tensor. Shape [aDim, 1]
+                - the action to apply:
+                    tf.Tensor. Shape [aDim, 1], dtype=tf.float64
         '''
 
         return tf.squeeze(tf.slice(actions, [timestep, 0, 0], [1, -1, -1]), 0)
@@ -446,14 +435,14 @@ class ControllerBase(object):
             - input:
             --------
                 - scope: string, the tensorflow scope name.
-                - noises: float tensor. The noise tensor.
-                    Shape [k, tau, aDim, 1]
+                - noises: The noise tensor.
+                    tf.Tensor shape [k, tau, aDim, 1], dtype=tf.float64
                 - timestep: the current timestep of the rollout.
 
             - output:
             ---------
-                - noise tensor at time timestep.
-                    Shape [k, aDim, 1]
+                - noise at time timestep.
+                    tf.Tensor Shape [k, aDim, 1]
         '''
 
         return tf.squeeze(tf.slice(noises,
@@ -498,7 +487,7 @@ class ControllerBase(object):
         # shapes: in [tau, aDim, 1], scalar; out [scalar, aDim, 1]
         return tf.slice(current, [0, 0, 0], [length, -1, -1])
 
-    def advance_goal(self, scope, next):
+    def advance_goal(self, next):
         self._cost.setGoal(next)
 
     def build_graph(self, scope, k, state, actionSeq, normalize=False):
@@ -513,10 +502,11 @@ class ControllerBase(object):
 
             - input:
             --------
-                - k: int, the number of samples to use.
-                - state: np array, the current state of the system.
+                - k: tf.Variable, dtype=int, the number of samples to use.
+                - state: tf.Placeholder, the current state of the system.
                     Shape: [sDim, 1]
-                - actionSeq: np array, the current optimized action sequence.
+                - actionSeq: tf.Variable, the current optimized
+                action sequence.
                     Shape: [tau, aDim ,1]
                 - normalizeCost: Bool, if true the cost are normalized
                     before the expodential.
@@ -534,32 +524,12 @@ class ControllerBase(object):
         returnDict = {}
         with tf.name_scope(scope) as scope:
             with tf.name_scope("random") as rand:
-
-                start = t.perf_counter()
-
                 noises = self.build_noise(rand, k)
-
-                end = t.perf_counter()
-                self._timingDict["rand"] += end-start
-
             with tf.name_scope("Rollout") as roll:
-
-                start = t.perf_counter()
-
-                costDict = self.build_model(roll, state, noises, actionSeq)
-
-                end = t.perf_counter()
-                self._rolloutTimingDict['total'] += end-start
-
+                costDict = self.build_model(roll, k, state, noises, actionSeq)
             with tf.name_scope("Update") as up:
-                start = t.perf_counter()
-
                 update_dict = self.update(up, costDict["cost"], noises,
                                           normalize=normalize)
-
-                end = t.perf_counter()
-                self._timingDict['update'] += end-start
-
             with tf.name_scope("Next") as n:
                 next = self.get_next(n, update_dict["update"], 1)
             with tf.name_scope("shift_and_init") as si:
@@ -573,19 +543,20 @@ class ControllerBase(object):
 
         return returnDict
 
-    def build_model(self, scope, state, noises, actionSeq):
+    def build_model(self, scope, k, state, noises, actionSeq):
         '''
             Builds the rollout graph and computes the cost for every sample.
 
             - input:
             --------
                 - scope: string, the tensorflow scope name.
+                - k: the number of samples. tf.Variable shape [1]
                 - state: the current state of the system.
-                    Shape [sDim, 1]
+                    tf.Tensor Shape [sDim, 1]
                 - noises: the noise tensor to use for the rollouts.
-                    Shape [k, tau, aDim, 1]
+                    tf.tensor Shape [k, tau, aDim, 1]
                 - actionSeq: the current action sequence.
-                    Shape [tau, aDim, 1]
+                    tf.tensor Shape [tau, aDim, 1]
 
             - output:
             ---------
@@ -595,9 +566,11 @@ class ControllerBase(object):
 
         '''
         state = tf.expand_dims(state, axis=0)
+        nextState = tf.zeros(shape=state.shape, dtype=tf.float64)
         sshape = state.shape
-        k = noises.shape[0]
         returnDict = {}
+        costDict = {}
+        c = ""
         paths = [tf.broadcast_to(state, [k, sshape[0], sshape[1], sshape[2]])]
         applied = []
 
@@ -608,16 +581,10 @@ class ControllerBase(object):
                 noise = self.prepare_noise(pd, noises, i)
                 toApply = tf.add(action, noise, name="toApply")
             with tf.name_scope("Step_" + str(i)) as s:
-                start = t.perf_counter()
                 nextState = self._model.build_step_graph(s, state, toApply)
-                end = t.perf_counter()
-                self._rolloutTimingDict['model_t'] += end-start
             with tf.name_scope("Cost_" + str(i)) as c:
-                start = t.perf_counter()
                 tmpDict = self._cost.build_step_cost_graph(c, nextState,
                                                            action, noise)
-                end = t.perf_counter()
-                self._rolloutTimingDict['cost'] += end-start
                 costDict = self._cost.add_cost(c, tmpDict, returnDict)
 
             state = nextState
@@ -635,8 +602,6 @@ class ControllerBase(object):
         returnDict["paths"] = paths
         returnDict["applied"] = applied
         returnDict = {**returnDict, **sampleCostsDict}
-
-        self._rolloutTimingDict['calls'] += 1
 
         return returnDict
 
@@ -696,8 +661,15 @@ class ControllerBase(object):
         fake_state[6] = 1.
         fake_sequence = np.zeros((self._tau, self._aDim, 1))
 
-        _ = self._next(self._k,
-                       fake_state,
-                       fake_sequence,
-                       self._normalizeCost)
+        if self._graphMode:
+            _ = self._next_graph(tf.Variable(1, dtype=tf.int32),
+                                 fake_state,
+                                 fake_sequence,
+                                 self._normalizeCost)
+        else:
+            _ = self._next(tf.Variable(1, dtype=tf.int32),
+                           fake_state,
+                           fake_sequence,
+                           self._normalizeCost)
+            warnings.warn("Not using graph mode, no trace to generate.")
         pass

@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-class ModelBase(object):
+class ModelBase(tf.Module):
     '''
         Model base class for the MPPI controller.
         Every model should inherit this class.
@@ -9,7 +9,7 @@ class ModelBase(object):
     def __init__(self,
                  stateDim=2,
                  actionDim=1,
-                 k=1,
+                 k=tf.Variable(1),
                  dt=0.1,
                  name="model",
                  inertialFrameId="world"):
@@ -187,4 +187,4 @@ class ModelBase(object):
         return self._actionDim
 
     def set_k(self, k):
-        self._k = k
+        self._k.assign(k)

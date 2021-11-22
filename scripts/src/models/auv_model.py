@@ -2,8 +2,6 @@ import tensorflow as tf
 import numpy as np
 from .model_base import ModelBase
 
-import time as t
-
 gpu = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 
@@ -58,7 +56,7 @@ def skew_op_k(batch):
 
 def tf_skew_op_k(scope, batch):
     with tf.name_scope(scope) as scope:
-        k = batch.shape[0]
+        k = tf.shape(batch)[0]
         vec = tf.expand_dims(batch, axis=-1)
 
         OPad = tf.zeros(shape=(k, 1), dtype=tf.float64)
@@ -89,7 +87,7 @@ class AUVModel(ModelBase):
                  inertialFrameId='world',
                  actionDim=6,
                  name="AUV",
-                 k=1,
+                 k=tf.Variable(1),
                  dt=0.1,
                  rk=1,
                  parameters=dict()):
@@ -100,12 +98,12 @@ class AUVModel(ModelBase):
         stateDim = 13
 
         ModelBase.__init__(self,
-                           stateDim,
-                           actionDim,
-                           name,
-                           k,
-                           dt,
-                           inertialFrameId)
+                           stateDim=stateDim,
+                           actionDim=actionDim,
+                           name=name,
+                           k=k,
+                           dt=dt,
+                           inertialFrameId=inertialFrameId)
 
         assert inertialFrameId in ['world', 'world_ned']
 
@@ -127,10 +125,10 @@ class AUVModel(ModelBase):
             self._volume = parameters["volume"]
         assert (self._volume > 0), "Volume has to be positive."
 
-        self._densityu = 0
+        self._density = 0
         if "density" in parameters:
-            self._densityu = parameters["density"]
-        assert (self._densityu > 0), "Liquid density has to be positive."
+            self._density = parameters["density"]
+        assert (self._density > 0), "Liquid density has to be positive."
 
         # TODO: Not used.
         self._height = 0
@@ -232,30 +230,6 @@ class AUVModel(ModelBase):
         # TODO: Not used.
         self._invMRb = tf.linalg.inv(self._rbMass)
 
-        self._timingDict = {}
-        self._timingDict["total"] = 0.
-        self._timingDict["pose_dot"] = 0.
-        self._timingDict["calls"] = 0.
-
-        self._accTimingDict = {}
-        self._accTimingDict['total'] = 0.
-        self._accTimingDict["rest"] = 0.
-        self._accTimingDict["solv"] = 0.
-        self._accTimingDict["damp"] = 0.
-        self._accTimingDict["calls"] = 0.
-
-        self._coriTimingDict = {}
-        self._coriTimingDict['cori-skew'] = 0.
-        self._coriTimingDict['cori-skew-data'] = 0.
-        self._coriTimingDict['cori-concat'] = 0.
-        self._coriTimingDict['total'] = 0.
-
-        
-        self._b2iTimingDict = {}
-        self._b2iTimingDict['rotb2i'] = 0.
-        self._b2iTimingDict['tb2i'] = 0.
-        self._b2iTimingDict['total'] = 0.
-
     def print_info(self):
         """Print the vehicle's parameters."""
         print('Body frame: {}'.format(self._bodyFrameId))
@@ -294,10 +268,10 @@ class AUVModel(ModelBase):
 
         return inertial
 
-    def build_step_graph(self, scope, state, action, retAcc=False):
-        return self.step(scope, state, action, rk=self._rk, acc=retAcc)
+    def build_step_graph(self, scope, state, action):
+        return self.step(scope, state, action, rk=self._rk)
 
-    def step(self, scope, state, action, rk=1, acc=False):
+    def step(self, scope, state, action, rk=1):
         # Forward and backward euler integration.
         with tf.name_scope(scope) as scope:
             k1 = self.state_dot(state, action)
@@ -318,35 +292,32 @@ class AUVModel(ModelBase):
             nextState = tf.add(state, tmp)
             nextState = self.normalize_quat(nextState)
 
-            if not acc:
-                return nextState
-            return nextState, k1[:, 7:13]
+            return nextState
 
     def state_dot(self, state, action):
         '''
             Computes x_dot = f(x, u)
+
+            - input:
+            --------
+                - state: The state of the system
+                    tf.Tensor shape [k, 13, 1].
+                - action: The action applied to the system.
+                    tf.Tensor shape [k, 6, 1].
+            
+            - output:
+            ---------
+                - state_dot: The first order derivate of the state
+                after applying action to state.
+                    tf.Tensor shape [k, 13, 1].
         '''
         # mostily used for rk integration methods.
         pose, speed = self.prepare_data(state)
-
-        start = t.perf_counter()
         self.body2inertial_transform(pose)
-        end = t.perf_counter()
-        self._b2iTimingDict['total'] += end-start
 
-        start = t.perf_counter()
         poseDot = tf.matmul(self.get_jacobian(), speed)
-        end = t.perf_counter()
-        self._timingDict["pose_dot"] += end-start
-
-        start = t.perf_counter()
-        speedDot = self.acc("acceleration", speed, action)
-        end = t.perf_counter()
-        self._accTimingDict["total"] += end-start
-        self._accTimingDict["calls"] += 1
-
-        self._timingDict["calls"] += 1
-
+        with tf.name_scope("acceleration") as acc:
+            speedDot = self.acc(acc, speed, action)
         return self.get_state_dot(poseDot, speedDot)
 
     def get_jacobian(self):
@@ -357,10 +328,8 @@ class AUVModel(ModelBase):
                      | 0^{3 cross 3} T_{theta}(theta)   |
                      ---------------------------------------
         '''
-        k = self._rotBtoI.shape[0]
-
-        OPad3x3 = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
-        OPad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
+        OPad3x3 = tf.zeros(shape=(self._k, 3, 3), dtype=tf.float64)
+        OPad4x3 = tf.zeros(shape=(self._k, 4, 3), dtype=tf.float64)
 
         jacR1 = tf.concat([self._rotBtoI, OPad3x3], axis=-1)
 
@@ -388,8 +357,6 @@ class AUVModel(ModelBase):
         y = quat[:, 2]
         z = quat[:, 3]
 
-        start = t.perf_counter()
-
         r1 = tf.expand_dims(tf.concat([1 - 2 * (tf.pow(y, 2) + tf.pow(z, 2)),
                                        2 * (x * y - z * w),
                                        2 * (x * z + y * w)], axis=-1),
@@ -408,11 +375,6 @@ class AUVModel(ModelBase):
 
         self._rotBtoI = tf.concat([r1, r2, r3], axis=1)
 
-        end = t.perf_counter()
-        self._b2iTimingDict["rotb2i"] += end-start
-
-        start = t.perf_counter()
-
         r1t = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
 
         r2t = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
@@ -422,9 +384,6 @@ class AUVModel(ModelBase):
         r4t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
 
         self._TBtoIquat = 0.5 * tf.concat([r1t, r2t, r3t, r4t], axis=1)
-
-        end = t.perf_counter()
-        self._b2iTimingDict["tb2i"] += end-start
 
     def rotBtoI_np(self, quat):
         w = quat[0]
@@ -457,32 +416,6 @@ class AUVModel(ModelBase):
         speed = state[:, 7:13]
         return pose, speed
 
-    def get_state(self, poseNext, speedNext):
-        '''
-            Return the state of the system after
-            propagating it for one timestep.
-
-            input:
-            ------
-                - poseNext: float64 tensor.
-                    Shape [k/1, 7, 1].
-                - speedNext: float64 tensor.
-                    Shape [k, 6, 1]
-
-            output:
-            -------
-                - nextState: float64 tensor. Shape [k, 12/13, 1]
-        '''
-
-        poseNext = self.normalize_quat(poseNext)
-        k_p = poseNext.shape[0]
-        k_s = speedNext.shape[0]
-        # On the first step, the pose is only of size k=1.
-        if k_p < k_s:
-            poseNext = tf.broadcast_to(poseNext, [k_s, 7, 1])
-        state = tf.concat([poseNext, speedNext], axis=1)
-        return state
-
     def get_state_dot(self, poseDot, speedDot):
         '''
             Return the state of the system after
@@ -496,13 +429,11 @@ class AUVModel(ModelBase):
 
             output:
             -------
-                - nextState: float64 tensor. Shape [k, 12/13, 1]
+                - nextState: float64 tensor. Shape [k, 13, 1]
         '''
-        k_p = poseDot.shape[0]
-        k_s = speedDot.shape[0]
+        kS = tf.shape(speedDot)[0]
         # On the first step, the pose is only of size k=1.
-        if k_p < k_s:
-            poseDot = tf.broadcast_to(poseDot, [k_s, 7, 1])
+        poseDot = tf.broadcast_to(poseDot, [kS, 7, 1])
         stateDot = tf.concat([poseDot, speedDot], axis=1)
         return stateDot
 
@@ -533,17 +464,15 @@ class AUVModel(ModelBase):
             cob = tf.expand_dims(self._cob, axis=0)
 
             fng = - self._mass*self._gravity*self._unitZ
-            fnb = self._volume*self._densityu*self._gravity*self._unitZ
+            fnb = self._volume*self._density*self._gravity*self._unitZ
 
             rotItoB = tf.transpose(self._rotBtoI, perm=[0, 2, 1])
 
             fbg = tf.matmul(rotItoB, fng)
             fbb = tf.matmul(rotItoB, fnb)
 
-            k = rotItoB.shape[0]
-
-            cog = tf.broadcast_to(cog, [k, 3])
-            cob = tf.broadcast_to(cob, [k, 3])
+            cog = tf.broadcast_to(cog, [self._k, 3])
+            cob = tf.broadcast_to(cob, [self._k, 3])
 
             mbg = tf.expand_dims(tf.linalg.cross(cog,
                                                  tf.squeeze(fbg, axis=-1)),
@@ -595,45 +524,27 @@ class AUVModel(ModelBase):
             ------
                 - $ C(\nu)\nu $ the coriolis matrix. Shape [k, 6, 6]
         '''
-        k = vel.shape[0]
         with tf.name_scope(scope) as scope:
 
-            OPad = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
+            OPad = tf.zeros(shape=(self._k, 3, 3), dtype=tf.float64)
 
-            start = t.perf_counter()
             skewCori = tf.squeeze(tf.matmul(self._mTot[0:3, 0:3],
                                             vel[:, 0:3]) +
                                   tf.matmul(self._mTot[0:3, 3:6],
                                             vel[:, 3:6]),
                                   axis=-1)
-            end = t.perf_counter()
-            self._coriTimingDict["cori-skew-data"] += end-start
-
-            start = t.perf_counter()
             S12 = -tf_skew_op_k("Skew_coriolis", skewCori)
-            end = t.perf_counter()
-            self._coriTimingDict["cori-skew-data"] += end-start
 
-            start = t.perf_counter()
             skewCoriDiag = tf.squeeze(tf.matmul(self._mTot[3:6, 0:3],
                                                 vel[:, 0:3]) +
                                       tf.matmul(self._mTot[3:6, 3:6],
                                                 vel[:, 3:6]),
                                       axis=-1)
-            end = t.perf_counter()
-            self._coriTimingDict["cori-skew-data"] += end-start
-
-            start = t.perf_counter()
             S22 = -tf_skew_op_k("Skew_coriolis_diag", skewCoriDiag)
-            end = t.perf_counter()
-            self._coriTimingDict["cori-skew"] += end-start
 
-            start = t.perf_counter()
             r1 = tf.concat([OPad, S12], axis=-1)
             r2 = tf.concat([S12, S22], axis=-1)
             C = tf.concat([r1, r2], axis=1)
-            end = t.perf_counter()
-            self._coriTimingDict["cori-concat"] += end-start
 
             return C
 
@@ -643,37 +554,13 @@ class AUVModel(ModelBase):
             if genForce is not None:
                 tensGenForce = genForce
 
-            start = t.perf_counter()
             D = self.damping_matrix("Damping", vel)
-            end = t.perf_counter()
-            self._accTimingDict["damp"] += end-start
 
-            start = t.perf_counter()
             C = self.coriolis_matrix("Coriolis", vel)
-            end = t.perf_counter()
-            self._coriTimingDict["total"] += end-start
 
-            start = t.perf_counter()
             g = self.restoring_forces("Restoring")
-            end = t.perf_counter()
-            self._accTimingDict["rest"] += end-start
-
-            start = t.perf_counter()
 
             rhs = tensGenForce - tf.matmul(C, vel) - tf.matmul(D, vel) - g
             lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
-
             acc = tf.matmul(lhs, rhs)
-
-            end = t.perf_counter()
-            self._accTimingDict["solv"] += end-start
-
             return acc
-
-    def get_profile(self):
-        self._timingDict["b2i_trans"] = self._b2iTimingDict.copy()
-        profile = self._timingDict.copy()
-        profile['acc'] = self._accTimingDict.copy()
-        profile['acc']['cori'] = self.cori_timing_dict.copy()
-
-        return profile
