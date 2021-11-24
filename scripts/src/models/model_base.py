@@ -31,6 +31,7 @@ class ModelBase(tf.Module):
         self._optimizer = tf.optimizers.Adam(learning_rate=0.5)
         self._currentLoss = None
         self._name = name
+        self._observer = None
 
     def add_model_vars(self, name, var):
         '''
@@ -164,7 +165,7 @@ class ModelBase(tf.Module):
             ---------
                 - the predicted next state. Shape [1, sDim, 1]
         '''
-        self._k = 1
+        self.set_k(1)
         return self.build_step_graph("step", state, action)
 
     def get_name(self):
@@ -188,3 +189,6 @@ class ModelBase(tf.Module):
 
     def set_k(self, k):
         self._k.assign(k)
+
+    def set_observer(self, observer):
+        self._observer = observer
