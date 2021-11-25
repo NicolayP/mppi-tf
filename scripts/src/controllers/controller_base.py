@@ -75,12 +75,24 @@ class ControllerBase(tf.Module):
         self._model = model
         self._cost = cost
 
-        self._k = tf.Variable(k, trainable=False, dtype=tf.int32, name="samples")
+        self._k = tf.Variable(k,
+                              trainable=False,
+                              dtype=tf.int32,
+                              name="samples")
+
+        self._lam = tf.Variable(lam,
+                                trainable=False,
+                                dtype=tf.float64,
+                                name="lambda")
+
+        self._upsilon = tf.Variable(upsilon,
+                                    trainable=False,
+                                    dtype=tf.float64,
+                                    name="upsilon")
+
         self._tau = tau
         self._sDim = sDim
         self._aDim = aDim
-        self._lam = tf.Variable(lam, trainable=False, dtype=tf.float64, name="lambda")
-        self._upsilon = tf.Variable(upsilon, trainable=False, dtype=tf.float64, name="upsilon")
         self._normalizeCost = normalizeCost
         self._filterSeq = filterSeq
         self._log = log
@@ -93,19 +105,21 @@ class ControllerBase(tf.Module):
         self._model.set_observer(self._observer)
         self._cost.set_observer(self._observer)
 
-        self._sigma = tf.convert_to_tensor(sigma, dtype=tf.float64, name="Sigma")
+        self._sigma = tf.convert_to_tensor(sigma,
+                                           dtype=tf.float64,
+                                           name="Sigma")
 
         if self._graphMode:
             self._next_fct = tf.function(self._next)
         else:
             self._next_fct = self._next
 
-        self._logDict = {}
-
         self._steps = 0
 
         if initSeq.size == 0:
-            self._actionSeq = tf.zeros((tau, aDim, 1), dtype=tf.float64, name="Action_sequence_init")
+            self._actionSeq = tf.zeros((tau, aDim, 1),
+                                       dtype=tf.float64,
+                                       name="Action_sequence_init")
         else:
             if assert_shape(initSeq, (tau, aDim, 1)):
                 self._actionSeq = initSeq
@@ -157,6 +171,7 @@ class ControllerBase(tf.Module):
 
         if self._log:
             pred = self.predict(x, u, self._actionSeq, xNext)
+            self._observer.advance()
 
     def save_rp(self, filename):
         '''
@@ -169,9 +184,9 @@ class ControllerBase(tf.Module):
         self._rb.save_transitions(filename)
 
     def state_error(self, stateGt, statePred):
-        error =  tf.linalg.norm(tf.subtract(stateGt, statePred))
+        error = tf.linalg.norm(tf.subtract(stateGt, statePred))
         return error
-        
+
     @tf.function
     def predict(self, x, u, actionSeq, xNext):
         # TODO: get first predicted next state, predict action sequence,
@@ -182,10 +197,6 @@ class ControllerBase(tf.Module):
         error = self.state_error(xNext, nextState)
         dist = self._cost.dist(x)
         costPred = self._cost.state_cost("predict", nextState)
-
-        self._observer.write_predict("predicted/next_state", xNext)
-        self._observer.write_predict("predicted/state", x)
-        self._observer.write_predict("predicted/error", error)
 
         state = nextState
 
@@ -204,8 +215,10 @@ class ControllerBase(tf.Module):
         with tf.name_scope("Rollout_cost"):
             sampleCosts = self._cost.add_cost(c, fCost, costPred)
 
+        self._observer.write_predict("predicted/next_state", xNext)
+        self._observer.write_predict("predicted/state", x)
+        self._observer.write_predict("predicted/error", error)
         self._observer.write_predict("predicted/dist", dist)
-        self._observer.write_predict("predicted/cost", costPred)
         self._observer.write_predict("predicted/sample_cost", sampleCosts)
 
         return nextState
@@ -276,11 +289,13 @@ class ControllerBase(tf.Module):
         #                         shape.\n Expected [{}, 1], got {}".
         # format(self._sDim, state.shape))
         start = t.perf_counter()
-        
+
+        # tf.profiler.experimental.start(self._observer.get_logdir())
         next = self._next_fct(self._k,
                               state,
                               self._actionSeq,
                               self._normalizeCost)
+        # tf.profiler.experimental.stop()
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
         # since we expect smooth inputs, need to be played around with.
@@ -288,17 +303,20 @@ class ControllerBase(tf.Module):
         # enough for this.
         if self._filterSeq:
             self._actionSeqNp = tf.convert_to_tensor(
-                            np.expand_dims(
-                    scipy.signal.savgol_filter(
-                            self._actionSeq.numpy()[:, :, 0],
-                            29, 9, deriv=0, delta=1.0, axis=0),
-                    axis=-1))
+                                    np.expand_dims(
+                                        scipy.signal.savgol_filter(
+                                            self._actionSeq.numpy()[:, :, 0],
+                                            29,
+                                            9,
+                                            deriv=0,
+                                            delta=1.0,
+                                            axis=0),
+                                        axis=-1))
 
         end = t.perf_counter()
 
         self._timingDict['total'] += end-start
         self._timingDict['calls'] += 1
-
         return np.squeeze(next.numpy())
 
     def build_graph(self, scope, k, state, actionSeq, normalize=False):
@@ -338,15 +356,15 @@ class ControllerBase(tf.Module):
             with tf.name_scope("Rollout") as roll:
                 cost = self.build_model(roll, k, state, noises, actionSeq)
             with tf.name_scope("Update") as up:
-                update = self.update(up, cost, noises,
-                                          normalize=normalize)
+                update = self.update(up, cost, noises, normalize=normalize)
             with tf.name_scope("Next") as n:
                 next = self.get_next(n, update, 1)
-                self._observer.write_control("next", next)
             with tf.name_scope("shift_and_init") as si:
                 init = self.init_zeros(si, 1)
                 actionSeq = self.shift(si, update, init, 1)
 
+        self._observer.write_control("state", state)
+        self._observer.write_control("next", next)
         return next
 
     def build_noise(self, scope, k):
@@ -388,13 +406,15 @@ class ControllerBase(tf.Module):
 
             - output:
             ---------
-                - sample costs. Tensor containing the cost of 
+                - sample costs. Tensor containing the cost of
                 every samples. tf.Tensor, shape [k, 1, 1]
 
         '''
         with tf.name_scope("setup") as setup:
             state = tf.expand_dims(state, axis=0)
-            state = tf.broadcast_to(state, [k, self._sDim, 1], name="Broadcast_inital_state")
+            state = tf.broadcast_to(state,
+                                    [k, self._sDim, 1],
+                                    name="Broadcast_inital_state")
             nextState = tf.zeros(shape=tf.shape(state), dtype=tf.float64)
             cost = tf.zeros(shape=(k, 1, 1), dtype=tf.float64)
 
@@ -406,7 +426,9 @@ class ControllerBase(tf.Module):
                     noise = self.prepare_noise(pd, noises, i)
                     toApply = tf.add(action, noise, name="toApply")
                 with tf.name_scope("Step_" + str(i)) as s:
-                    nextState = self._model.build_step_graph(s, state, toApply)
+                    nextState = self._model.build_step_graph(s,
+                                                             state,
+                                                             toApply)
                 with tf.name_scope("Cost_" + str(i)) as c:
                     tmp = self._cost.build_step_cost_graph(c, nextState,
                                                            action, noise)
@@ -418,7 +440,8 @@ class ControllerBase(tf.Module):
             fCost = self._cost.build_final_step_cost_graph(s, nextState)
         with tf.name_scope("Rollout_cost"):
             sampleCosts = self._cost.add_cost(c, fCost, cost)
-            self._observer.write_control("sample_costs", sampleCosts)
+            
+        self._observer.write_control("sample_costs", sampleCosts)
 
         return sampleCosts
 
@@ -572,4 +595,3 @@ class ControllerBase(tf.Module):
                                fake_sequence,
                                self._normalizeCost)
             warnings.warn("Not using graph mode, no trace to generate.")
-

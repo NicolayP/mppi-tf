@@ -23,41 +23,48 @@ class ObserverBase(tf.Module):
         self._sDim = sDim
         self._writer = None
         self._k = k
+        self._log = log
+        self._stateName = ["x", "y", "z",
+                            "w", "wx", "wy", "wz",
+                            "x_dot", "y_dot", "z_dot",
+                            "r_dot", "p_dot", "y_dot"]
+        self._poseId = [0, 1, 2, 3, 4, 5, 6]
+        self._velId = [7, 8, 9, 10, 11, 12]
 
         if log or debug:
             stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
             path = 'graphs/python/'
             if debug:
                 path = os.path.join(path, 'debug')
-            logdir = os.path.join(logPath,
-                                  path,
-                                  modelName,
-                                  "k" + str(k.numpy()),
-                                  "T" + str(tau),
-                                  "L" + str(lam),
-                                  stamp)
+            self.logdir = os.path.join(logPath,
+                                       path,
+                                       modelName,
+                                       "k" + str(k.numpy()),
+                                       "T" + str(tau),
+                                       "L" + str(lam),
+                                       stamp)
 
-            print(logdir)
-            os.makedirs(logdir)
 
-            self._writer = tf.summary.create_file_writer(logdir)
+            os.makedirs(self.logdir)
+
+            self._writer = tf.summary.create_file_writer(self.logdir)
 
             self._summary_name = ["x", "y", "z"]
 
             if configFile is not None:
-                conf_dest = os.path.join(logdir, "config.yaml")
-                task_dest = os.path.join(logdir, "task.yaml")
+                conf_dest = os.path.join(self.logdir, "config.yaml")
+                task_dest = os.path.join(self.logdir, "task.yaml")
                 copyfile(configFile, conf_dest)
                 copyfile(taskFile, task_dest)
 
-            self.predNextState = None       #
-            self.predState = None           #
-            self.predError = None           #
-            self.predDist = None            #
-            self.predCost = None            #
-            self.predSampleCost = None      #
+            self.predNextState = None       # DONE
+            self.predState = None           # DONE
+            self.predError = None           # DONE
+            self.predDist = None            # DONE
+            self.predCost = None            # DONE
+            self.predSampleCost = None      # DONE
             self.update = None              # DONE
-            self.next = None                #
+            self.next = None                # DONE
             self.actionSeq = None           #
             self.path = None                #
             self.applied = None             #
@@ -68,10 +75,10 @@ class ObserverBase(tf.Module):
             self.nabla = None               # DONE
             self.arg = None                 # DONE
             self.weightedNoise = None       # DONE
-            self.step = 0
+            self.step = tf.Variable(0, dtype=tf.int64)
 
-            with tf.name_scope("summary") as self.scope:
-                pass
+    def get_logdir(self):
+        return self.logdir
 
     def save_graph(self, function, graphMode=True):
         state = tf.zeros((self._sDim, 1), dtype=tf.float64)
@@ -85,10 +92,16 @@ class ObserverBase(tf.Module):
             summary_ops_v2.graph(graph.as_graph_def())
 
     def advance(self):
-        self.step += 1
+        if not self._log:
+            return
+        self._writer.flush()
+        self.step.assign_add(1)
 
     def write_control(self, name, tensor):
-        with tf.name_scope(self.scope):
+        if not self._log:
+            return
+
+        with self._writer.as_default():
             if name == "update":
                 tf.summary.scalar("Controller/update",
                                 tensor,
@@ -102,7 +115,7 @@ class ObserverBase(tf.Module):
                                     step=self.step)
 
             elif name == "sample_costs":
-                self.best_id = tf.squeeze(tf.argmax(tensor, axis=0))
+                self.best_id = tf.squeeze(tf.argmin(tensor, axis=0))
                 tf.summary.histogram("Cost/All/All_cost",
                                     tensor,
                                     step=self.step)
@@ -156,17 +169,32 @@ class ObserverBase(tf.Module):
                                     tensor,
                                     step=self.step)
 
+            elif name == "state":
+                for i in self._poseId:
+                    tf.summary.scalar("State/position_{}".format(i),
+                                      tf.squeeze(tensor[i, :]),
+                                      step=self.step)
+                for i in self._velId:
+                    tf.summary.scalar("State/velicity_{}".format(i),
+                                      tf.squeeze(tensor[i, :]),
+                                      step=self.step)
+
     def write_predict(self, name, tensor):
-        with tf.name_scope(self.scope):
+        if not self._log:
+            return
+
+        with self._writer.as_default():
             if name == "predicted/next_state":
-                tf.summary.scalar("Predictied/Next_state",
-                                tf.squeeze(tensor),
-                                step=self.step)
+                for i in range(self._sDim):
+                    tf.summary.scalar("Predictied/Next_state_{}".format(self._stateName[i]),
+                                    tf.squeeze(tensor[i, :]),
+                                    step=self.step)
 
             elif name == "predicted/state":
-                tf.summary.scalar("Predicted/State",
-                                tf.squeeze(tensor),
-                                step=self.step)
+                for i in range(self._sDim):
+                    tf.summary.scalar("Predicted/State_{}".format(self._stateName[i]),
+                                        tf.squeeze(tensor[i, :]),
+                                        step=self.step)
 
             elif name == "predicted/error":
                 tf.summary.scalar("Predicted/error",
@@ -174,16 +202,12 @@ class ObserverBase(tf.Module):
                                 step=self.step)
 
             elif name == "predicted/dist":
-                tf.summary.scalar("Predicted/goal_distance",
-                                tf.squeeze(tensor),
-                                step=self.step)
-
-            elif name == "predicted/cost":
-                tf.summary.scalar("Predicted/cost",
-                                tf.squeeze(tensor),
-                                step=self.step)
+                for i in range(self._sDim):
+                    tf.summary.scalar("Predicted/goal_distance_{}".format(self._stateName[i]),
+                                    tf.squeeze(tensor[i, :]),
+                                    step=self.step)
 
             elif name == "predicted/sample_cost":
-                tf.summary.scalar("Predicted/Sample_cost",
-                                tf.squeeze(tensor),
-                                step=self.step)
+                tf.summary.histogram("Predicted/Sample_cost",
+                                    tf.squeeze(tensor),
+                                    step=self.step)
