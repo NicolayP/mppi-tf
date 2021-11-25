@@ -2,8 +2,8 @@ import tensorflow as tf
 import numpy as np
 from .model_base import ModelBase
 
-gpu = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
+# gpu = tf.config.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 
 def skew_op(vec):
     S = np.zeros(shape=(3, 3))
