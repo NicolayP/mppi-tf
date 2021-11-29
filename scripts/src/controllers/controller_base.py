@@ -241,7 +241,7 @@ class ControllerBase(tf.Module):
     def print_concrete(self):
         print(self._next_fct.pretty_printed_concrete_signatures())
 
-    def _next(self, k, state, actionSeq, normalizeCost=False):
+    def _next(self, k, state, actionSeq, normalizeCost=False, profile=False):
         '''
             Internal tensorflow part of the controller.
             Computes the next action based on the number of samples,
@@ -267,9 +267,15 @@ class ControllerBase(tf.Module):
         print("Tracing with {}".format(state))
         self._model.set_k(k)
         # every input has already been check in parent function calls
+        if profile:
+            tf.profiler.experimental.start(self._observer.get_logdir())
+
         with tf.name_scope("Controller") as cont:
-            return self.build_graph(cont, k, state, actionSeq,
+            action = self.build_graph(cont, k, state, actionSeq,
                                     normalize=normalizeCost)
+        if profile:
+            tf.profiler.experimental.stop()
+        return action
 
     def next(self, state):
         '''
@@ -584,14 +590,19 @@ class ControllerBase(tf.Module):
         fake_state[6] = 1.
         fake_sequence = np.zeros((self._tau, self._aDim, 1))
 
-        if self._graphMode:
-            _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
-                               fake_state,
-                               fake_sequence,
-                               self._normalizeCost)
-        else:
-            _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
-                               fake_state,
-                               fake_sequence,
-                               self._normalizeCost)
+        _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
+                           fake_state,
+                           fake_sequence,
+                           self._normalizeCost)
+        if not self._graphMode:
             warnings.warn("Not using graph mode, no trace to generate.")
+
+    def profile(self):
+        fake_state = np.zeros((self._sDim, 1))
+        fake_state[6] = 1.
+        fake_sequence = np.zeros((self._tau, self._aDim, 1))
+        _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
+                           fake_state,
+                           fake_sequence,
+                           self._normalizeCost,
+                           profile=True)
