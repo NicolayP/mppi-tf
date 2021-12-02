@@ -1,4 +1,4 @@
-from src.controllers.controller_base import ControllerBase
+from .src.controllers.controller_base import ControllerBase
 
 def get_controller(model,
                    cost,

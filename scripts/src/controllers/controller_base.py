@@ -10,8 +10,8 @@ import time as t
 
 import warnings
 
-# gpu_devices = tf.config.experimental.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
 class ControllerBase(tf.Module):
@@ -141,7 +141,8 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
-        self._observer.save_graph(self._next_fct, self._graphMode)
+        if self._log:
+            self._observer.save_graph(self._next_fct, self._graphMode)
 
     def save(self, x, u, xNext):
         '''
@@ -187,7 +188,7 @@ class ControllerBase(tf.Module):
         error = tf.linalg.norm(tf.subtract(stateGt, statePred))
         return error
 
-    @tf.function
+    # @tf.function
     def predict(self, x, u, actionSeq, xNext):
         # TODO: get first predicted next state, predict action sequence,
         # compute diff between first next state and next state
@@ -202,7 +203,7 @@ class ControllerBase(tf.Module):
 
         for i in range(actionSeq.shape[0]):
             with tf.name_scope("Prepare_data_" + str(i)) as pd:
-                action = self.prepare_action(pd, actionSeq, i)
+                action = tf.expand_dims(self.prepare_action(pd, actionSeq, i), axis=0)
             with tf.name_scope("Step_" + str(i)) as s:
                 nextState = self._model.build_step_graph(s, state, action)
             with tf.name_scope("Cost_" + str(i)) as c:
@@ -222,21 +223,6 @@ class ControllerBase(tf.Module):
         self._observer.write_predict("predicted/sample_cost", sampleCosts)
 
         return nextState
-
-    def train(self):
-        if self._rb.get_stored_size() < 32 or self._model.is_trained():
-            return
-
-        epochs = 500
-        for e in range(epochs):
-            sample = self._rb.sample(self._batchSize)
-            gt = sample['next_obs']
-            x = sample['obs']
-            u = sample['act']
-            self._model.train_step(gt, x, u, self._trainStep*epochs + e,
-                                   self._writer, self._log)
-
-        self._trainStep += 1
 
     def print_concrete(self):
         print(self._next_fct.pretty_printed_concrete_signatures())

@@ -385,32 +385,6 @@ class AUVModel(ModelBase):
 
         self._TBtoIquat = 0.5 * tf.concat([r1t, r2t, r3t, r4t], axis=1)
 
-    def rotBtoI_np(self, quat):
-        w = quat[0]
-        x = quat[1]
-        y = quat[2]
-        z = quat[3]
-
-        return np.array([
-                         [1 - 2 * (y**2 + z**2),
-                          2 * (x * y - z * w),
-                          2 * (x * z + y * w)],
-                         [2 * (x * y + z * w),
-                          1 - 2 * (x**2 + z**2),
-                          2 * (y * z - x * w)],
-                         [2 * (x * z - y * w),
-                          2 * (y * z + x * w),
-                          1 - 2 * (x**2 + y**2)]
-                        ])
-
-    def tItoB_np(self, euler):
-        r = euler[0]
-        p = euler[1]
-        T = np.array([[1., 0., -np.sin(p)],
-                      [0., np.cos(r), np.cos(p) * np.sin(r)],
-                      [0., -np.sin(r), np.cos(p) * np.cos(r)]])
-        return T
-
     def prepare_data(self, state):
         pose = state[:, 0:7]
         speed = state[:, 7:13]

@@ -166,7 +166,7 @@ class ModelBase(tf.Module):
                 - the predicted next state. Shape [1, sDim, 1]
         '''
         self.set_k(1)
-        return self.build_step_graph("step", state, action)
+        return self.build_step_graph("predict", state, action)
 
     def get_name(self):
         '''
