@@ -1,7 +1,7 @@
 import numpy as np
 
-from .src.costs.static_cost import StaticCost
-from .src.costs.elipse_cost import ElipseCost, ElipseCost3D
+from .costs.static_cost import StaticCost
+from .costs.elipse_cost import ElipseCost, ElipseCost3D
 
 
 

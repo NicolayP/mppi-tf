@@ -1,6 +1,6 @@
-from .src.models.nn_model import NNAUVModel, NNModel
-from .src.models.point_mass_model import PointMassModel
-from .src.models.auv_model import AUVModel
+from .models.nn_model import NNAUVModel, NNModel
+from .models.point_mass_model import PointMassModel
+from .models.auv_model import AUVModel
 
 
 
