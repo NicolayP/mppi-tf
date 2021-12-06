@@ -89,7 +89,7 @@ class AUVModel(ModelBase):
                  name="AUV",
                  k=tf.Variable(1),
                  dt=0.1,
-                 rk=1,
+                 rk=2, # Deprecated
                  parameters=dict()):
         '''
             Class constructor
@@ -106,6 +106,11 @@ class AUVModel(ModelBase):
                            inertialFrameId=inertialFrameId)
 
         assert inertialFrameId in ['world', 'world_ned']
+
+        if "rk" in parameters:
+            self._rk = parameters["rk"]
+        else:
+            self._rk = 1
 
         # TODO: Not used.
         if inertialFrameId == 'world':
@@ -538,3 +543,9 @@ class AUVModel(ModelBase):
             lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
             acc = tf.matmul(lhs, rhs)
             return acc
+
+    def save_config(self, path):
+        pass
+
+    def load_config(self, path):
+        pass
