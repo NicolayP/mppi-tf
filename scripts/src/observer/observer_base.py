@@ -30,6 +30,7 @@ class ObserverBase(tf.Module):
                             "r_dot", "p_dot", "y_dot"]
         self._poseId = [0, 1, 2, 3, 4, 5, 6]
         self._velId = [7, 8, 9, 10, 11, 12]
+        self._tau = tau
 
         if log or debug:
             stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
@@ -82,7 +83,7 @@ class ObserverBase(tf.Module):
 
     def save_graph(self, function, graphMode=True):
         state = tf.zeros((self._sDim, 1), dtype=tf.float64)
-        seq = tf.zeros((5, self._aDim, 1), dtype=tf.float64)
+        seq = tf.zeros((self._tau, self._aDim, 1), dtype=tf.float64)
         with self._writer.as_default():
             if graphMode:
                 graph = function.get_concrete_function(1, state, seq).graph

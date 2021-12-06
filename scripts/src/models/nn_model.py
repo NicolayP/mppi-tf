@@ -24,11 +24,11 @@ class NNModel(ModelBase):
         '''
 
         ModelBase.__init__(self,
-                           stateDim,
-                           actionDim,
-                           k,
-                           name,
-                           inertialFrameId)
+                           stateDim=stateDim,
+                           actionDim=actionDim,
+                           k=k,
+                           name=name,
+                           inertialFrameId=inertialFrameId)
         tf.keras.backend.set_floatx('float64')
         self.model = tf.keras.Sequential([
             tf.keras.layers.Dense(10, activation=tf.nn.relu, input_shape=(stateDim+actionDim-3,)),
@@ -64,17 +64,15 @@ class NNModel(ModelBase):
         grads = tape.gradient(loss, self.model.trainable_variables)
         self._optimizer.apply_gradients(zip(grads,
                                             self.model.trainable_variables))
+        return loss
 
     def get_var(self):
         return self.model.trainable_variables
 
     def set_var(self, var):
         newVariables = self.extract_variables(var)
-        print(newVariables[0])
         for oldVar, newVar in zip(self.model.trainable_variables, newVariables):
             oldVar = newVar
-        print(self.model.trainable_variables[0])
-        
 
     def extract_variables(self, var):
         vars = []
@@ -120,7 +118,7 @@ class NNAUVModel(NNModel):
                  k=tf.Variable(1),
                  stateDim=13,
                  actionDim=6,
-                 name="nn_model"):
+                 name="auv_nn_model"):
 
         NNModel.__init__(self,
                          inertialFrameId=inertialFrameId,

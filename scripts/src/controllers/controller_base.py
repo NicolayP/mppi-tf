@@ -126,15 +126,6 @@ class ControllerBase(tf.Module):
             else:
                 raise AssertionError
 
-        self._bufferSize = 264
-        self._batchSize = 32
-
-        self._rb = ReplayBuffer(self._bufferSize,
-                                env_dict={"obs": {"shape": (self._sDim, 1)},
-                                          "act": {"shape": (self._aDim, 1)},
-                                          "next_obs": {"shape":
-                                                       (self._sDim, 1)}})
-
         self._trainStep = 0
 
         self._timingDict = {}
@@ -155,34 +146,9 @@ class ControllerBase(tf.Module):
                 - u: the current action. Shape [aDim, 1]
                 - xNext: the next state. Shape [sDim, 1]
         '''
-
-        if not (assert_shape(x, (self._sDim, 1)) and
-                assert_shape(u, (self._aDim, 1)) and
-                assert_shape(xNext, (self._sDim, 1))):
-            raise AssertionError("Input shape missmatch, \
-                                 x.shape = {}; expected {}, u.shape = {}; \
-                                 expected {}, xNext.shape = {}; expected {}".
-                                 format(x.shape, (self._sDim, 1), u.shape,
-                                        (self._aDim, 1), xNext.shape,
-                                        (self._sDim, 1)))
-
-        self._rb.add(obs=x,
-                     act=u,
-                     next_obs=xNext)
-
         if self._log:
             pred = self.predict(x, u, self._actionSeq, xNext)
             self._observer.advance()
-
-    def save_rp(self, filename):
-        '''
-            Save the replay buffer transitions to a file.
-
-            - input:
-            --------
-                - filename, string.
-        '''
-        self._rb.save_transitions(filename)
 
     def state_error(self, stateGt, statePred):
         error = tf.linalg.norm(tf.subtract(stateGt, statePred))
