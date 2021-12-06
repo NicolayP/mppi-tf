@@ -34,8 +34,9 @@ class ControllerBase(tf.Module):
                  logPath=None,
                  gif=False,
                  graphMode=False,
-                 configFile=None,
-                 taskFile=None,
+                 configDict=None,
+                 taskDict=None,
+                 modelDict=None,
                  debug=False):
 
         '''
@@ -64,8 +65,9 @@ class ControllerBase(tf.Module):
                 - logPath: String, the path where the info will be logged.
                 - gif: Bool, if true generates an animated gif of the
                     controller execution (not tested in ros).
-                - configFile: Environment config file.
-                - taskFile: Task config file, the cost hyper parameter.
+                - configDict: Environment config dict.
+                - taskDict: Task config dict, the cost hyper parameter.
+                - modelDict: Model config dict, the model parameters.
                 - debug: Bool, if true, the controller goes in debug mode
                     and logs more information.
 
@@ -98,9 +100,18 @@ class ControllerBase(tf.Module):
         self._log = log
         self._debug = debug
         self._graphMode = graphMode
-        self._observer = ObserverBase(logPath, log, debug, k, tau, lam,
-                                      configFile, taskFile, aDim, sDim,
-                                      self._model.get_name())
+        self._observer = ObserverBase(logPath=logPath,
+                                      log=log,
+                                      debug=debug,
+                                      k=k,
+                                      tau=tau,
+                                      lam=lam,
+                                      configDict=configDict,
+                                      taskDict=taskDict,
+                                      modelDict=modelDict,
+                                      aDim=aDim,
+                                      sDim=sDim,
+                                      modelName=self._model.get_name())
 
         self._model.set_observer(self._observer)
         self._cost.set_observer(self._observer)

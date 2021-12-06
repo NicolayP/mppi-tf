@@ -2,6 +2,7 @@ from types import DynamicClassAttribute
 import tensorflow as tf
 from .model_base import ModelBase
 import numpy as np
+import os
 
 class NNModel(ModelBase):
     '''
@@ -102,7 +103,15 @@ class NNModel(ModelBase):
                              name=name,
                              dtype=tf.float64)
         return tensor
+
+    def save_config(self, path):
+        file = os.path.join(path, "weights.keras")
+        self.model.save(file)
     
+    def load_config(self, path):
+        file = os.path.join(path, "weights.keras")
+        self.model = tf.keras.models.load_model(file)
+
 
 class NNAUVModel(NNModel):
     '''

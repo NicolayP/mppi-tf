@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 from shutil import copyfile
 from tensorflow.python.ops import summary_ops_v2
+import yaml
 
 class ObserverBase(tf.Module):
 
@@ -13,8 +14,9 @@ class ObserverBase(tf.Module):
                  k,
                  tau,
                  lam,
-                 configFile,
-                 taskFile,
+                 configDict,
+                 taskDict,
+                 modelDict,
                  aDim,
                  sDim,
                  modelName):
@@ -33,30 +35,26 @@ class ObserverBase(tf.Module):
         self._tau = tau
 
         if log or debug:
-            stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-            path = 'graphs/python/'
-            if debug:
-                path = os.path.join(path, 'debug')
-            self.logdir = os.path.join(logPath,
-                                       path,
-                                       modelName,
-                                       "k" + str(k.numpy()),
-                                       "T" + str(tau),
-                                       "L" + str(lam),
-                                       stamp)
-
-
+            self.logdir = os.path.join(logPath, "controller")
             os.makedirs(self.logdir)
-
             self._writer = tf.summary.create_file_writer(self.logdir)
 
             self._summary_name = ["x", "y", "z"]
 
-            if configFile is not None:
-                conf_dest = os.path.join(self.logdir, "config.yaml")
-                task_dest = os.path.join(self.logdir, "task.yaml")
-                copyfile(configFile, conf_dest)
-                copyfile(taskFile, task_dest)
+            if configDict is not None:
+                confDest = os.path.join(self.logdir, "config.yaml")
+                with open(confDest, "w") as stream:
+                    yaml.dump(configDict, stream)
+
+            if taskDict is not None:
+                taskDest = os.path.join(self.logdir, "task.yaml")
+                with open(taskDest, "w") as stream:
+                    yaml.dump(taskDict, stream)
+
+            if modelDict is not None:
+                modelDest = os.path.join(self.logdir, "model.yaml")
+                with open(modelDest, "w") as stream:
+                    yaml.dump(modelDict, stream)
 
             self.predNextState = None       # DONE
             self.predState = None           # DONE

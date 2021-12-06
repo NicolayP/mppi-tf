@@ -17,8 +17,10 @@ def get_controller(model,
                    gif,
                    graphMode,
                    debug,
-                   configFile,
-                   taskFile):
+                   configDict,
+                   taskDict,
+                   modelDict):
+    
     return ControllerBase(model=model,
                           cost=cost,
                           k=k,
@@ -36,5 +38,6 @@ def get_controller(model,
                           gif=gif,
                           graphMode=graphMode,
                           debug=debug,
-                          configFile=configFile,
-                          taskFile=taskFile)
+                          configDict=configDict,
+                          taskDict=taskDict,
+                          modelDict=modelDict)

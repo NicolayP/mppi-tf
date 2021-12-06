@@ -32,12 +32,7 @@ class LearnerBase(tf.Module):
         self.step = 0
 
         if self.log:
-            stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-            path = 'graphs/python/'
-            self.logdir = os.path.join(logPath,
-                                       path,
-                                       model.get_name(),
-                                       stamp)
+            self.logdir = os.path.join(logPath, "learner")
             self.writer = tf.summary.create_file_writer(self.logdir)
             self.save_graph()
 
