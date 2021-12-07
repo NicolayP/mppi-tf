@@ -258,7 +258,7 @@ def run_model(model, initalState, sequence):
     traj = [initalState]
     state = np.expand_dims(initalState, axis=0)
     steps = sequence.shape[1]
-    for i in range(steps):
+    for i in range(steps-1):
         toApply = sequence[:, i]
         nextState = model.predict(state, toApply)
         traj.append(np.squeeze(nextState, axis=0))
@@ -349,7 +349,7 @@ def test_models(sequenceFile, trajFile, models, labels, time):
     gtTraj = get_traj(trajFile)
     figPose, axPose = get_ax()
     figVel, axVel = get_ax()
-    axPose = plot_traj(figPose, axPose, to_euler(gtTraj), "gt", time)
+    axPose = plot_traj(figPose, axPose, to_euler(gtTraj[0:-2]), "gt", time)
     axVel = plot_traj(figVel, axVel, gtTraj[:, 7:13], "gt", time, vel=True)
     for model, label in zip(models, labels):
         traj = run_model(model, gtTraj[0], sequence)
