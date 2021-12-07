@@ -104,11 +104,11 @@ class NNModel(ModelBase):
                              dtype=tf.float64)
         return tensor
 
-    def save_config(self, path):
-        file = os.path.join(path, "weights.keras")
+    def save_params(self, path, step):
+        file = os.path.join(path, "weights_step{}.keras".format(step))
         self.model.save(file)
     
-    def load_config(self, path):
+    def load_params(self, path):
         file = os.path.join(path, "weights.keras")
         self.model = tf.keras.models.load_model(file)
 

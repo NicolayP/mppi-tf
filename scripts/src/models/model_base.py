@@ -193,8 +193,8 @@ class ModelBase(tf.Module):
     def set_observer(self, observer):
         self._observer = observer
 
-    def save_config(self, path):
+    def save_params(self, path, step):
         raise NotImplementedError
 
-    def load_config(self, path):
+    def load_params(self, path):
         raise NotImplementedError

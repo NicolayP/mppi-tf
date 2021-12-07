@@ -544,8 +544,8 @@ class AUVModel(ModelBase):
             acc = tf.matmul(lhs, rhs)
             return acc
 
-    def save_config(self, path):
+    def save_params(self, path, step):
         pass
 
-    def load_config(self, path):
+    def load_params(self, path):
         pass
