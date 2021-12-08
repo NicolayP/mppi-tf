@@ -74,3 +74,5 @@ class LearnerBase(tf.Module):
     def save_transitions(self, filename):
         self.rb.save_transitions(filename)
  
+    def save_params(self, step):
+        self.model.save_params(self.logdir, step)

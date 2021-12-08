@@ -13,7 +13,8 @@ class NNModel(ModelBase):
                  actionDim=1,
                  k=tf.Variable(1),
                  name="nn_model",
-                 inertialFrameId="world"):
+                 inertialFrameId="world",
+                 weightFile=None):
         '''
             Neural network model constructor.
 
@@ -36,6 +37,9 @@ class NNModel(ModelBase):
             tf.keras.layers.Dense(10, activation=tf.nn.relu),
             tf.keras.layers.Dense(stateDim)
         ])
+
+        if weightFile is not None:
+            self.load_params(weightFile)
 
     def build_step_graph(self, scope, state, action):
         '''
@@ -105,12 +109,11 @@ class NNModel(ModelBase):
         return tensor
 
     def save_params(self, path, step):
-        file = os.path.join(path, "weights_step{}.keras".format(step))
-        self.model.save(file)
+        path = os.path.join(path, "weights_step{}".format(step))
+        self.model.save(path)
     
     def load_params(self, path):
-        file = os.path.join(path, "weights.keras")
-        self.model = tf.keras.models.load_model(file)
+        self.model = tf.keras.models.load_model(path)
 
 
 class NNAUVModel(NNModel):
@@ -127,14 +130,16 @@ class NNAUVModel(NNModel):
                  k=tf.Variable(1),
                  stateDim=13,
                  actionDim=6,
-                 name="auv_nn_model"):
+                 name="auv_nn_model",
+                 weightFile=None):
 
         NNModel.__init__(self,
                          inertialFrameId=inertialFrameId,
                          stateDim=stateDim,
                          actionDim=actionDim,
                          name=name,
-                         k=k)
+                         k=k,
+                         weightFile=weightFile)
         
         self.mask = tf.constant([[[1],
                                   [1],

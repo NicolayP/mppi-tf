@@ -185,7 +185,7 @@ class ObserverBase(tf.Module):
         with self._writer.as_default():
             if name == "predicted/next_state":
                 for i in range(self._sDim):
-                    tf.summary.scalar("Predictied/Next_state_{}".format(self._stateName[i]),
+                    tf.summary.scalar("Predicted/Next_state_{}".format(self._stateName[i]),
                                     tf.squeeze(tensor[i, :]),
                                     step=self.step)
 

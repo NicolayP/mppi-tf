@@ -71,7 +71,7 @@
   - [X] normailze cost
   - [X] log normalized cost.
   - [X] debug flag when logging summary.
-  - [X] log predictied cost.
+  - [X] log predicted cost.
   - [X] train only if enough samples.
   - [X] moved logging to a separated pseudo singleton.
   - [X] log speed and position cost for elipse.
