@@ -1,4 +1,6 @@
 import tensorflow as tf
+import tensorflow_graphics as tfg
+
 import numpy as np
 from .model_base import ModelBase
 
@@ -357,10 +359,11 @@ class AUVModel(ModelBase):
         '''
         quat = pose[:, 3:7, :]
 
-        w = quat[:, 0]
-        x = quat[:, 1]
-        y = quat[:, 2]
-        z = quat[:, 3]
+        
+        x = quat[:, 0]
+        y = quat[:, 1]
+        z = quat[:, 2]
+        w = quat[:, 3]
 
         r1 = tf.expand_dims(tf.concat([1 - 2 * (tf.pow(y, 2) + tf.pow(z, 2)),
                                        2 * (x * y - z * w),
@@ -433,7 +436,8 @@ class AUVModel(ModelBase):
         pos = pose[:, 0:3]
         quat = pose[:, 3:7]
         vel = pose[:, 7:13]
-        quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
+        quat = tfg.geometry.transformation.quaternion.normalize(quat)
+        #quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
         pose = tf.concat([pos, quat, vel], axis=1)
         return pose
 
