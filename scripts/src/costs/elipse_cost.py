@@ -52,7 +52,6 @@ class ElipseCost(CostBase):
         if not assert_shape(state, (-1, 4, 1)):
             raise AssertionError("State tensor doesn't have the expected shape.\n Expected [k/1, 4, 1], got {}".format(state.shape))
 
-        return_dict = {}
         x = tf.slice(state, [0, 0, 0], [-1, 1, -1])
         y = tf.slice(state, [0, 2, 0], [-1, 1, -1])
         vx = tf.slice(state, [0, 1, 0], [-1, 1, -1])
@@ -66,10 +65,7 @@ class ElipseCost(CostBase):
         dv = tf.math.multiply(self.mv, dv)
         state_cost = tf.add(d, dv)
 
-        return_dict["speed_cost"]=dv
-        return_dict["position_cost"]=d
-        return_dict["state_cost"]=state_cost
-        return return_dict
+        return state_cost
 
     def draw_goal(self):
         alpha = np.linspace(0, 2*np.pi, 1000)
@@ -138,7 +134,7 @@ class ElipseCost3D(CostBase):
         '''
         if not assert_shape(state, (-1, 12, 1)):
             raise AssertionError("State tensor doesn't have the expected shape.\n Expected [k/1, 12, 1], got {}".format(state.shape))
-        return_dict = {}
+
         x = tf.expand_dims(state[:, 0], axis=-1)
         y = tf.expand_dims(state[:, 1], axis=-1)
         z = tf.expand_dims(state[:, 2], axis=-1)
@@ -165,10 +161,7 @@ class ElipseCost3D(CostBase):
         state_cost = tf.add(state_cost, dvz)
         state_cost = tf.add(state_cost, diffz)
 
-        return_dict["speed_cost"]=dv
-        return_dict["position_cost"]=d
-        return_dict["state_cost"]=state_cost
-        return return_dict
+        return state_cost
 
     def draw_goal(self):
         alpha = np.linspace(0, 2*np.pi, 1000)
