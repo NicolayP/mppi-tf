@@ -10,6 +10,7 @@ from src.models.nn_model import NNAUVModel
 from src.costs.cost_base import CostBase
 from src.costs.static_cost import StaticCost
 from src.costs.elipse_cost import ElipseCost
+from src.costs.elipse_cost import ElipseCost3D
 from src.controllers.controller_base import ControllerBase
 import numpy as np
 from uuv_control_msgs import srv
@@ -1156,6 +1157,170 @@ class TestElipseCost(tf.test.TestCase):
         s_c = cost.state_cost("", state)
         self.assertAllClose(exp_s_c, s_c)
 
+
+class TestElipse3DCost(tf.test.TestCase):
+    def setUp(self):
+        self.lam = 1.
+        self.gamma = 1.
+        self.upsilon = 1.
+        self.sigma = np.array([
+                               [1., 0., 0., 0., 0., 0.],
+                               [0., 1., 0., 0., 0., 0.],
+                               [0., 0., 1., 0., 0., 0.],
+                               [0., 0., 0., 1., 0., 0.],
+                               [0., 0., 0., 0., 1., 0.],
+                               [0., 0., 0., 0. ,0., 1.]
+                              ])
+        self.speed = 1.
+        self.v_speed = 1.
+        self.m_state = 1.
+        self.m_vel = 1.
+        self.axis = np.array([[2.], [1.5]])
+
+    def test_prep_const(self):
+        normal = np.array([[0.], [0.], [1.]])
+        aVec = np.array([[1.], [0.], [0.]])
+        center = np.array([[0.], [0.], [0.]])
+
+        cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
+                            self.sigma, normal, aVec, self.axis, center,
+                            self.speed, self.v_speed, self.m_state,
+                            self.m_vel)
+        
+        exp_r = np.array([
+                          [1., 0., 0.],
+                          [0., 1., 0.],
+                          [0., 0., 1.]
+                         ])
+        exp_t = center
+        self.assertAllClose(cost.R, exp_r)
+        self.assertAllClose(cost.t, exp_t)
+
+        normal = np.array([[0.], [1.], [1.]])
+        aVec = np.array([[1.], [0.], [0.]])
+        center = np.array([[0.], [1.], [-2.]])
+
+        cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
+                            self.sigma, normal, aVec, self.axis, center,
+                            self.speed, self.v_speed, self.m_state,
+                            self.m_vel)
+        
+        exp_r = np.array([
+                          [1., 0., 0.],
+                          [0., 0.5, -0.5],
+                          [0., 0.5, 0.5]
+                         ]).T
+        exp_t = center
+        self.assertAllClose(cost.R, exp_r)
+        self.assertAllClose(cost.t, exp_t)
+
+    def test_position_error(self):
+        position = np.array([
+                             [[0.1], [0.4], [0.2]],
+                             [[1.], [1.], [-2]],
+                             [[2.], [1.], [-2]]
+                            ])
+        normal = np.array([[0.], [1.], [1.]])
+        aVec = np.array([[1.], [0.], [0.]])
+        center = np.array([[0.], [1.], [-2.]])
+
+        cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
+                            self.sigma, normal, aVec, self.axis, center,
+                            self.speed, self.v_speed, self.m_state,
+                            self.m_vel)
+        error = cost.position_error(position)
+        
+        pass
+        #exp_er = np.array([])
+        #self.assertAllClose(error, exp_er)
+
+    def test_orientation_error(self):
+        orientation = np.array([
+                                [
+                                 [0.1], [0.4], [0.2],
+                                 [0.0], [0.0], [0.0], [1.]
+                                ],
+                                [
+                                 [1.], [1.], [-2],
+                                 [0.3], [0.2], [0.1], [0.5]
+                                ],
+                                [
+                                 [2.], [1.], [-2],
+                                 [0.2], [-0.3], [-0.9], [0.0]
+                                ]
+                               ])
+        normal = np.array([[0.], [1.], [1.]])
+        aVec = np.array([[1.], [0.], [0.]])
+        center = np.array([[0.], [1.], [-2.]])
+
+        cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
+                            self.sigma, normal, aVec, self.axis, center,
+                            self.speed, self.v_speed, self.m_state,
+                            self.m_vel)
+        error = cost.orientation_error(orientation)
+        pass
+        #exp_er = np.array([])
+        #self.assertAllClose(error, exp_er)
+
+    def test_velocity_error(self):
+        velocitiy = np.array([
+                                [
+                                 [0.1], [0.4], [0.2],
+                                 [0.0], [0.0], [0.0],
+                                ],
+                                [
+                                 [1.], [1.], [-2],
+                                 [0.3], [0.2], [0.1],
+                                ],
+                                [
+                                 [2.], [1.], [-2],
+                                 [0.2], [-0.3], [-0.9],
+                                ]
+                               ])
+        normal = np.array([[0.], [1.], [1.]])
+        aVec = np.array([[1.], [0.], [0.]])
+        center = np.array([[0.], [1.], [-2.]])
+
+        cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
+                            self.sigma, normal, aVec, self.axis, center,
+                            self.speed, self.v_speed, self.m_state,
+                            self.m_vel)
+        error = cost.velocity_error(velocitiy)
+        pass
+        #exp_er = np.array([])
+        #self.assertAllClose(error, exp_er)
+
+    def test_state_cost(self):
+        state = np.array([
+                          [
+                           [0.1], [0.4], [0.2],
+                           [0.0], [0.0], [0.0], [1.],
+                           [0.3], [0.7], [2.],
+                           [1.], [2.4], [5.0]
+                          ],
+                          [
+                           [1.], [1.], [-2],
+                           [0.3], [0.2], [0.1], [0.5],
+                           [0.4], [2.7], [2.],
+                           [0.], [0.0], [0.0]
+                          ],
+                          [
+                           [2.], [1.], [-2],
+                           [0.2], [-0.3], [-0.9], [0.0],
+                           [2.3], [1.7], [0.],
+                           [0.1], [0.4], [0.01]
+                          ] 
+                         ])
+        normal = np.array([[0.], [1.], [1.]])
+        aVec = np.array([[1.], [0.], [0.]])
+        center = np.array([[0.], [1.], [-2.]])
+
+        cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
+                            self.sigma, normal, aVec, self.axis, center,
+                            self.speed, self.v_speed, self.m_state,
+                            self.m_vel)
+        error = cost.state_cost("foo", state)
+        pass
 
 class TestController(tf.test.TestCase):
     def setUp(self):

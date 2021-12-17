@@ -105,15 +105,14 @@ class ElipseCost3D(CostBase):
                  sigma,
                  normal,
                  aVec,
-                 a,
-                 b,
+                 axis,
                  center,
                  speed,
                  v_speed,
-                 m_state,
-                 m_vel):
+                 mState,
+                 mVel):
         '''
-            2D eliptic cost function.
+            3D eliptic cost function.
             - input:
             --------
                 - lam (lambda) the inverse temperature.
@@ -129,26 +128,30 @@ class ElipseCost3D(CostBase):
                 - m_vel: multiplier for the vel error.
         '''
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
-        self.a = a
-        self.b = b
+        axis = np.concatenate([axis, np.array([[1.]])], axis=0)
+        self.axis = tf.convert_to_tensor(axis, dtype=tf.float64)
         self.aVec = tf.convert_to_tensor(aVec, dtype=tf.float64)
         self.normal = tf.convert_to_tensor(normal, dtype=tf.float64)
-        self.bVec = tf.linalg.cross(self.aVec, self.normal)
+        self.bVec = tf.expand_dims(
+                        tf.linalg.cross(
+                            tf.squeeze(self.normal, axis=-1),
+                            tf.squeeze(self.aVec, axis=-1)
+                        ), axis=-1
+                    )
         self.center = tf.convert_to_tensor(center, dtype=tf.float64)
 
+        self.mapping = tf.constant([axis[0, 0]**2, -axis[0, 0]**2, 0.], dtype=tf.float64)
         self.prepare_consts()
+        self.gv = tf.constant(speed, dtype=tf.float64)
 
         #self.gv = speed
         #self.vz = v_speed
-        #self.mx = tf.cast(m_state, tf.float64)
-        #self.mv = tf.cast(m_vel, tf.float64)
+        self.mS = tf.cast(mState, tf.float64)
+        self.mV = tf.cast(mVel, tf.float64)
 
     def prepare_consts(self):
-        X = tf.constant([[1., 0., 0.],
-                         [0., 0., 1.],
-                         [0., 0., 1.]], dtype=tf.float64)
-        N = tf.concat([self.aVec, self.bVec, self.normal], axis=0)
-        self.R = tf.transpose(tf.linalg.matmul(X, tf.linalg.inv(N)))
+        N = tf.concat([self.aVec, self.bVec, self.normal], axis=-1)
+        self.R = tf.transpose(tf.linalg.inv(N))
         self.t = self.center
 
     def state_cost(self, scope, state):
@@ -156,10 +159,10 @@ class ElipseCost3D(CostBase):
         # Express the point in the plane frame.
         posPf = tf.linalg.matmul(self.R, position)
         positionCost = self.position_error(posPf)
-        orientationCost = self.orientation_error(state[:, 3:7])
+        orientationCost = self.orientation_error(state[:, 0:7])
         velCost = self.velocity_error(state[:, 7:13])
 
-        stateCost = self.mState*positionCost + self.mState*orientationCost + self.mVel*velCost
+        stateCost = self.mS*positionCost + self.mS*orientationCost + self.mV*velCost
         return stateCost
 
     def position_error(self, position):
@@ -181,7 +184,7 @@ class ElipseCost3D(CostBase):
         d = tf.pow(tf.divide(position, self.axis), 2)
         d = tf.reduce_sum(d, axis=1) # -> shape [k, 1, 1]
         d = tf.abs(d - 1.)
-        return d
+        return tf.expand_dims(d, axis=-1)
 
     def orientation_error(self, pose):
         '''
@@ -198,13 +201,13 @@ class ElipseCost3D(CostBase):
             ----------
                 - orientation cost. Shape [k, 1, 1]
         '''
-        mapping = tf.constant([self.a**2, -self.b**2, 0.], dtype=tf.float64)
         position = pose[:, 0:3]
+        quaterion = tf.squeeze(pose[:, 3:7])
         tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
-        tgVec = tf.multiply(tgVec, mapping)
+        tgVec = tf.multiply(tgVec, self.mapping)
         x = tf.constant([1., 0., 0.], dtype=tf.float64)
         q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(tgVec, x)
-        err = tfg.geometry.transformation.quaternion.relative_angle(q, pose.q)
+        err = tfg.geometry.transformation.quaternion.relative_angle(q, quaterion)
         return err
 
     def velocity_error(self, velocity):
@@ -224,5 +227,5 @@ class ElipseCost3D(CostBase):
         '''
         # compute the normalized linear velocity
         v = tf.norm(velocity[:, 0:3], axis=1)
-        dv = tf.pow(v - self.gv, 2)
+        dv = tf.pow(v, 2) - tf.pow(self.gv, 2)
         return dv
