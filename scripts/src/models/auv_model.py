@@ -356,11 +356,10 @@ class AUVModel(ModelBase):
 
         '''
         quat = pose[:, 3:7, :]
-
-        w = quat[:, 0]
-        x = quat[:, 1]
-        y = quat[:, 2]
-        z = quat[:, 3]
+        w = quat[:, 3]
+        x = quat[:, 0]
+        y = quat[:, 1]
+        z = quat[:, 2]
 
         r1 = tf.expand_dims(tf.concat([1 - 2 * (tf.pow(y, 2) + tf.pow(z, 2)),
                                        2 * (x * y - z * w),

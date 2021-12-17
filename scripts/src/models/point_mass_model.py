@@ -137,12 +137,12 @@ class PointMassModel(ModelBase):
                 - scope. String, the tensorflow scope name
         '''
 
-        a = np.array([[1., self.dt], [0., 1.]])
+        a = np.array([[1., self._dt], [0., 1.]])
         aPad = np.array([[0, 0], [0, 0]])
         aNp = block_diag(a, aPad, int(self._stateDim/2))
         self._A = tf.constant(aNp, dtype=tf.float64, name="A")
 
-        b = np.array([[(self.dt*self.dt)/2.], [self.dt]])
+        b = np.array([[(self._dt*self._dt)/2.], [self._dt]])
         bPad = np.array([[0], [0]])
         bNp = block_diag(b, bPad, self._actionDim)
         self._B = tf.constant(bNp, dtype=tf.float64, name="B")
