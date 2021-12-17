@@ -1186,15 +1186,14 @@ class TestController(tf.test.TestCase):
         self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
         model = PointMassModel(self.mass, self.dt, self.sDim, self.aDim)
         cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
-        self.cont = ControllerBase(model,
-                                   cost,
-                                   self.k,
-                                   self.tau,
-                                   self.dt,
-                                   self.sDim,
-                                   self.aDim,
-                                   self.lam,
-                                   self.sigma)
+        self.cont = ControllerBase(model=model,
+                                   cost=cost,
+                                   k=self.k,
+                                   tau=self.tau,
+                                   sDim=self.sDim,
+                                   aDim=self.aDim,
+                                   lam=self.lam,
+                                   sigma=self.sigma)
 
     def testDataPrep(self):
         exp_a0 = np.array([[1.], [0.5]])

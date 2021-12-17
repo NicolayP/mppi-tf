@@ -21,7 +21,6 @@ class ControllerBase(tf.Module):
                  cost,
                  k=1,
                  tau=1,
-                 dt=0.01,
                  sDim=1,
                  aDim=1,
                  lam=1.,
@@ -32,7 +31,6 @@ class ControllerBase(tf.Module):
                  filterSeq=False,
                  log=False,
                  logPath=None,
-                 gif=False,
                  graphMode=False,
                  configDict=None,
                  taskDict=None,
@@ -48,7 +46,6 @@ class ControllerBase(tf.Module):
                 - Cost: a cost object heritated from the cost_base class.
                 - k: Int, The number of samples used inside the controller.
                 - tau: Int, The number of prediction timesteps.
-                - dt: Float, The timestep size.
                 - sDim: Int, The state space dimension.
                 - aDim: Int, The action space dimension.
                 - lam: Float, The inverse temperature.
@@ -527,9 +524,6 @@ class ControllerBase(tf.Module):
     def get_next(self, scope, current, length):
         # shapes: in [tau, aDim, 1], scalar; out [scalar, aDim, 1]
         return tf.slice(current, [0, 0, 0], [length, -1, -1])
-
-    def advance_goal(self, next):
-        self._cost.setGoal(next)
 
     def init_zeros(self, scope, size):
         # shape: out [size, aDim, 1]

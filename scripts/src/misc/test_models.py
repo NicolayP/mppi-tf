@@ -3,16 +3,16 @@ import numpy as np
 from quaternion import as_euler_angles
 import os
 
-def to_euler(state_quat):
-    steps = state_quat.shape[0]
-    pos = state_quat[:, 0:3, :]
-    quats = np.squeeze(state_quat[:, 3:7, :], axis=-1)
+def to_euler(state):
+    steps = state.shape[0]
+    pos = state[:, 0:3, :]
+    quats = np.squeeze(state[:, 3:7, :], axis=-1)
     euler = np.zeros(shape=(steps, 3, 1))
     for i, q in enumerate(quats):
-        quat = np.quaternion(q[0], q[1], q[2], q[3])
+        quat = np.quaternion(q[3], q[0], q[1], q[2])
         euler[i, :, :] = np.expand_dims(as_euler_angles(quat), axis=-1)*180/np.pi
 
-    vel = state_quat[:, 7:13, :]
+    vel = state[:, 7:13, :]
     state_euler =  np.concatenate([pos, euler, vel], axis=1)
     return state_euler
 
