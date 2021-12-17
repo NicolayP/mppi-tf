@@ -432,9 +432,11 @@ class AUVModel(ModelBase):
         '''
 
         pos = pose[:, 0:3]
-        quat = pose[:, 3:7]
+        quat = tf.squeeze(pose[:, 3:7], axis=-1)
         vel = pose[:, 7:13]
+
         quat = tfg.geometry.transformation.quaternion.normalize(quat)
+        quat = tf.expand_dims(quat, axis=-1)
         #quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
         pose = tf.concat([pos, quat, vel], axis=1)
         return pose
