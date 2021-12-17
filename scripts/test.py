@@ -1215,10 +1215,11 @@ class TestElipse3DCost(tf.test.TestCase):
         self.assertAllClose(cost.t, exp_t)
 
     def test_position_error(self):
+        # Already expressed in elipse frame
         position = np.array([
                              [[0.1], [0.4], [0.2]],
                              [[1.], [1.], [-2]],
-                             [[2.], [1.], [-2]]
+                             [[2.], [1.], [0.]]
                             ])
         normal = np.array([[0.], [1.], [1.]])
         aVec = np.array([[1.], [0.], [0.]])
@@ -1230,9 +1231,10 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.m_vel)
         error = cost.position_error(position)
         
-        pass
-        #exp_er = np.array([])
-        #self.assertAllClose(error, exp_er)
+        exp_er = np.array([[[0.8863888888888889]],
+                           [[3.6944444444444446]],
+                           [[0.4444444444444444]]])
+        self.assertAllClose(error, exp_er)
 
     def test_orientation_error(self):
         orientation = np.array([
@@ -1242,13 +1244,20 @@ class TestElipse3DCost(tf.test.TestCase):
                                 ],
                                 [
                                  [1.], [1.], [-2],
-                                 [0.3], [0.2], [0.1], [0.5]
+                                 [0.48038446], [0.32025631], [0.16012815], [0.80064077]
                                 ],
                                 [
                                  [2.], [1.], [-2],
-                                 [0.2], [-0.3], [-0.9], [0.0]
+                                 [0.20628425], [-0.30942637], [-0.92827912], [0.]
                                 ]
                                ])
+        quat = np.squeeze(orientation[:, 3:7], axis=-1)
+        
+        quatVec = np.array([
+                         [0., -0., 0.99756117, 0.06979764],
+                         [-0., 0., 0.96736124, 0.25340132],
+                         [-0., 0., 0.91224006, 0.40965605]
+                        ])
         normal = np.array([[0.], [1.], [1.]])
         aVec = np.array([[1.], [0.], [0.]])
         center = np.array([[0.], [1.], [-2.]])
@@ -1258,9 +1267,12 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.speed, self.v_speed, self.m_state,
                             self.m_vel)
         error = cost.orientation_error(orientation)
-        pass
-        #exp_er = np.array([])
-        #self.assertAllClose(error, exp_er)
+        exp_er = np.array([
+                           3.0018837793006306,
+                           2.4098026419889416,
+                           1.1216620246733544
+                          ])
+        self.assertAllClose(error, exp_er)
 
     def test_velocity_error(self):
         velocitiy = np.array([
@@ -1286,9 +1298,8 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.speed, self.v_speed, self.m_state,
                             self.m_vel)
         error = cost.velocity_error(velocitiy)
-        pass
-        #exp_er = np.array([])
-        #self.assertAllClose(error, exp_er)
+        exp_er = np.abs(np.array([[[0.21-1]], [[6-1]], [[9-1]]]))
+        self.assertAllClose(error, exp_er)
 
     def test_state_cost(self):
         state = np.array([
@@ -1319,8 +1330,10 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.sigma, normal, aVec, self.axis, center,
                             self.speed, self.v_speed, self.m_state,
                             self.m_vel)
-        error = cost.state_cost("foo", state)
+        c = cost.state_cost("foo", state)
         pass
+        #exp_c = np.array([])
+        #self.assertAllClose(c, exp_c)
 
 class TestController(tf.test.TestCase):
     def setUp(self):

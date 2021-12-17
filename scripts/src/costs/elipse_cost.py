@@ -140,7 +140,14 @@ class ElipseCost3D(CostBase):
                     )
         self.center = tf.convert_to_tensor(center, dtype=tf.float64)
 
-        self.mapping = tf.constant([axis[0, 0]**2, -axis[0, 0]**2, 0.], dtype=tf.float64)
+        self.mapping = tf.constant([
+                                    [
+                                     [-axis[0, 0]/axis[1, 0]],
+                                     [axis[1, 0]/axis[0, 0]],
+                                     [0.]
+                                    ]
+                                   ],
+                                   dtype=tf.float64)
         self.prepare_consts()
         self.gv = tf.constant(speed, dtype=tf.float64)
 
@@ -152,14 +159,19 @@ class ElipseCost3D(CostBase):
     def prepare_consts(self):
         N = tf.concat([self.aVec, self.bVec, self.normal], axis=-1)
         self.R = tf.transpose(tf.linalg.inv(N))
+        self.q = tfg.geometry.transformation.quaternion.from_rotation_matrix(self.R)
         self.t = self.center
 
     def state_cost(self, scope, state):
-        position = state[:, 0:3]
+        position = tf.squeeze(state[:, 0:3], axis=-1)
+        quat = tf.squeeze(state[:, 3:7], axis=-1)
         # Express the point in the plane frame.
-        posPf = tf.linalg.matmul(self.R, position)
+        posPf = tfg.geometry.transformation.quaternion.rotate(position, self.q)
+        posPf = tf.expand_dims(posPf, axis=-1)
+        quatPf = tfg.geometry.transformation.quaternion.multiply(self.q, quat)
+        posePf = tf.concat([posPf, tf.expand_dims(quatPf, axis=-1)], axis=1)
         positionCost = self.position_error(posPf)
-        orientationCost = self.orientation_error(state[:, 0:7])
+        orientationCost = self.orientation_error(posePf)
         velCost = self.velocity_error(state[:, 7:13])
 
         stateCost = self.mS*positionCost + self.mS*orientationCost + self.mV*velCost
@@ -180,7 +192,7 @@ class ElipseCost3D(CostBase):
             ----------
                 - distance in euclidian norm between the point and the elipse.
                     Shape [k, 1, 1]
-        '''
+        ''' 
         d = tf.pow(tf.divide(position, self.axis), 2)
         d = tf.reduce_sum(d, axis=1) # -> shape [k, 1, 1]
         d = tf.abs(d - 1.)
@@ -202,11 +214,13 @@ class ElipseCost3D(CostBase):
                 - orientation cost. Shape [k, 1, 1]
         '''
         position = pose[:, 0:3]
+        # Rotation from elipse frame to point
         quaterion = tf.squeeze(pose[:, 3:7])
         tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
-        tgVec = tf.multiply(tgVec, self.mapping)
+        tgVec = tf.squeeze(tf.multiply(tgVec, self.mapping), axis=-1)
+        tgVec = tf.linalg.normalize(tgVec, axis=-1)[0]
         x = tf.constant([1., 0., 0.], dtype=tf.float64)
-        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(tgVec, x)
+        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, tgVec)
         err = tfg.geometry.transformation.quaternion.relative_angle(q, quaterion)
         return err
 
@@ -227,5 +241,5 @@ class ElipseCost3D(CostBase):
         '''
         # compute the normalized linear velocity
         v = tf.norm(velocity[:, 0:3], axis=1)
-        dv = tf.pow(v, 2) - tf.pow(self.gv, 2)
-        return dv
+        dv = tf.abs(tf.pow(v, 2) - tf.pow(self.gv, 2))
+        return tf.expand_dims(dv, axis=-1)
