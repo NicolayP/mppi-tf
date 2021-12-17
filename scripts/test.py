@@ -1,12 +1,16 @@
+from os import killpg
 import tensorflow as tf
-from ..models.model_base import ModelBase
-from ..models.point_mass_model import PointMassModel
-from ..models.auv_model import AUVModel
-from ..models.nn_model import NNAUVModel
-from ..costs.cost_base import CostBase
-from ..costs.static_cost import StaticCost
-from ..costs.elipse_cost import ElipseCost
-from ..controllers.controller_base import ControllerBase
+gpu = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
+
+from src.models.model_base import ModelBase
+from src.models.point_mass_model import PointMassModel
+from src.models.auv_model import AUVModel
+from src.models.nn_model import NNAUVModel
+from src.costs.cost_base import CostBase
+from src.costs.static_cost import StaticCost
+from src.costs.elipse_cost import ElipseCost
+from src.controllers.controller_base import ControllerBase
 import numpy as np
 from uuv_control_msgs import srv
 
@@ -52,8 +56,8 @@ class TestPointMassModel(tf.test.TestCase):
         exp_x = np.array([[[0.], [0.]]])
         exp = exp_u + exp_x
 
-        x_pred = model.buildFreeStepGraph("", state_in)
-        u_pred = model.buildActionStepGraph("", action_in)
+        x_pred = model.build_free_step_graph("", state_in)
+        u_pred = model.build_action_step_graph("", action_in)
         pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
@@ -75,8 +79,8 @@ class TestPointMassModel(tf.test.TestCase):
         exp_x = np.array([[[0.], [0.], [0.], [0.]]])
         exp = exp_u + exp_x
 
-        x_pred = model.buildFreeStepGraph("", state_in)
-        u_pred = model.buildActionStepGraph("", action_in)
+        x_pred = model.build_free_step_graph("", state_in)
+        u_pred = model.build_action_step_graph("", action_in)
         pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
@@ -115,8 +119,8 @@ class TestPointMassModel(tf.test.TestCase):
                           [[-1.+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]]])
         exp = exp_u + exp_x
 
-        x_pred = model.buildFreeStepGraph("", state_in)
-        u_pred = model.buildActionStepGraph("", action_in)
+        x_pred = model.build_free_step_graph("", state_in)
+        u_pred = model.build_action_step_graph("", action_in)
         pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
@@ -154,8 +158,8 @@ class TestPointMassModel(tf.test.TestCase):
 
         exp_x = np.expand_dims(exp_x[0, :, :], 0)
 
-        x_pred = model.buildFreeStepGraph("", state_in)
-        u_pred = model.buildActionStepGraph("", action_in)
+        x_pred = model.build_free_step_graph("", state_in)
+        u_pred = model.build_action_step_graph("", action_in)
         pred = model.build_step_graph("", state_in, action_in)
 
         self.assertAllClose(exp_u, u_pred)
@@ -221,7 +225,7 @@ class TestPointMassModel(tf.test.TestCase):
 
         model.train_step(gt, x, u)
 
-        mt = model.getMass()
+        mt = model.get_mass()
 
         self.assertAllLessEqual(mt, m)
 
@@ -254,8 +258,8 @@ class TestAUVModel(tf.test.TestCase):
         self.inertial["ixz"] = 2.0
         self.inertial["iyz"] = 3.0
         self.params["inertial"] = self.inertial
-        self.model_quat = AUVModel(quat=True, action_dim=6, dt=0.1, k=1, parameters=self.params)
-        self.model_euler = AUVModel(quat=False, action_dim=6, dt=0.1, k=1, parameters=self.params)
+        self.params["rk"] = 2
+        self.model_quat = AUVModel(actionDim=6, dt=0.1, parameters=self.params)
 
     def test_B2I_transform_and_jacobian(self):
         ''' 
@@ -264,19 +268,25 @@ class TestAUVModel(tf.test.TestCase):
             euler representation is [roll, pitch, yaw]
             euler: shape [k, 12, 1]
         '''
+        k = 3
+        self.model_quat.set_k(k)
 
-        quat = np.array([[[0.], [0.], [0.], [1.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]],
-                                  [[0.], [0.], [0.], [0.950510320581509], [0.0438308910967523], [0.25508068761447], [0.171880267220619], [0.], [0.], [0.], [0.], [0.], [0.]],
-                                  [[0.], [0.], [0.], [0.586824089619078], [-0.111618880991033], [0.633022223770408], [0.492403876367579], [0.], [0.], [0.], [0.], [0.], [0.]]])
+        quat = np.array([[[0.], [0.], [0.],
+                          [0.], [0.], [0.], [1.],
+                          [0.], [0.], [0.],
+                          [0.], [0.], [0.]],
+                         [[0.], [0.], [0.],
+                           [0.0438308910967523], [0.25508068761447],
+                           [0.171880267220619], [0.950510320581509],
+                          [0.], [0.], [0.],
+                          [0.], [0.], [0.]],
+                         [[0.], [0.], [0.],
+                           [-0.111618880991033], [0.633022223770408],
+                           [0.492403876367579], [0.586824089619078],
+                          [0.], [0.], [0.],
+                          [0.], [0.], [0.]]])
 
-
-        euler = np.array([[[0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.], [0.]],
-                                   [[0.], [0.], [0.], [0.1949573], [0.4891167], [0.4065898], [0.], [0.], [0.], [0.], [0.], [0.]],
-                                   [[0.], [0.], [0.], [1.2317591], [1.0214548], [2.1513002], [0.], [0.], [0.], [0.], [0.], [0.]]])
-
-        inp = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]]])
         pose_quat, speed_quat = self.model_quat.prepare_data(quat)
-        pose_euler, speed_euler = self.model_euler.prepare_data(euler)
 
         # Quaternion section
         rot_from_lib = np.array([
@@ -298,10 +308,11 @@ class TestAUVModel(tf.test.TestCase):
                                   [-0.8528685,  0.4924039,  0.1736482]
                                  ]
                                 ])
-        wid=3
-        xid=4
-        yid=5
-        zid=6
+
+        wid=6
+        xid=3
+        yid=4
+        zid=5
 
         exp_rot = np.array([
                             [
@@ -365,8 +376,7 @@ class TestAUVModel(tf.test.TestCase):
                             ]
                            ])
 
-
-        exp_TB2Iquat = np.zeros(shape=(3, 4, 3))
+        exp_TB2Iquat = np.zeros(shape=(k, 4, 3))
 
         exp_TB2Iquat[:, 0, 0] = -quat[:, xid, 0]
         exp_TB2Iquat[:, 0, 1] = -quat[:, yid, 0]
@@ -386,84 +396,24 @@ class TestAUVModel(tf.test.TestCase):
         
         exp_TB2Iquat = 0.5*exp_TB2Iquat
 
-        self.model_quat.body2inertial_transform_q(pose_quat)
+        self.model_quat.body2inertial_transform(pose_quat)
 
-        self.assertAllClose(self.model_quat._rotBtoI, exp_rot)
         self.assertAllClose(self.model_quat._rotBtoI, rot_from_lib)
+        self.assertAllClose(self.model_quat._rotBtoI, exp_rot)
 
         self.assertAllClose(self.model_quat._TBtoIquat, exp_TB2Iquat)
 
-        exp_jac_quat = np.zeros(shape=(3, 7, 6))
+        exp_jac_quat = np.zeros(shape=(k, 7, 6))
         exp_jac_quat[:, 0:3, 0:3] = exp_rot
         exp_jac_quat[:, 3:7, 3:6] = exp_TB2Iquat
-        jac_quat = self.model_quat.get_jacobian_q()
+        jac_quat = self.model_quat.get_jacobian()
 
         self.assertAllClose(jac_quat, exp_jac_quat)
 
-        # Euler section 
-        rid=3
-        pid=4
-        yid=5
-
-
-        cr = np.cos(euler[:, rid, 0])
-        cp = np.cos(euler[:, pid, 0])
-        cy = np.cos(euler[:, yid, 0])
-
-        sr = np.sin(euler[:, rid, 0])
-        sp = np.sin(euler[:, pid, 0])
-        sy = np.sin(euler[:, yid, 0])
-
-
-
-        exp_rot_euler = np.array([
-                                  [
-                                   [cy[0]*cp[0], -sy[0]*cr[0]+cy[0]*sp[0]*sr[0], sy[0]*sr[0]+cy[0]*cr[0]*sp[0]],
-                                   [sy[0]*cp[0], cy[0]*cr[0]+sr[0]*sp[0]*sy[0], -cy[0]*sr[0]+sp[0]*sy[0]*cr[0]],
-                                   [-sp[0], cp[0]*sr[0], cp[0]*cr[0]]
-                                  ],
-
-                                  [
-                                   [cy[1]*cp[1], -sy[1]*cr[1]+cy[1]*sp[1]*sr[1], sy[1]*sr[1]+cy[1]*cr[1]*sp[1]],
-                                   [sy[1]*cp[1], cy[1]*cr[1]+sr[1]*sp[1]*sy[1], -cy[1]*sr[1]+sp[1]*sy[1]*cr[1]],
-                                   [-sp[1], cp[1]*sr[1], cp[1]*cr[1]]
-                                  ],
-
-                                  [
-                                   [cy[2]*cp[2], -sy[2]*cr[2]+cy[2]*sp[2]*sr[2], sy[2]*sr[2]+cy[2]*cr[2]*sp[2]],
-                                   [sy[2]*cp[2], cy[2]*cr[2]+sr[2]*sp[2]*sy[2], -cy[2]*sr[2]+sp[2]*sy[2]*cr[2]],
-                                   [-sp[2], cp[2]*sr[2], cp[2]*cr[2]]
-                                  ]
-                                 ])
-
-        exp_TB2Ieuler = np.zeros(shape=(3, 3, 3))
-
-        exp_TB2Ieuler[:, 0, 0] = 1.
-        exp_TB2Ieuler[:, 0, 1] = sr*sp/cp
-        exp_TB2Ieuler[:, 0, 2] = cr*sp/cp
-        
-        exp_TB2Ieuler[:, 1, 1] = cr
-        exp_TB2Ieuler[:, 1, 2] = -sr
-        
-        exp_TB2Ieuler[:, 2, 1] = sr/cp
-        exp_TB2Ieuler[:, 2, 2] = cr/cp
-
-        self.model_euler.body2inertial_transform(pose_euler)
-
-        self.assertAllClose(self.model_euler._rotBtoI, exp_rot)
-        self.assertAllClose(self.model_euler._rotBtoI, exp_rot_euler)
-        self.assertAllClose(self.model_euler._rotBtoI, rot_from_lib)
-
-        self.assertAllClose(self.model_euler._TBtoIeuler, exp_TB2Ieuler)
-
-        exp_jac_euler = np.zeros(shape=(3, 6, 6))
-        exp_jac_euler[:, 0:3, 0:3] = exp_rot
-        exp_jac_euler[:, 3:6, 3:6] = exp_TB2Ieuler
-
-        jac_euler = self.model_euler.get_jacobian()
-        self.assertAllClose(jac_euler, exp_jac_euler)
-
     def test_restoring(self):
+        k = 2
+        self.model_quat.set_k(k)
+
         roll = np.array([45., 13., 280.])*(np.pi/180.)
         pitch = np.array([0., 110., 50.])*(np.pi/180.)
         yaw = np.array([0., 25., 325.])*(np.pi/180.)
@@ -473,31 +423,50 @@ class TestAUVModel(tf.test.TestCase):
                          [[5.2], [-2.], [1.7], [roll[2]], [pitch[2]], [yaw[2]]]
                         ])
 
-        rotItoB = np.array([
-                            [
-                             np.cos(yaw)*np.cos(pitch),
-                             -np.sin(yaw)*np.cos(roll)+np.cos(yaw)*np.sin(pitch)*np.sin(roll),
-                             np.sin(yaw)*np.sin(roll)+np.cos(yaw)*np.cos(roll)*np.sin(pitch)
-                            ],
-                            [
-                             np.sin(yaw)*np.cos(pitch),
-                             np.cos(yaw)*np.cos(roll)+np.sin(roll)*np.sin(pitch)*np.sin(yaw),
-                             -np.cos(yaw)*np.sin(roll)+np.sin(pitch)*np.sin(yaw)*np.cos(roll)
-                            ],
-                            [
-                             -np.sin(pitch),
-                             np.cos(pitch)*np.sin(roll),
-                             np.cos(pitch)*np.cos(roll)
-                            ]
-                           ]).T
+        pose = np.array([
+                         [[1.0], [1.0], [1.0], [0.3826834], [0.], [0.], [0.9238795]],
+                         [[1.5], [2.3], [0.7], [-0.1127657], [0.8086476], [0.0328141], [0.5764513]],
+                         [[5.2], [-2.], [1.7], [-0.4582488], [0.4839407], [0.0503092], [0.7438269]]
+                        ])
 
-        W = self.model_euler.mass*self.model_euler.gravity
-        B = self.model_euler.volume*self.model_euler.density*self.model_euler.gravity
+        roll = np.array([13., 280.])*(np.pi/180.)
+        pitch = np.array([110., 50.])*(np.pi/180.)
+        yaw = np.array([25., 325.])*(np.pi/180.)
 
-        r_g = self.model_euler.cog
-        r_b = self.model_euler.cob
+        pose = np.array([
+                         [[1.5], [2.3], [0.7], [-0.1127657], [0.8086476], [0.0328141], [0.5764513]],
+                         [[5.2], [-2.], [1.7], [-0.4582488], [0.4839407], [0.0503092], [0.7438269]]
+                        ])
 
-        fng = np.array([0.0, 0.0, - W])
+        rotItoB = np.zeros(shape=(k, 3, 3))
+        rotBtoI = np.zeros(shape=(k, 3, 3))
+        
+        for i in range(k):
+            rotBtoI[i, :, :] = np.array([[
+                                         np.cos(yaw[i])*np.cos(pitch[i]),
+                                         -np.sin(yaw[i])*np.cos(roll[i])+np.cos(yaw[i])*np.sin(pitch[i])*np.sin(roll[i]),
+                                         np.sin(yaw[i])*np.sin(roll[i])+np.cos(yaw[i])*np.cos(roll[i])*np.sin(pitch[i])
+                                        ],
+                                        [
+                                         np.sin(yaw[i])*np.cos(pitch[i]),
+                                         np.cos(yaw[i])*np.cos(roll[i])+np.sin(roll[i])*np.sin(pitch[i])*np.sin(yaw[i]),
+                                         -np.cos(yaw[i])*np.sin(roll[i])+np.sin(pitch[i])*np.sin(yaw[i])*np.cos(roll[i])
+                                        ],
+                                        [
+                                         -np.sin(pitch[i]),
+                                         np.cos(pitch[i])*np.sin(roll[i]),
+                                         np.cos(pitch[i])*np.cos(roll[i])
+                                        ]]
+                                        )
+            rotItoB[i, :, :] = rotBtoI[i, :, :].T
+        
+        W = self.model_quat._mass*self.model_quat._gravity
+        B = self.model_quat._volume*self.model_quat._density*self.model_quat._gravity
+
+        r_g = self.model_quat._cog
+        r_b = self.model_quat._cob
+
+        fng = np.array([0.0, 0.0, -W])
         fnb = np.array([0.0, 0.0, B])
 
         fbg = np.dot(rotItoB, fng)
@@ -506,7 +475,7 @@ class TestAUVModel(tf.test.TestCase):
         mbg = np.cross(r_g, fbg)
         mbb = np.cross(r_b, fbb)
 
-        exp_rest = np.zeros((3, 6, 1))
+        exp_rest = np.zeros((k, 6, 1))
         fb = -(fbb+fbg)
         mb = -(mbb+mbg)
         exp_rest[:, 0, 0] = fb[:, 0]
@@ -517,19 +486,22 @@ class TestAUVModel(tf.test.TestCase):
         exp_rest[:, 4, 0] = mb[:, 1]
         exp_rest[:, 5, 0] = mb[:, 2]
 
-        self.model_euler.body2inertial_transform(pose)
+        self.model_quat.body2inertial_transform(pose)
 
-        rest = self.model_euler.restoring_forces("rest")
+        rest = self.model_quat.restoring_forces("rest")
 
+        self.assertAllClose(self.model_quat._rotBtoI, rotBtoI)
         self.assertAllClose(rest, exp_rest)
 
     def test_damping(self):
+        k = 3
+        self.model_quat.set_k(k)
         vel = np.array([
                         [[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]],
                         [[2.0], [1.5], [1.0], [3.0], [3.5], [2.5]],
                         [[-2.0], [-1.5], [-1.0], [-3.0], [-3.5], [-2.5]]
                        ])
-        d = self.model_euler.damping_matrix("damp", vel)
+        d = self.model_quat.damping_matrix("damp", vel)
         exp_damp = np.zeros(shape=(vel.shape[0], 6, 6))
         for i in range(vel.shape[0]):
             exp_damp[i, :, :] = -1* np.diag(self.params["linear_damping"]) - vel[i, 0, 0]*np.diag(self.params["linear_damping_forward_speed"])
@@ -538,6 +510,8 @@ class TestAUVModel(tf.test.TestCase):
         self.assertAllClose(d, exp_damp)
 
     def test_corrolis(self):
+        k = 1
+        self.model_quat.set_k(k)
         vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
         Iv = [self.inertial["ixx"]*vel[0, 3, 0] - self.inertial["ixy"]*vel[0, 4, 0] - self.inertial["ixz"]*vel[0, 5, 0], 
               - self.inertial["ixy"]*vel[0, 3, 0] + self.inertial["iyy"]*vel[0, 4, 0] - self.inertial["iyz"]*vel[0, 5, 0],
@@ -558,15 +532,17 @@ class TestAUVModel(tf.test.TestCase):
                        [Mav[2, 0, 0], 0., -Mav[0, 0, 0], Mav[5, 0, 0], 0., -Mav[3, 0, 0]],
                        [-Mav[1, 0, 0], Mav[0, 0, 0], 0., -Mav[4, 0, 0], Mav[3, 0, 0], 0.]]])
 
-        c = self.model_euler.coriolis_matrix("coriolis", vel)
+        c = self.model_quat.coriolis_matrix("coriolis", vel)
 
         self.assertAllClose(c, crb + ca)
 
-    def test_step1_k1_s12_a6(self):
-        state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
+    def test_step1_k1_s13_a6(self):
+        k = 1
+        self.model_quat.set_k(k)
+        state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
                            [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]])
         action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]])
-        next_state = self.model_euler.build_step_graph("step", state, action)
+        next_state = self.model_quat.build_step_graph("step", state, action)
 
         #print("*"*10 + " Next State " + "*"*10)
         #print(next_state)
@@ -574,19 +550,21 @@ class TestAUVModel(tf.test.TestCase):
         pass
 
     def test_step1_k5_s12_a6(self):
-        state = np.array([ [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
+        k = 5
+        self.model_quat.set_k(k)
+        state = np.array([ [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
                              [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ],
 
-                           [ [1.0], [1.0], [1.0], [0.0], [0.0], [0.0],
+                           [ [1.0], [1.0], [1.0], [0.0], [0.0], [0.0], [1.0],
                              [0.1], [2.0], [2.0], [1.0], [2.0], [3.0] ],
 
-                           [ [0.0], [2.0], [1.0], [0.2], [0.3], [0.0],
+                           [ [0.0], [2.0], [1.0], [0.2], [0.3], [0.0], [1.0],
                              [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ],
 
-                           [ [5.0], [0.2], [0.0], [1.2], [0.0], [3.1],
+                           [ [5.0], [0.2], [0.0], [1.2], [0.0], [3.1], [1.0],
                              [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ],
 
-                           [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0],
+                           [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
                              [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ] ])
 
         action = np.array([[ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ],
@@ -595,7 +573,7 @@ class TestAUVModel(tf.test.TestCase):
                            [ [2.0], [2.0], [2.0], [2.0], [2.0], [2.0] ],
                            [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]])
 
-        next_state = self.model_euler.build_step_graph("step", state, action)
+        next_state = self.model_quat.build_step_graph("step", state, action)
         #print("*"*10 + " Next State Many " + "*"*10)
         #print(next_state)
         #print("*"*20)
@@ -607,199 +585,22 @@ class TestNNAUVModel(tf.test.TestCase):
         self.nn_auv = NNAUVModel()
         pass
 
-    def testQMul(self):
-        q1 = np.array([
-                       [
-                        [1.0], [0.0], [0.0], [0.0]
-                       ],
-                       [
-                        [0.6532815], [0.6532815], [0.2705981], [0.2705981]
-                       ],
-                       [
-                        [0.3043807], [0.8653662], [0.0337827], [0.3966767]
-                       ]
-                      ])
-        q2 = np.array([
-                       [
-                        [0.6296361], [-0.1662446], [-0.7387952], [0.1735018]
-                       ],
-                       [
-                        [0.5772279], [-0.3951541], [0.2347526], [0.6749462]
-                       ],
-                       [
-                        [0.1720284], [0.4709948], [0.8445119], [0.1880684]
-                       ]
-                      ])
-
-        exp_mul = []
-
-        for p, q in zip(q1, q2):
-            w0, x0, y0, z0 = p
-            w1, x1, y1, z1 = q
-            res = np.array([
-                            [
-                             w0*w1 - x0*x1 - y0*y1 - z0*z1,
-                             w0*x1 + x0*w1 + y0*z1 - z0*y1,
-                             w0*y1 - x0*z1 + y0*w1 + z0*x1,
-                             w0*z1 + x0*y1 - y0*x1 + z0*w1
-                            ]
-                           ], dtype=np.float64)
-
-            exp_mul.append(res)
-
-        exp_mul = np.concatenate(exp_mul, axis=0)
-        mult_qs = self.nn_auv.qMul(q1, q2)
-        self.assertAllClose(exp_mul, mult_qs)
-        pass
-
-    def testPureQ(self):
-        vec = np.array([
-                        [[11.350], [20.050], [0.0065]],
-                        [[0.5480], [65.150], [-54.05]],
-                        [[-1.006], [100650], [84.545]],
-                        [[87.568], [-87.50], [-63.00]]
-                       ])
-        pure = self.nn_auv.pureQ(vec)
-        exp_pure = np.array([
-                             [[0.0], [11.350], [20.050], [0.0065]],
-                             [[0.0], [0.5480], [65.150], [-54.05]],
-                             [[0.0], [-1.006], [100650], [84.545]],
-                             [[0.0], [87.568], [-87.50], [-63.00]]
-                            ])
-        self.assertAllClose(exp_pure, pure)
-
-    def testInvQ(self):
-        q = np.array([
-                      [[ 0.6296361], [-0.1662446], [-0.7387952], [ 0.1735018]],
-                      [[ 0.5772279], [-0.3951541], [ 0.2347526], [ 0.6749462]],
-                      [[ 0.1720284], [ 0.4709948], [ 0.8445119], [ 0.1880684]],
-                      [[ 0.5474948], [-0.5612603], [ 0.5605486], [-0.2664988]]
-                     ])
-        exp_inv = np.array([
-                            [[ 0.6296361], [ 0.1662446], [ 0.7387952], [-0.1735018]],
-                            [[ 0.5772279], [ 0.3951541], [-0.2347526], [-0.6749462]],
-                            [[ 0.1720284], [-0.4709948], [-0.8445119], [-0.1880684]],
-                            [[ 0.5474948], [ 0.5612603], [-0.5605486], [ 0.2664988]]
-                     ])
-        inv = self.nn_auv.invQ(q)
-        self.assertAllClose(inv, exp_inv)
-        pass
-
-    def testrotVec(self):
-        q = np.array([
-                      [[ 0.6296361], [-0.1662446], [-0.7387952], [ 0.1735018]],
-                      [[ 0.5772279], [-0.3951541], [ 0.2347526], [ 0.6749462]],
-                      [[ 0.1720284], [ 0.4709948], [ 0.8445119], [ 0.1880684]],
-                      [[ 0.5474948], [-0.5612603], [ 0.5605486], [-0.2664988]]
-                     ])
-        vec = np.array([
-                        [[11.350], [20.050], [0.0065]],
-                        [[0.5480], [65.150], [-54.05]],
-                        [[-1.006], [100650], [84.545]],
-                        [[87.568], [-87.50], [-63.00]]
-                       ])
-        invq = np.array([
-                         [[ 0.6296361], [ 0.1662446], [ 0.7387952], [-0.1735018]],
-                         [[ 0.5772279], [ 0.3951541], [-0.2347526], [-0.6749462]],
-                         [[ 0.1720284], [-0.4709948], [-0.8445119], [-0.1880684]],
-                         [[ 0.5474948], [ 0.5612603], [-0.5605486], [ 0.2664988]]
-                        ])
-
-        pure = self.nn_auv.pureQ(vec).numpy()
-        exp_r_vec = qmul(qmul(q, pure), invq)[:, 1:4]
-
-        rotate_vec =self.nn_auv.rotVec(q, vec)
-
-        self.assertAllClose(rotate_vec, exp_r_vec)
-        pass
-
-    def testInvtransform(self):
-        state_t = np.array([
-                            [
-                             [1.0], [1.0], [0.5], #Position
-                             [1.0], [0.0], [0.0], [0.0], #Quaterinon
-                             [1.0], [0.0], [0.25], #Linear velocity
-                             [0.0] ,[0.0] ,[0.0] #Angular velocity
-                            ],
-                            [
-                             [1.0], [-1.75],[0.5],
-                             [0.6532815], [0.6532815], [0.2705981], [0.2705981],
-                             [1.0], [0.0], [0.25],
-                             [0.0] ,[0.0] ,[0.0]
-                            ]
-                           ])
-        pose_t = state_t[:, 0:7]
-        q = pose_t[:, 3:7]
-        t = pose_t[:, 0:3]
-
-        pure_t = np.concatenate([np.array([[[0.0]],[[0.0]]]), t], axis=1)
-
-        inv_q = np.concatenate([q[:, 0:1], -q[:, 1:4]], axis=1)
-        inv = self.nn_auv.invTransform(pose_t)
-
-        t_inv = -qmul(inv_q, qmul(pure_t, q))[:, 1:4]
-        exp_inv = np.concatenate([t_inv, inv_q], axis=1)
-
-        self.assertAllClose(inv, exp_inv)
-        pass
-
-    def testTransform(self):
-        pose1 = np.array([
-                          [
-                           [1.0], [1.0], [0.5], #Position
-                           [1.0], [0.0], [0.0], [0.0], #Quaterinon
-                          ],
-                          [
-                           [1.0], [-1.75],[0.5],
-                           [0.6532815], [0.6532815], [0.2705981], [0.2705981],
-                          ]
-                         ])
-
-        pose2 = np.array([
-                          [
-                           [3.0], [-2.3], [5.96], #Position
-                           [-0.1913417], [0.8001031], [0.4619398], [0.3314136] #Quaterinon
-                          ],
-                          [
-                           [1.0], [-1.75],[0.5],
-                           [0.4615897], [0.8446119], [0.0560099], [0.2653839]
-                          ]
-                         ])
-
-        q1 = pose1[:, 3:7]
-        t1 = pose1[:, 0:3]
-        q2 = pose2[:, 3:7]
-        t2 = pose2[:, 0:3]
-
-        pure_t = np.concatenate([np.array([[[0.0]], [[0.0]]]), t2], axis=1)
-        inv_q1 = np.concatenate([q1[:, 0:1], -q1[:, 1:4]], axis=1)
-
-
-        t_rot = qmul(q1,qmul(pure_t, inv_q1))[:, 1:4]
-        t_res = t_rot + t1
-        q_res = qmul(q1, q2)
-        exp_trans = np.concatenate([t_res, q_res], axis=1)
-        trans = self.nn_auv.transform(pose1, pose2)
-        self.assertAllClose(trans, exp_trans)
-
     def testPrepareTrainingDataN1(self):
         state_t = np.array([
                             [
-                             [1.0], [1.0], [0.5],
-                             [1.0], [0.0], [0.0], [0.0],
-                             [1.0], [0.0], [0.25],
-                             [0.0] ,[0.0] ,[0.0]
+                             [1.0], [1.0], [0.5], # position
+                             [0.0], [0.0], [0.0], [1.0], # Quaternion
+                             [1.0], [0.0], [0.25], # Linear velocities
+                             [0.0] ,[0.0] ,[0.0] # Angular velocities
                             ]
                            ])
 
-        q = state_t[:, 3:7]
-        x = state_t[:, 0:3]
         state_t1 = np.array([
                              [
-                              [2.0], [1.0], [0.75],
-                              [1.0], [0.0], [0.0], [0.0],
-                              [3.0], [3.5], [4.5],
-                              [5.5], [6.5], [7.5]
+                              [2.0], [1.0], [0.75], # position
+                              [0.0], [0.0], [0.0], [1.0], # Quaternion
+                              [3.0], [3.5], [4.5], # Linear velocities
+                              [5.5], [6.5], [7.5] # Angular velocities
                              ]
                             ])
 
@@ -810,127 +611,40 @@ class TestNNAUVModel(tf.test.TestCase):
                           ])
 
 
-        (X, y) = self.nn_auv.prepareTrainingData(state_t, state_t1, action)
+        (X, y) = self.nn_auv.prepare_training_data(state_t, state_t1, action)
 
-        exp_x = np.array([[[1.0], [0.0], [0.0], [0.0],
-                           [1.0], [0.0], [0.25], [0.0], [0.0], [0.0],
-                           [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]])
+        # Quaternion, velocities and action
+        exp_x = np.array([[[0.0], [0.0], [0.0], [1.0], # Quaternion
+                           [1.0], [0.0], [0.25], # Linear velocities
+                           [0.0], [0.0], [0.0], #Angular velocities
+                           [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]]) # Action
 
-        exp_y = np.array([[[1.0], [0.0], [0.25], [1.0], [0.0], [0.0], [0.0],
-                           [3.0], [3.5], [4.5], [5.5], [6.5], [7.5]]])
+        # DeltaT. Atm it is a difference between states so negative quaterion.
+        exp_y = np.array([[[1.0], [0.0], [0.25], # Next position
+                           [0.0], [0.0], [0.0], [0.0], # Quaternion
+                           [2.0], [3.5], [4.25], # Linear velocities
+                           [5.5], [6.5], [7.5]]]) # angular velocitiess
 
-        self.assertAllClose(X, exp_x)
-        self.assertAllClose(y, exp_y)
-
-    def testPrepareTrainingDataN2(self):
-        return
-        state_t = np.array([
-                            [
-                             [1.0], [1.0], [0.5], #Position
-                             [1.0], [0.0], [0.0], [0.0], #Quaterinon
-                             [1.0], [0.0], [0.25], #Linear velocity
-                             [0.0] ,[0.0] ,[0.0] #Angular velocity
-                            ],
-                            [
-                             [1.0], [-1.75],[0.5],
-                             [0.6532815], [0.6532815], [0.2705981], [0.2705981],
-                             [1.0], [0.0], [0.25],
-                             [0.0] ,[0.0] ,[0.0]
-                            ]
-                           ])
-
-        state_t1 = np.array([
-                             [
-                              [2.0], [1.0], [0.75],
-                              [1.0], [0.0], [0.0], [0.0],
-                              [3.0], [3.5], [4.5],
-                              [5.5], [6.5], [7.5]
-                             ],
-                             [
-                              [2.0], [-1.0], [0.75],
-                              [0.3043807], [0.8653662], [0.0337827], [0.3966767],
-                              [3.0], [3.5], [4.5],
-                              [5.5], [6.5], [7.5]
-                             ]
-                            ])
-
-        action = np.array([[[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]],
-                           [[6.0], [5.0], [4.0], [3.0], [2.0], [1.0]]])
-
-        (X, y) = self.nn_auv.prepareTrainingData(state_t, state_t1, action)
-
-
-
-        exp_x = np.array([
-                          [
-                           [1.0], [0.0], [0.0], [0.0],
-                           [1.0], [0.0], [0.25], [0.0], [0.0], [0.0],
-                           [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]
-                          ],
-                          [
-                           [1.0], [0.0], [0.0], [0.0],
-                           [1.0], [0.0], [0.25], [0.0], [0.0], [0.0],
-                           [6.0], [5.0], [4.0], [3.0], [2.0], [1.0]
-                          ]
-                         ])
-
-        exp_y = np.array([
-                          [
-                           [1.0], [0.0], [0.25], [1.0], [0.0], [0.0], [0.0],
-                           [3.0], [3.5], [4.5], [5.5], [6.5], [7.5]
-                          ],
-                          [
-                           [1.0], [0.0], [0.25], [1.0], [0.0], [0.0], [0.0],
-                           [3.0], [3.5], [4.5], [5.5], [6.5], [7.5]
-                          ]
-                         ])
-
-        self.assertAllClose(X, exp_x)
-        self.assertAllClose(y, exp_y)
-
-    def testPrepareTrainingDataN6(self):
-        state_t = np.array([[[1.0], [1.0], [0.5], [1.0], [0.0], [0.0], [0.0],
-                             [1.0], [0.0], [0.25], [0.0] ,[0.0] ,[0.0]]])
-        state_t1 = np.array([[[2.0], [1.0], [0.75], [1.0], [0.0], [0.0], [0.0],
-                              [3.0], [3.5], [4.5], [5.5], [6.5], [7.5]]])
-        action = np.array([[[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]])
-
-        (X, y) = self.nn_auv.prepareTrainingData(state_t, state_t1, action)
-        exp_x = np.array([[[1.0], [0.0], [0.0], [0.0],
-                           [1.0], [0.0], [0.25], [0.0], [0.0], [0.0],
-                           [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]])
-        exp_y = np.array([[[1.0], [0.0], [0.25], [1.0], [0.0], [0.0], [0.0],
-                           [3.0], [3.5], [4.5], [5.5], [6.5], [7.5]]])
         self.assertAllClose(X, exp_x)
         self.assertAllClose(y, exp_y)
 
     def testPrepareDataN1(self):
         state = np.array([[
-                           [0.0], [1.0], [2.0], [3.0], [4.0], [5.0], [6.0], [7.0], [8.0], [9.0], [10.0], [11.0], [12.0]
+                           [0.0], [1.0], [2.0], # Position
+                           [3.0], [4.0], [5.0], [6.0], # Quaternion
+                           [7.0], [8.0], [9.0], # Linera velocities
+                           [10.0], [11.0], [12.0] # Angular velocities
                          ]])
         action = np.array([[
-                            [13.0], [14.0], [15.0], [16.0], [17.0], [18.0]
+                            [13.0], [14.0], [15.0], # Forces
+                            [16.0], [17.0], [18.0] # Torques
                            ]])
-        inp_data = self.nn_auv.prepareData(state, action)
-        exp_inp_data = np.array([[[3.0], [4.0], [5.0], [6.0], [7.0], [8.0], [9.0], [10.0], [11.0], [12.0], [13.0], [14.0], [15.0], [16.0], [17.0], [18.0]]])
-
-        self.assertAllClose(exp_inp_data, inp_data)
-
-    def testPrepareDataN2(self):
-        state = np.array([
-                          [[0.0], [1.0], [2.0], [3.0], [4.0], [5.0], [6.0], [7.0], [8.0], [9.0], [10.0], [11.0], [12.0]],
-                          [[-0.0], [-1.0], [-2.0], [-3.0], [-4.0], [-5.0], [-6.0], [-7.0], [-8.0], [-9.0], [-10.0], [-11.0], [-12.0]]
-                         ])
-        action = np.array([
-                           [[13.0], [14.0], [15.0], [16.0], [17.0], [18.0]],
-                           [[-13.0], [-14.0], [-15.0], [-16.0], [-17.0], [-18.0]]
-                          ])
-
-        inp_data = self.nn_auv.prepareData(state, action)
-        exp_inp_data = np.array([
-                                 [[3.0], [4.0], [5.0], [6.0], [7.0], [8.0], [9.0], [10.0], [11.0], [12.0], [13.0], [14.0], [15.0], [16.0], [17.0], [18.0]],
-                                 [[-3.0], [-4.0], [-5.0], [-6.0], [-7.0], [-8.0], [-9.0], [-10.0], [-11.0], [-12.0], [-13.0], [-14.0], [-15.0], [-16.0], [-17.0], [-18.0]]
-                                ])
+        inp_data = self.nn_auv.prepare_data(state, action)
+        exp_inp_data = np.array([[3.0, 4.0, 5.0, 6.0, # Quaternion
+                                  7.0, 8.0, 9.0, # Linear velocities
+                                  10.0, 11.0, 12.0, # Angular velocities
+                                  13.0, 14.0, 15.0, # Forces
+                                  16.0, 17.0, 18.0]]) # Torques
 
         self.assertAllClose(exp_inp_data, inp_data)
 
@@ -952,22 +666,16 @@ class TestNNAUVModel(tf.test.TestCase):
                            [[13.5], [14.5], [15.5], [16.5], [17.5], [18.5]],
                           ])
 
-        inp_data = self.nn_auv.prepareData(state, action)
+        inp_data = self.nn_auv.prepare_data(state, action)
         exp_inp_data = np.array([
-                                 [[3.0], [4.0], [5.0], [6.0], [7.0], [8.0], [9.0], [10.0], [11.0], [12.0], [13.0], [14.0], [15.0], [16.0], [17.0], [18.0]],
-                                 [[15.0], [14.0], [13.0], [12.0], [11.0], [10.0], [9.0], [8.0], [7.0], [6.0], [5.0], [4.0], [3.0], [2.0], [1.0], [0.0]],
-                                 [[-3.0], [-4.0], [-5.0], [-6.0], [-7.0], [-8.0], [-9.0], [-10.0], [-11.0], [-12.0], [-13.0], [-14.0], [-15.0], [-16.0], [-17.0], [-18.0]],
-                                 [[-15.0], [-14.0], [-13.0], [-12.0], [-11.0], [-10.0], [-9.0], [-8.0], [-7.0], [-6.0], [-5.0], [-4.0], [-3.0], [-2.0], [-1.0], [-0.0]],
-                                 [[-3.5], [-4.5], [-5.5], [-6.5], [-7.5], [-8.5], [-9.5], [-10.5], [-11.5], [-12.5], [-13.5], [-14.5], [-15.5], [-16.5], [-17.5], [-18.5]],
-                                 [[3.5], [4.5], [5.5], [6.5], [7.5], [8.5], [9.5], [10.5], [11.5], [12.5], [13.5], [14.5], [15.5], [16.5], [17.5], [18.5]]
+                                 [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0],
+                                 [15.0, 14.0, 13.0, 12.0, 11.0, 10.0, 9.0, 8.0, 7.0, 6.0, 5.0, 4.0, 3.0, 2.0, 1.0, 0.0],
+                                 [-3.0, -4.0, -5.0, -6.0, -7.0, -8.0, -9.0, -10.0, -11.0, -12.0, -13.0, -14.0, -15.0, -16.0, -17.0, -18.0],
+                                 [-15.0, -14.0, -13.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0, -0.0],
+                                 [-3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5],
+                                 [3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5]
                                 ])
         self.assertAllClose(exp_inp_data, inp_data)
-
-    def testPred2InertialN2(self):
-        pass
-
-    def testPred2InertialN6(self):
-        pass
 
 
 class TestCost(tf.test.TestCase):
@@ -992,8 +700,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             _ = cost.state_cost("", state)
 
-        a_c_dict = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
+        a_c = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c)
 
     def testStepCost_s4_a2_l1(self):
 
@@ -1014,8 +722,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             _ = cost.state_cost("", state)
 
-        a_c_dict = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
+        a_c = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c)
 
     def testStepCost_s4_a3_l1(self):
 
@@ -1050,8 +758,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             _ = cost.state_cost("", state)
 
-        a_c_dict = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
+        a_c = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c)
 
     def testStepCost_s4_a3_l10_g2_u3(self):
 
@@ -1086,8 +794,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             _ = cost.state_cost("", state)
 
-        a_c_dict = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
+        a_c = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c)
 
     def testStepCost_s4_a3_l15_g20_u30(self):
 
@@ -1122,8 +830,8 @@ class TestCost(tf.test.TestCase):
         with self.assertRaises(NotImplementedError):
             _ = cost.state_cost("", state)
 
-        a_c_dict = cost.action_cost("", action, noise)
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
+        a_c = cost.action_cost("", action, noise)
+        self.assertAllClose(exp_a_c, a_c)
 
 
 class TestStaticCost(tf.test.TestCase):
@@ -1150,12 +858,11 @@ class TestStaticCost(tf.test.TestCase):
 
         exp_c = exp_a_c + exp_s_c
 
-        a_c_dict = cost.action_cost("", action, noise)
-        c_dict = cost.build_step_cost_graph("", state, action, noise)
+        a_c = cost.action_cost("", action, noise)
+        c = cost.build_step_cost_graph("", state, action, noise)
 
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
-        self.assertAllClose(exp_s_c, c_dict["state_cost"])
-        self.assertAllClose(exp_c, c_dict["cost"])
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c, c)
 
     def testStepStaticCost_s4_a2_l1(self):
 
@@ -1182,15 +889,13 @@ class TestStaticCost(tf.test.TestCase):
         exp_c = exp_a_c + exp_s_c
 
 
-        a_c_dict = cost.action_cost("", action, noise)
-        c_dict = cost.build_step_cost_graph("", state, action, noise)
+        a_c = cost.action_cost("", action, noise)
+        c = cost.build_step_cost_graph("", state, action, noise)
 
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
-        self.assertAllClose(exp_s_c, c_dict["state_cost"])
-        self.assertAllClose(exp_c, c_dict["cost"])
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c, c)
 
     def testStepStaticCost_s4_a3_l1(self):
-
         state=np.array([[[0.], [0.5], [2.], [0.]],
                         [[0.], [2.], [0.], [0.]],
                         [[10.], [2.], [2.], [3.]],
@@ -1226,12 +931,164 @@ class TestStaticCost(tf.test.TestCase):
 
         exp_c = exp_a_c + exp_s_c
 
-        a_c_dict = cost.action_cost("", action, noise)
-        c_dict = cost.build_step_cost_graph("", state, action, noise)
+        a_c = cost.action_cost("", action, noise)
+        c = cost.build_step_cost_graph("", state, action, noise)
 
-        self.assertAllClose(exp_a_c, a_c_dict["action_cost"])
-        self.assertAllClose(exp_s_c, c_dict["state_cost"])
-        self.assertAllClose(exp_c, c_dict["cost"])
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c, c)
+
+    def testStepStaticCost_s13_a6_l1(self):
+        state=np.array([
+                        [[0.], [0.5], [2.],
+                         [0.], [0.], [0.], [1.],
+                         [1.], [2.], [3.],
+                         [4.], [5.], [6.]
+                        ],
+                        [
+                         [0.], [2.], [0.],
+                         [0.], [0.5], [0.5], [0.],
+                         [4.], [5.], [6.],
+                         [1.], [2.], [3.]
+                        ]
+                       ])
+
+        goal=np.array([
+                       [1.], [1.], [2.],
+                       [0.], [0.], [0.], [1.],
+                       [0.], [0.], [0.],
+                       [0.], [0.], [0.]
+                      ])
+
+        action=np.array([
+                         [0.5], [2.], [0.25], [4.], [1.], [1.5]
+                        ])
+
+        noise=np.array([
+                        [[0.5], [1.], [2.], [3.], [4.], [5.]],
+                        [[0.5], [2.], [0.25], [1.25], [2.5], [0.75]]
+                       ])
+
+        Sigma=np.array([
+                        [1., 0., 0., 0., 0., 0.],
+                        [0., 1., 0., 0., 0., 0.],
+                        [0., 0., 1., 0., 0., 0.],
+                        [0., 0., 0., 1., 0., 0.],
+                        [0., 0., 0., 0., 1., 0.],
+                        [0., 0., 0., 0., 0., 1.]
+                       ])
+
+        Q=np.array([
+                    [ # X
+                     1., 0., 0.,
+                     0., 0., 0., 0.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Y
+                     0., 1., 0.,
+                     0., 0., 0., 0.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Z
+                     0., 0., 1.,
+                     0., 0., 0., 0.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Q.X
+                     0., 0., 0.,
+                     1., 0., 0., 0.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Q.Y
+                     0., 0., 0.,
+                     0., 1., 0., 0.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Q.Z
+                     0., 0., 0.,
+                     0., 0., 1., 0.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Q.W
+                     0., 0., 0.,
+                     0., 0., 0., 1.,
+                     0., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # X DOT
+                     0., 0., 0.,
+                     0., 0., 0., 0.,
+                     10., 0., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Y DOT
+                     0., 0., 0.,
+                     0., 0., 0., 0.,
+                     0., 10., 0.,
+                     0., 0., 0.
+                    ],
+                    [ # Z DOT
+                     0., 0., 0.,
+                     0., 0., 0., 0.,
+                     0., 0., 10.,
+                     0., 0., 0.
+                    ],
+                    [ # ROLL DOT
+                     0., 0., 0.,
+                     0., 0., 0., 0.,
+                     0., 0., 0.,
+                     10., 0., 0.
+                    ],
+                    [ # PITCH DOT
+                     0., 0., 0.,
+                     0., 0., 0., 0.,
+                     0., 0., 0.,
+                     0., 10., 0.
+                    ],
+                    [ # YAW DOT
+                     0., 0., 0.,
+                     0., 0., 0., 0.,
+                     0., 0., 0.,
+                     0., 0., 10.
+                    ],
+                   ])
+
+        lam=np.array([1.])
+        gamma = 1.
+        upsilon = 1.
+
+        cost = StaticCost(lam, gamma, upsilon, Sigma, goal, Q)
+
+        exp_a_c = np.array([
+                            [
+                             [0.5*(gamma*(23.5625 + 2.*26.25) + lam[0]*(1-1./upsilon)*(55.25) ) ]
+                            ],
+                            [
+                             [0.5*(gamma*(23.5625 + 2.*(12.9375)) + lam[0]*(1-1./upsilon)*(12.6875) ) ]
+                            ]
+                           ])
+
+        exp_s_c = np.array([
+                            [
+                             [911.25]
+                            ],
+                            [
+                             [917.5]
+                            ]
+                           ])
+
+        exp_c = exp_a_c + exp_s_c
+
+        a_c = cost.action_cost("", action, noise)
+        c = cost.build_step_cost_graph("", state, action, noise)
+
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c, c)
 
 
 class TestElipseCost(tf.test.TestCase):
@@ -1264,10 +1121,10 @@ class TestElipseCost(tf.test.TestCase):
 
         exp_s_c = np.array([[[0.25]]])
 
-        s_c_dict = cost.state_cost("", state)
+        s_c = cost.state_cost("", state)
 
 
-        self.assertAllClose(exp_s_c, s_c_dict["state_cost"])
+        self.assertAllClose(exp_s_c, s_c)
 
     def testStepElipseCost_s4_l1_k5(self):
 
@@ -1296,8 +1153,8 @@ class TestElipseCost(tf.test.TestCase):
                             [[1+1.5278640450004208]],
                             [[33+38.57779489814404]]])
 
-        s_c_dict = cost.state_cost("", state)
-        self.assertAllClose(exp_s_c, s_c_dict["state_cost"])
+        s_c = cost.state_cost("", state)
+        self.assertAllClose(exp_s_c, s_c)
 
 
 class TestController(tf.test.TestCase):
@@ -1348,14 +1205,14 @@ class TestController(tf.test.TestCase):
         exp_n2 = np.array([[[2.], [1.]], [[1.2], [3.]], [[0.5], [0.5]], [[0.1], [-0.4]], [[0.], [0.]]])
 
 
-        a0 = self.cont.prepareAction("", self.a, 0)
-        n0 = self.cont.prepareNoise("", self.n, 0)
+        a0 = self.cont.prepare_action("", self.a, 0)
+        n0 = self.cont.prepare_noise("", self.n, 0)
 
-        a1 = self.cont.prepareAction("", self.a, 1)
-        n1 = self.cont.prepareNoise("", self.n, 1)
+        a1 = self.cont.prepare_action("", self.a, 1)
+        n1 = self.cont.prepare_noise("", self.n, 1)
 
-        a2 = self.cont.prepareAction("", self.a, 2)
-        n2 = self.cont.prepareNoise("", self.n, 2)
+        a2 = self.cont.prepare_action("", self.a, 2)
+        n2 = self.cont.prepare_noise("", self.n, 2)
 
         self.assertAllClose(a0, exp_a0)
         self.assertAllClose(n0, exp_n0)
@@ -1390,12 +1247,12 @@ class TestController(tf.test.TestCase):
                               [0.034951787275480706*1 + 3.1871904480408675e-05*3 + 0.7020254138530686*0.5 + 0.2582607169364174*(-0.4) + 0.004730210030553017*0]]])
 
         b = self.cont.beta("", self.c)
-        arg = self.cont.normArg("", self.c, b, False)
-        e_arg = self.cont.expArg("", arg)
+        arg = self.cont.norm_arg("", self.c, b, False)
+        e_arg = self.cont.exp_arg("", arg)
         e = self.cont.exp("", e_arg)
         nab = self.cont.nabla("", e)
         w = self.cont.weights("", e, nab)
-        w_n = self.cont.weightedNoise("", w, self.n)
+        w_n = self.cont.weighted_noise("", w, self.n)
         sum = tf.reduce_sum(w)
 
 
@@ -1414,9 +1271,9 @@ class TestController(tf.test.TestCase):
         next2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]])
         next3 = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
 
-        n1 = self.cont.getNext("", self.a, 1)
-        n2 = self.cont.getNext("", self.a, 2)
-        n3 = self.cont.getNext("", self.a, 3)
+        n1 = self.cont.get_next("", self.a, 1)
+        n2 = self.cont.get_next("", self.a, 2)
+        n3 = self.cont.get_next("", self.a, 3)
 
         self.assertAllClose(n1, next1)
         self.assertAllClose(n2, next2)
@@ -1434,9 +1291,5 @@ class TestController(tf.test.TestCase):
 
         self.assertAllClose(n1, exp1)
         self.assertAllClose(n2, exp2)
-
-    def testAll(self):
-        pass
-
 
 tf.test.main()

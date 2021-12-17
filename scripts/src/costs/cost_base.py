@@ -49,7 +49,7 @@ class CostBase(tf.Module):
                 - state: the current state of the system.
                     shape: [k/1, sDim, 1]
                 - action: the action applied to reach the current state.
-                    shape: [k/1, aDim, 1]
+                    shape: [aDim, 1]
                 - noise: the noise applied to the sample.
                     shape: [k/1, aDim, 1]
 
@@ -62,11 +62,11 @@ class CostBase(tf.Module):
         '''
         if not assert_shape(action, (self.sig_shape[0], 1)):
             raise AssertionError("Bad shape for the action tensor,\
-                    should be [aDim, 1], got shape {}".format(action.shape))
+                    should be [{}, 1], got shape {}".format(action.shape))
 
         if not assert_shape(noise, (-1, self.sig_shape[0], 1)):
             raise AssertionError("Bad shape for the noise tensor,\
-                should be [k/1, aDim, 1], got shape {}".format(noise.shape))
+                should be [k/1, {}, 1], got shape {}".format(self.sig_shape[0], noise.shape))
 
         with tf.name_scope("step_cost") as s:
             stateCost = self.state_cost(s, state)

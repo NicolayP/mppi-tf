@@ -115,7 +115,8 @@ class NNModel(ModelBase):
     def load_params(self, path):
         self.model = tf.keras.models.load_model(path)
 
-
+# TODO: CHECK difference between quaterion and euler.
+# TODO: Is adding quaternions a smart idea in next_state?
 class NNAUVModel(NNModel):
     '''
         Neural network representation for AUV model. Assumes that
@@ -185,12 +186,12 @@ class NNAUVModel(NNModel):
         tFrom = self.mask*stateT
         poseBIt = stateT - tFrom
         poseBIt1 = stateT1 - tFrom
-        X = tf.concat([stateT[:, 3:-1], action], axis=1)
+        X = tf.concat([stateT[:, 3:], action], axis=1)
         Y = poseBIt1 - poseBIt
         return (X, Y)
     
     def prepare_data(self, state, action):
-        data = tf.concat([state[:, 3:13], action], axis=1)
+        data = tf.concat([state[:, 3:], action], axis=1)
         return tf.squeeze(data, axis=-1)
 
     def next_state(self, state, delta):
