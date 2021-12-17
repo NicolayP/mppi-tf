@@ -108,7 +108,7 @@ class ModelBase(tf.Module):
         with tf.GradientTape() as tape:
             for key in self._modelVars:
                 tape.watch(self._modelVars[key])
-            self._currentLoss = self.buildLossGraph(gt, x, a)
+            self._currentLoss = self.build_loss_graph(gt, x, a)
 
         grads = tape.gradient(self._currentLoss,
                               list(self._modelVars.values()))
