@@ -1,7 +1,10 @@
 from os import killpg
+import quaternion
 import tensorflow as tf
 gpu = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
+
+import tensorflow_graphics as tfg
 
 from src.models.model_base import ModelBase
 from src.models.point_mass_model import PointMassModel
@@ -1326,6 +1329,7 @@ class TestElipse3DCost(tf.test.TestCase):
         aVec = np.array([[1.], [0.], [0.]])
         center = np.array([[0.], [1.], [-2.]])
 
+
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
                             self.speed, self.v_speed, self.m_state,
@@ -1334,6 +1338,26 @@ class TestElipse3DCost(tf.test.TestCase):
         pass
         #exp_c = np.array([])
         #self.assertAllClose(c, exp_c)
+
+    def test_tf_rot(self):
+        # plane is the zy plane
+        self.q = np.array([0., 0.7071068, 0., 0.7071068])
+
+        # Pose x, y, z and roll 90, pitch 0, yaw 0.
+        position = np.array([1., 2., 3.])
+        quat = np.array([0.7071068, 0., 0., 0.7071068])
+        posPf = tfg.geometry.transformation.quaternion.rotate(position, self.q)
+        posPf = tf.expand_dims(posPf, axis=-1)
+
+        quatPf = tfg.geometry.transformation.quaternion.multiply(self.q, quat)
+        quatPf = tf.expand_dims(quatPf, axis=-1)
+
+        exp_pos = np.array([[3.], [2.], [-1.]])
+        # roll = 90, pitch = 0, yaw = -90
+        exp_quat = np.array([[0.5], [0.5], [-0.5], [0.5]])
+        self.assertAllClose(posPf, exp_pos)
+        self.assertAllClose(quatPf, exp_quat)
+
 
 class TestController(tf.test.TestCase):
     def setUp(self):
