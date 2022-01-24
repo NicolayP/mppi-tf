@@ -97,6 +97,7 @@ class ControllerBase(tf.Module):
         self._log = log
         self._debug = debug
         self._graphMode = graphMode
+
         self._observer = ObserverBase(logPath=logPath,
                                       log=log,
                                       debug=debug,
@@ -140,8 +141,8 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
-        if self._log:
-            self._observer.save_graph(self._next_fct, self._graphMode)
+        #if self._log:
+        #    self._observer.save_graph(self._next_fct, self._graphMode)
 
     def save(self, x, u, xNext):
         '''

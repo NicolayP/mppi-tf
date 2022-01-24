@@ -305,6 +305,7 @@ class AUVModel(ModelBase):
         '''
             Computes x_dot = f(x, u)
 
+                    nextState = tf.add(state, tmp)
             - input:
             --------
                 - state: The state of the system
@@ -435,7 +436,7 @@ class AUVModel(ModelBase):
         quat = tf.squeeze(pose[:, 3:7], axis=-1)
         vel = pose[:, 7:13]
 
-        quat = tfg.geometry.transformation.quaternion.normalize(quat)
+        quat = tf.math.l2_normalize(quat, axis=-1)
         quat = tf.expand_dims(quat, axis=-1)
         #quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
         pose = tf.concat([pos, quat, vel], axis=1)
