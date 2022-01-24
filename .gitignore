@@ -13,3 +13,6 @@ config/tasks/*
 
 !config/envs/*.default.yaml
 !config/tasks/*.default.yaml
+
+*ipynb*
+*bags*
