@@ -100,9 +100,9 @@ def get_traj(file):
     return traj
 
 
-def get_ax():
+def get_ax(title):
     fig, axs = plt.subplots(3, 2)
-    fig.suptitle("Pose")
+    fig.suptitle(title)
     fig.tight_layout()
     return fig, axs
 
@@ -110,8 +110,8 @@ def get_ax():
 def test_models(sequenceFile, trajFile, models, labels, time):
     sequence = get_sequence(sequenceFile)
     gtTraj = get_traj(trajFile)
-    figPose, axPose = get_ax()
-    figVel, axVel = get_ax()
+    figPose, axPose = get_ax("Pose")
+    figVel, axVel = get_ax("Vel")
     axPose = plot_traj(figPose, axPose, to_euler(gtTraj[0:-2]), "gt", time)
     axVel = plot_traj(figVel, axVel, gtTraj[:, 7:13], "gt", time, vel=True)
     for model, label in zip(models, labels):
