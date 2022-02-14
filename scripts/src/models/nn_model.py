@@ -8,6 +8,7 @@ class NNModel(ModelBase):
     '''
         Neural network based model class.
     '''
+    # PUBLIC
     def __init__(self,
                  stateDim=2,
                  actionDim=1,
@@ -32,9 +33,11 @@ class NNModel(ModelBase):
                            name=name,
                            inertialFrameId=inertialFrameId)
         tf.keras.backend.set_floatx('float64')
-        self.model = tf.keras.Sequential([
-            tf.keras.layers.Dense(10, activation=tf.nn.relu, input_shape=(stateDim+actionDim-3,)),
-            tf.keras.layers.Dense(10, activation=tf.nn.relu),
+        self.nn = tf.keras.Sequential([
+            tf.keras.layers.Dense(32, activation=tf.nn.relu,
+                                  input_shape=(stateDim+actionDim-3,)),
+            tf.keras.layers.Dense(32, activation=tf.nn.relu),
+            tf.keras.layers.Dense(32, activation=tf.nn.relu),
             tf.keras.layers.Dense(stateDim)
         ])
 
@@ -59,37 +62,43 @@ class NNModel(ModelBase):
         '''
         raise NotImplementedError
 
-    def predict_nn(self, scope, input):
-        return tf.expand_dims(self.model(input), axis=-1)
+    def get_weights(self):
+        ret = []
+        for entry in self.nn.trainable_variables:
+            ret.append(tf.identity(entry))
+        return ret
 
-    # Define a new train function for NN using keras.
-    def train_step(self, gt, x, a, step=None, writer=None, log=False):
-        with tf.GradientTape() as tape:
-            loss = self.build_loss_graph(gt, x, a)
-        grads = tape.gradient(loss, self.model.trainable_variables)
-        self._optimizer.apply_gradients(zip(grads,
-                                            self.model.trainable_variables))
-        return loss
+    def weights(self):
+        return self.nn.trainable_variables
 
-    def get_var(self):
-        return self.model.trainable_variables
+    def update_weights(self, var, msg=True):
+        if msg:
+            newVariables = self.extract_variables(var)
+        else:
+            newVariables = var
+        
+        for oldVar, newVar in zip(self.nn.trainable_variables, newVariables):
+            oldVar.assign(newVar)
 
-    def set_var(self, var):
-        newVariables = self.extract_variables(var)
-        for oldVar, newVar in zip(self.model.trainable_variables, newVariables):
-            oldVar = newVar
+    def save_params(self, path, step):
+        path = os.path.join(path, "weights_step{}".format(step))
+        self.nn.save(path)
+    
+    def load_params(self, path):
+        self.nn = tf.keras.models.load_model(path)
 
-    def extract_variables(self, var):
+    # PRIVATE
+    def _extract_variables(self, var):
         vars = []
         for layer in var:
-            weights = self.get_2d_tensor(layer.weights,layer.weights_name)
-            bias = self.get_1d_tensor(layer.bias, layer.bias_name)
+            weights = self._get_2d_tensor(layer.weights,layer.weights_name)
+            bias = self._get_1d_tensor(layer.bias, layer.bias_name)
             vars.append(weights)
             vars.append(bias)
         
         return vars
 
-    def get_2d_tensor(self, tensor2d, name):
+    def _get_2d_tensor(self, tensor2d, name):
         tensor = []
         for row in tensor2d.tensor:
             tensor.append(row.tensor)
@@ -100,7 +109,7 @@ class NNModel(ModelBase):
                              dtype=tf.float64)
         return tensor
 
-    def get_1d_tensor(self, tensor1d, name):
+    def _get_1d_tensor(self, tensor1d, name):
         tensor = np.array(tensor1d.tensor)
         tensor = tf.Variable(tensor,
                              True,
@@ -108,12 +117,8 @@ class NNModel(ModelBase):
                              dtype=tf.float64)
         return tensor
 
-    def save_params(self, path, step):
-        path = os.path.join(path, "weights_step{}".format(step))
-        self.model.save(path)
-    
-    def load_params(self, path):
-        self.model = tf.keras.models.load_model(path)
+    def _predict_nn(self, scope, input):
+        return tf.expand_dims(self.nn(input), axis=-1)
 
 # TODO: CHECK difference between quaterion and euler.
 # TODO: Is adding quaternions a smart idea in next_state?
@@ -178,11 +183,36 @@ class NNAUVModel(NNModel):
         state = tf.convert_to_tensor(state, dtype=tf.float64)
         with tf.name_scope(scope) as scope:
             x = self.prepare_data(state, action)
-            delta = self.predict_nn("nn", x)
+            delta = self._predict_nn("nn", x)
             nextState = self.next_state(state, delta)
         return nextState
 
     def prepare_training_data(self, stateT, stateT1, action):
+        '''
+            Create new frame such that:
+                - stateT's position is on the origin.
+                - stateT1 is expressed in this new frame.
+            It then creates the training data by computing deltaT from
+            the two new representations of stateT and stateT1.
+
+            Input:
+            ------
+                - stateT: state of the plant at time t.
+                    Tensor with shape [k, 13, 1].
+                - stateT1: state of the plant at time t+1.
+                    Tensor with shape [k, 13, 1].
+                - action: applied action on the plant at time t.
+                    Tensor with shape [k, 6, 1]
+
+            Output:
+            -------
+                - (X, y) pair containing:
+                    X: The concatenation of the state and the action, 
+                    without the position as it's set to 0.
+                    Tensor with shape [k, 16, 1]
+
+                    y: The delta between stateT and stateT1.
+        '''
         tFrom = self.mask*stateT
         poseBIt = stateT - tFrom
         poseBIt1 = stateT1 - tFrom
