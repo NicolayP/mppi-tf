@@ -18,11 +18,11 @@ if __name__ == "__main__":
 
     parser.add_argument('actionSequence',
                         help="File containing the action sequence to apply. \
-                             The sequence should be formated by np.")
+                             The sequence should be formated readable by numpy.")
 
     parser.add_argument("groundTruth",
                         help="file containing the ground truth trajectory \
-                             from the robot/simulator i na numpy format.")
+                             from the robot/simulator in a numpy compatible format.")
 
     parser.add_argument("modelsConfig",
                         nargs='+',
