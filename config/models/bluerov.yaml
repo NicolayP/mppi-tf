@@ -1,30 +1,31 @@
 type: "auv"
-mass: 16.75
-model: rexrov2
+mass: 26.75
+model: bluerov2
 inertial:
-  ixx: 0.26800000000000007
-  iyy: 0.26800000000000007
-  izz: 0.26800000000000007
-  ixy: 0.0
-  ixz: 0.0
-  iyz: 0.0
+  ixx: 0.7301
+  iyy: 0.7705
+  izz: 0.8024
+  ixy: 0.002048
+  ixz: 0.003906
+  iyz: 0.001800
 cog: [0, 0, 0]
 # CoB represented wrt ENU convention
-cob: [0, 0, 0.3]
-volume: 0.03349333333333334
+cob: [0, 0, 0.05]
+volume: 0.02675
 length: 0.457
 height: 0.254
 width: 0.338
 base_link: base_link
 frame_id: 'world'
 Ma:
-- [1.4, 0., 0., 0., 0., 0.]
-- [0., 1.8, 0., 0., 0., 0.]
-- [0., 0., 2., 0., 0., 0.]
-- [0., 0., 0., 1.05, 0., 0.]
-- [0., 0., 0., 0., 1.05, 0.]
-- [0., 0., 0., 0., 0., 1.05]
+- [40, 0., 0., 0., 0., 0.]
+- [0., 30, 0., 0., 0., 0.]
+- [0., 0., 30, 0., 0., 0.]
+- [0., 0., 0., 10, 0., 0.]
+- [0., 0., 0., 0., 30, 0.]
+- [0., 0., 0., 0., 0., 30]
 # In the model, the damping coefficients are pre-multiplied by -1
-linear_damping: [-1.4, -1.8, -2.0, -1.05, -1.05, -1.05]
-quad_damping: [0., 0., 0., 0., 0., 0.]
+linear_damping: [-40., -95, -40, -3., -200, -200]
+quad_damping: [-150., -200., -135., -2., -10., -10.]
 density: 1000.0
+rk: 2
