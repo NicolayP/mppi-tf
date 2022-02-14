@@ -84,6 +84,7 @@ class ModelBase(tf.Module):
             return True
         return False
 
+    # DEPRECATED: TODO: remove this function as the learner does all this.
     def train_step(self, gt, x, a, step=None, writer=None, log=False):
         '''
             Performs one step of training.
