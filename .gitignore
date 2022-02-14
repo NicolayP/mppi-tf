@@ -19,3 +19,5 @@ config/tasks/*
 *.rar*
 
 *data*
+*learnerTests*
+scripts/src/models/bluerov2
