@@ -7,8 +7,8 @@ def get_learner(model,
                 numEpochs=100,
                 batchSize=30,
                 log=False,
-                logPath=None,
-                ):
+                logPath=None):
+
     return LearnerBase(model,
                        filename=filename,
                        bufferSize=bufferSize,

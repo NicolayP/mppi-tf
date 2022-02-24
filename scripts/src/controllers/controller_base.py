@@ -10,8 +10,8 @@ import time as t
 
 import warnings
 
-gpu_devices = tf.config.experimental.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+#gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+#tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
 class ControllerBase(tf.Module):

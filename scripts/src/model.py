@@ -2,7 +2,7 @@ from .models.nn_model import NNAUVModel, NNModel
 from .models.point_mass_model import PointMassModel
 from .models.auv_model import AUVModel
 
-
+import numpy as np
 
 def nn(model_dic, samples, dt, state_dim, action_dim, name, paramFile=None):
     return NNModel(state_dim=state_dim,
@@ -11,7 +11,11 @@ def nn(model_dic, samples, dt, state_dim, action_dim, name, paramFile=None):
                    weightFile=paramFile)
 
 def auv_nn(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
-    return NNAUVModel(weightFile=paramFile)
+    return NNAUVModel(k=samples,
+                      stateDim=state_dim,
+                      actionDim=action_dim,
+                      mask=np.array(modelDict["mask"]),
+                      weightFile=paramFile)
 
 def pm(model_dic, samples, dt, state_dim, action_dim, name, paramFile=None):
     return PointMassModel(mass=model_dic["mass"],

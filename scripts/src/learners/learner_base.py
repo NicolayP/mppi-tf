@@ -52,22 +52,30 @@ class LearnerBase(tf.Module):
     def add_rb(self, x, u, xNext):
         self.rb.add(obs=x, act=u, next_obs=xNext)
 
-    def train(self, X, y, batchSize=-1, epoch=1, learninRate=0.1, kfold=None):
+    def train(self, 
+              X,
+              y,
+              batchSize=-1,
+              epoch=1,
+              learninRate=0.1,
+              valGt=None,
+              valAct=None,
+              kfold=None):
         for e in range(epoch):
             if batchSize == -1:
-                batchLoss = self._train_step(X,
+                batchLoss, _ = self._train_step(X,
                                              y)
                 if self.log:
                     with self.writer.as_default():
                         if kfold is not None:
-                            scope = "epoch{}/batch{}/lr{}/loss".format(epoch, batchSize, learninRate)
+                            scope = "epoch{}/batch{}/lr{}/k{}/loss".format(epoch, batchSize, learninRate, kfold)
                         else:
                             scope = "Loss"
                         tf.summary.scalar(scope, batchLoss, self.step)
-                        self.step += 1
                 pass
+
             for i in range(0, X.shape[0], batchSize):
-                batchLoss = self._train_step(X[i:i+batchSize],
+                batchLoss, _ = self._train_step(X[i:i+batchSize],
                                              y[i:i+batchSize])
                 if self.log:
                     with self.writer.as_default():
@@ -76,7 +84,15 @@ class LearnerBase(tf.Module):
                         else:
                             scope = "Loss"
                         tf.summary.scalar(scope, batchLoss, self.step)
-                        self.step += 1
+                        
+
+            if ((valGt is not None) and (valAct is not None)) and (self.step % 10 == 0):
+                valErr = self.validate(valAct, valGt)
+                if self.log:
+                    with self.writer.as_default():
+                        tf.summary.scalar("validation{}".format(scope), valErr, self.step)
+
+            self.step += 1
 
     def rb_trans(self):
         return self.rb.get_all_transitions().copy()
@@ -87,6 +103,20 @@ class LearnerBase(tf.Module):
     def save_params(self, step):
         self.model.save_params(self.logdir, step)
 
+    def stats(self):
+        data = self.rb_trans()
+        (X, y) = self.model.prepare_training_data(data['obs'],
+                                                  data['next_obs'],
+                                                  data['act'], norm=False)
+        Xmean = np.mean(X, axis=0)
+        Xstd = np.std(X, axis=0)
+        
+        Ymean = np.mean(y, axis=0)
+        Ystd = np.std(y, axis=0)
+
+        self.model.set_Xmean_Xstd(Xmean, Xstd)
+        self.model.set_Ymean_Ystd(Ymean, Ystd)
+
     def grid_search(self, trajs, actionSeqs):
         init_weights = self.model.get_weights()
         
@@ -94,13 +124,17 @@ class LearnerBase(tf.Module):
         batchSize = np.array([-1])
         epoch = np.array([100, 500, 1000])
 
+        self.stats()
+
         mean = []
         for lr in learningRate:
             for bs in batchSize:
                 for e in epoch:
                     fold =self.k_fold_validation(learningRate=lr,
                                                  batchSize=bs,
-                                                 epoch=e, k=10)
+                                                 epoch=e, k=10,
+                                                 valGt=trajs,
+                                                 valAct=actionSeqs)
                     mean.append(np.mean(fold))
                     print("*"*5, " Grid ", 5*"*")
                     print("lr: ", lr)
@@ -109,22 +143,31 @@ class LearnerBase(tf.Module):
                     print("fold: ", fold)
                     print("mean: ", np.mean(fold))
 
-                    self.train_all(learningRate=lr, batchSize=bs, epoch=e)
+                    self.train_all(learningRate=lr, batchSize=bs,
+                                   epoch=e, valGt=trajs, valAct=actionSeqs)
                     err = self.validate(actionSeqs, trajs)
                     print("validation error: ", err.numpy())
                     self.model.update_weights(init_weights, msg=False)
         print("Best mean:", np.max(mean))
 
-    def train_all(self, learningRate=0.1, batchSize=32, epoch=100):
+    def train_all(self, learningRate=0.1, batchSize=32,
+                  epoch=100, valGt=None, valAct=None):
         self.optimizer = tf.optimizers.Adam(learning_rate=learningRate)
         data = self.rb_trans()
         (X, y) = self.model.prepare_training_data(data['obs'],
                                                   data['next_obs'],
                                                   data['act'])
         self.step = 0
-        self.train(X, y, batchSize=batchSize, epoch=epoch, learninRate=learningRate)
+        self.train(X,
+                   y,
+                   batchSize=batchSize,
+                   epoch=epoch,
+                   learninRate=learningRate,
+                   valGt=valGt,
+                   valAct=valAct)
 
-    def k_fold_validation(self, k=10, learningRate=0.1, batchSize=32, epoch=100):
+    def k_fold_validation(self, k=10, learningRate=0.1, batchSize=32,
+                          epoch=100, valGt=None, valAct=None):
         # First get all the data
         self.optimizer = tf.optimizers.Adam(learning_rate=learningRate)
         data = self.rb_trans()
@@ -140,7 +183,14 @@ class LearnerBase(tf.Module):
         i = 0
         for train, test in kfold.split(X, y):
             self.step = 0
-            self.train(X[train], y[train], batchSize=batchSize, epoch=epoch, learninRate=learningRate, kfold=i)
+            self.train(X[train],
+                       y[train],
+                       batchSize=batchSize,
+                       epoch=epoch,
+                       learninRate=learningRate,
+                       valGt=valGt,
+                       valAct=valAct,
+                       kfold=i)
             self.model.update_weights(init_weights, msg=False)
             lossFold = self.evaluate(X[test], y[test])
             fold.append(lossFold.numpy())
@@ -150,7 +200,7 @@ class LearnerBase(tf.Module):
         return fold
 
     def evaluate(self, X, y):
-        pred = self.model._predict_nn("Eval", np.squeeze(X, axis=-1))
+        pred = self.model._predict_nn("Eval", X)
         loss = tf.reduce_mean(tf.math.squared_difference(pred, y),
                               name="loss")
         return loss
@@ -181,27 +231,27 @@ class LearnerBase(tf.Module):
         axs[0, 6].plot(gtTraj[:, 6])
 
         # Lin Vel
-        axs[1, 0].plot(traj[:, 0])
-        axs[1, 0].plot(gtTraj[:, 0])
+        axs[1, 0].plot(traj[:, 7])
+        axs[1, 0].plot(gtTraj[:, 7])
 
-        axs[1, 1].plot(traj[:, 1])
-        axs[1, 1].plot(gtTraj[:, 1])
+        axs[1, 1].plot(traj[:, 8])
+        axs[1, 1].plot(gtTraj[:, 8])
 
-        axs[1, 2].plot(traj[:, 2])
-        axs[1, 2].plot(gtTraj[:, 2])
+        axs[1, 2].plot(traj[:, 9])
+        axs[1, 2].plot(gtTraj[:, 9])
 
         # Ang vel
-        axs[1, 3].plot(traj[:, 3])
-        axs[1, 3].plot(gtTraj[:, 3])
+        axs[1, 3].plot(traj[:, 10])
+        axs[1, 3].plot(gtTraj[:, 10])
 
-        axs[1, 4].plot(traj[:, 4])
-        axs[1, 4].plot(gtTraj[:, 4])
+        axs[1, 4].plot(traj[:, 11])
+        axs[1, 4].plot(gtTraj[:, 11])
 
-        axs[1, 5].plot(traj[:, 5])
-        axs[1, 5].plot(gtTraj[:, 5])
+        axs[1, 5].plot(traj[:, 12])
+        axs[1, 5].plot(gtTraj[:, 12])
         plt.show()
 
-    def validate(self, actionSeqs, gtTrajs):
+    def validate(self, actionSeqs, gtTrajs, plot=False):
         '''
             computes the error of the model for a number of trajectories with
             the matching action sequences.
@@ -237,22 +287,24 @@ class LearnerBase(tf.Module):
             trajs.append(np.expand_dims(state, axis=1))
         
         trajs = np.squeeze(np.concatenate(trajs, axis=1), axis=-1)
-        err = tf.linalg.norm(tf.subtract(trajs, gtTrajs))/k
+        err = tf.reduce_mean(tf.math.squared_difference(trajs, gtTrajs),
+                             name="loss")
 
-        self.plot_seq(trajs[0], gtTrajs[0])
+        if plot:
+            self.plot_seq(trajs[1], gtTrajs[1])
         return err
 
     # PRIVATE
     def _train_step(self, X, y):
         # If batchSize = -1, feed in the entire batch
         with tf.GradientTape() as tape:
-            pred = self.model._predict_nn("train", np.squeeze(X, axis=-1))
+            pred = self.model._predict_nn("train", X)
             loss = tf.reduce_mean(tf.math.squared_difference(pred, y),
                                   name="loss")
             grads = tape.gradient(loss, self.model.weights())
             self.optimizer.apply_gradients(zip(grads,
                                                self.model.weights()))
-            return loss
+            return loss, grads
 
     def _save_graph(self):
         state = tf.zeros((1, self.model.get_state_dim(), 1), dtype=tf.float64)

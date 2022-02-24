@@ -34,15 +34,51 @@ class NNModel(ModelBase):
                            inertialFrameId=inertialFrameId)
         tf.keras.backend.set_floatx('float64')
         self.nn = tf.keras.Sequential([
-            tf.keras.layers.Dense(32, activation=tf.nn.relu,
+            tf.keras.layers.Dense(32, activation='linear',
                                   input_shape=(stateDim+actionDim-3,)),
-            tf.keras.layers.Dense(32, activation=tf.nn.relu),
-            tf.keras.layers.Dense(32, activation=tf.nn.relu),
-            tf.keras.layers.Dense(stateDim)
+            tf.keras.layers.Dense(32, activation='linear'),
+            tf.keras.layers.Dense(32, activation='linear'),
+            tf.keras.layers.Dense(stateDim, activation='linear')
         ])
 
         if weightFile is not None:
             self.load_params(weightFile)
+        
+        self.Xmean = np.zeros(shape=(stateDim+actionDim-3))
+        self.Xstd = np.ones(shape=(stateDim+actionDim-3))
+
+        self.Ymean = np.zeros(shape=(stateDim))
+        self.Ystd = np.ones(shape=(stateDim))
+
+    def set_Xmean_Xstd(self, mean, std):
+        '''
+            Sets the mean and std of the data. This will be used as normalization
+            parameters for the data. 
+
+            input:
+            ------
+                - mean: The mean of the data for each input feature/axis 
+                    shape: [15/16, 1]
+                - std: the std of the data for each input feature/axis
+                    shape: [15/16, 1] 
+        '''
+        self.Xmean = tf.constant(mean, dtype=tf.float64)
+        self.Xstd = tf.constant(std, dtype=tf.float64)
+
+    def set_Ymean_Ystd(self, mean, std):
+        '''
+            Sets the mean and std of the output. This will be used as normalization
+            parameters for the data. 
+
+            input:
+            ------
+                - mean: The mean of the data for each output feature/axis 
+                    shape: [15/16, 1]
+                - std: the std of the data for each output feature/axis
+                    shape: [15/16, 1] 
+        '''
+        self.Ymean = tf.constant(mean, dtype=tf.float64)
+        self.Ystd = tf.constant(std, dtype=tf.float64)
 
     def build_step_graph(self, scope, state, action):
         '''
@@ -118,7 +154,7 @@ class NNModel(ModelBase):
         return tensor
 
     def _predict_nn(self, scope, input):
-        return tf.expand_dims(self.nn(input), axis=-1)
+        return self.nn(input)
 
 # TODO: CHECK difference between quaterion and euler.
 # TODO: Is adding quaternions a smart idea in next_state?
@@ -136,6 +172,10 @@ class NNAUVModel(NNModel):
                  k=tf.Variable(1),
                  stateDim=13,
                  actionDim=6,
+                 mask=np.array([[[1], [1], [1],
+                                 [0], [0], [0], [0],
+                                 [0], [0], [0],
+                                 [0], [0], [0]]]),
                  name="auv_nn_model",
                  weightFile=None):
 
@@ -147,19 +187,7 @@ class NNAUVModel(NNModel):
                          k=k,
                          weightFile=weightFile)
         
-        self.mask = tf.constant([[[1],
-                                  [1],
-                                  [1],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0],
-                                  [0]]],
+        self.mask = tf.constant(mask,
                                 name="mask",
                                 dtype=tf.float64)
 
@@ -171,7 +199,7 @@ class NNAUVModel(NNModel):
             ------
                 - scope: String, the tensorflow scope of the network
                 - state: The current state of the system using quaternion
-                representation. Shape [k, 13, 1].
+                representation. Shape [k, 12/13, 1].
                 - action: The 6D force/torque tensor. Shape [k, 6, 1]
 
 
@@ -183,11 +211,13 @@ class NNAUVModel(NNModel):
         state = tf.convert_to_tensor(state, dtype=tf.float64)
         with tf.name_scope(scope) as scope:
             x = self.prepare_data(state, action)
-            delta = self._predict_nn("nn", x)
+            normDelta = self._predict_nn("nn", x)
+            delta = self.denormalize(normDelta)
+            delta = tf.expand_dims(delta, axis=-1)
             nextState = self.next_state(state, delta)
         return nextState
 
-    def prepare_training_data(self, stateT, stateT1, action):
+    def prepare_training_data(self, stateT, stateT1, action, norm=True):
         '''
             Create new frame such that:
                 - stateT's position is on the origin.
@@ -198,9 +228,9 @@ class NNAUVModel(NNModel):
             Input:
             ------
                 - stateT: state of the plant at time t.
-                    Tensor with shape [k, 13, 1].
+                    Tensor with shape [k, 12/13, 1].
                 - stateT1: state of the plant at time t+1.
-                    Tensor with shape [k, 13, 1].
+                    Tensor with shape [k, 12/13, 1].
                 - action: applied action on the plant at time t.
                     Tensor with shape [k, 6, 1]
 
@@ -209,20 +239,41 @@ class NNAUVModel(NNModel):
                 - (X, y) pair containing:
                     X: The concatenation of the state and the action, 
                     without the position as it's set to 0.
-                    Tensor with shape [k, 16, 1]
+                    Tensor with shape [k, 16]
 
                     y: The delta between stateT and stateT1.
+                        shape: [k, 12/13]
         '''
+        if not tf.is_tensor(stateT):
+            stateT = tf.convert_to_tensor(stateT, dtype=tf.float64)
+        
+        if not tf.is_tensor(stateT1):
+            stateT1 = tf.convert_to_tensor(stateT1, dtype=tf.float64)
+        
+        if not tf.is_tensor(action):
+            action = tf.convert_to_tensor(action, dtype=tf.float64)
+
         tFrom = self.mask*stateT
         poseBIt = stateT - tFrom
         poseBIt1 = stateT1 - tFrom
-        X = tf.concat([stateT[:, 3:], action], axis=1)
-        Y = poseBIt1 - poseBIt
+        X = tf.squeeze(tf.concat([stateT[:, 3:], action], axis=1), axis=-1)
+        Y = tf.squeeze(poseBIt1 - poseBIt, axis=-1)
+
+        if norm:
+            X = (X-self.Xmean)/self.Xstd
+            Y = (Y-self.Ymean)/self.Ystd
+
         return (X, Y)
     
     def prepare_data(self, state, action):
         data = tf.concat([state[:, 3:], action], axis=1)
-        return tf.squeeze(data, axis=-1)
+        data = tf.squeeze(data, axis=-1)
+        data = (data-self.Xmean)/self.Xstd
+        return data
+
+    def denormalize(self, normDelta):
+        norm = normDelta*self.Ystd + self.Ymean
+        return norm
 
     def next_state(self, state, delta):
         return tf.add(state, delta)
