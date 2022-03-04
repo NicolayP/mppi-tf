@@ -6,7 +6,7 @@ class ModelBase(tf.Module):
         Model base class for the MPPI controller.
         Every model should inherit this class.
     '''
-    def __init__(self,
+    def __init__(self, modelDict,
                  stateDim=2,
                  actionDim=1,
                  k=tf.Variable(1),
@@ -22,6 +22,7 @@ class ModelBase(tf.Module):
                 - action_dim: int. the action space dimension.
                 - name: string. the model name. Used for logging.
         '''
+        self._modelDict = modelDict
         self._k = k
         self._inertialFrameId = inertialFrameId
         self._stateDim = stateDim

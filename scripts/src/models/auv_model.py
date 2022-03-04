@@ -85,7 +85,7 @@ class AUVModel(ModelBase):
         controller.
     '''
 
-    def __init__(self,
+    def __init__(self, modelDict,
                  inertialFrameId='world',
                  actionDim=6,
                  name="AUV",
@@ -99,7 +99,7 @@ class AUVModel(ModelBase):
         self._rk = rk
         stateDim = 13
 
-        ModelBase.__init__(self,
+        ModelBase.__init__(self, modelDict,
                            stateDim=stateDim,
                            actionDim=actionDim,
                            name=name,

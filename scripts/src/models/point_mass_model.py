@@ -32,6 +32,7 @@ class PointMassModel(ModelBase):
         is a trainable variable.
     '''
     def __init__(self,
+                 modelDict,
                  mass=1,
                  dt=0.1,
                  stateDim=2,
@@ -49,7 +50,7 @@ class PointMassModel(ModelBase):
 
         '''
 
-        ModelBase.__init__(self, stateDim, actionDim, dt=dt, name=name)
+        ModelBase.__init__(self, modelDict, stateDim, actionDim, dt=dt, name=name)
         mass = tf.Variable([[mass]],
                            name="mass",
                            trainable=True,

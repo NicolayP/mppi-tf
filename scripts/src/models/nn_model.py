@@ -1,8 +1,21 @@
 from types import DynamicClassAttribute
 import tensorflow as tf
+import tensorflow_graphics as tfg
 from .model_base import ModelBase
 import numpy as np
 import os
+
+# Gets rid of the error triggered when running
+# tfg in graph mode.
+import sys
+module = sys.modules['tensorflow_graphics.util.shape']
+def _get_dim(tensor, axis):
+    """Returns dimensionality of a tensor for a given axis."""
+    return tf.compat.v1.dimension_value(tensor.shape[axis])
+
+module._get_dim = _get_dim
+sys.modules['tensorflow_graphics.util.shape'] = module
+
 
 class NNModel(ModelBase):
     '''
@@ -10,6 +23,7 @@ class NNModel(ModelBase):
     '''
     # PUBLIC
     def __init__(self,
+                 modelDict,
                  stateDim=2,
                  actionDim=1,
                  k=tf.Variable(1),
@@ -26,7 +40,7 @@ class NNModel(ModelBase):
                 - name: string the model name.
         '''
 
-        ModelBase.__init__(self,
+        ModelBase.__init__(self, modelDict,
                            stateDim=stateDim,
                            actionDim=actionDim,
                            k=k,
@@ -34,10 +48,10 @@ class NNModel(ModelBase):
                            inertialFrameId=inertialFrameId)
         tf.keras.backend.set_floatx('float64')
         self.nn = tf.keras.Sequential([
-            tf.keras.layers.Dense(32, activation='linear',
+            tf.keras.layers.Dense(32, activation='relu',
                                   input_shape=(stateDim+actionDim-3,)),
-            tf.keras.layers.Dense(32, activation='linear'),
-            tf.keras.layers.Dense(32, activation='linear'),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dense(stateDim, activation='linear')
         ])
 
@@ -109,7 +123,7 @@ class NNModel(ModelBase):
 
     def update_weights(self, var, msg=True):
         if msg:
-            newVariables = self.extract_variables(var)
+            newVariables = self._extract_variables(var)
         else:
             newVariables = var
         
@@ -153,8 +167,8 @@ class NNModel(ModelBase):
                              dtype=tf.float64)
         return tensor
 
-    def _predict_nn(self, scope, input):
-        return self.nn(input)
+    def _predict_nn(self, scope, X):
+        return self.nn(X)
 
 # TODO: CHECK difference between quaterion and euler.
 # TODO: Is adding quaternions a smart idea in next_state?
@@ -168,6 +182,7 @@ class NNAUVModel(NNModel):
     '''
 
     def __init__(self,
+                 modelDict,
                  inertialFrameId="world",
                  k=tf.Variable(1),
                  stateDim=13,
@@ -179,7 +194,7 @@ class NNAUVModel(NNModel):
                  name="auv_nn_model",
                  weightFile=None):
 
-        NNModel.__init__(self,
+        NNModel.__init__(self, modelDict,
                          inertialFrameId=inertialFrameId,
                          stateDim=stateDim,
                          actionDim=actionDim,
@@ -277,3 +292,266 @@ class NNAUVModel(NNModel):
 
     def next_state(self, state, delta):
         return tf.add(state, delta)
+
+
+class NNAUVModelSpeed(NNAUVModel):
+    '''
+        Neural network representation for AUV model. Assumes that
+        the model uses quaternion representation. The network predicts
+        the next state expressed in the previous state body frame based on:
+        the orientation of the body frame (for restoring forces), the velocity
+        (in body frame) and the input forces.
+    '''
+
+    def __init__(self,
+                 modelDict,
+                 inertialFrameId="world",
+                 k=tf.Variable(1),
+                 stateDim=13,
+                 actionDim=6,
+                 mask=np.array([[[1], [1], [1],
+                                 [0], [0], [0], [0],
+                                 [0], [0], [0],
+                                 [0], [0], [0]]]),
+                 name="auv_nn_model",
+                 weightFile=None):
+
+        NNAUVModel.__init__(self, modelDict,
+                            inertialFrameId=inertialFrameId,
+                            stateDim=stateDim,
+                            actionDim=actionDim,
+                            mask=mask,
+                            name=name,
+                            k=k,
+                            weightFile=weightFile)
+
+        self.nn = tf.keras.Sequential([
+            tf.keras.layers.Dense(32, activation='relu',
+                                  input_shape=(stateDim+actionDim-3 -1,)),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dense(32, activation='relu'),
+            tf.keras.layers.Dense(6, activation='linear')
+        ])
+
+        if weightFile is not None:
+            self.load_params(weightFile)
+        
+        # Input is (state + aciton) - position 
+        # and rotation expressed in euler representation 
+        # so stateDim + actionDim - 3 (postion) - 1 (quat2Euler)
+        self.Xmean = np.zeros(shape=(stateDim + actionDim - 3 - 1))
+        self.Xstd = np.ones(shape=(stateDim + actionDim - 3 - 1))
+
+        self.Ymean = np.zeros(shape=(6))
+        self.Ystd = np.ones(shape=(6))
+
+    def build_step_graph(self, scope, state, action):
+        '''
+            Predicts the next step using the neural network model.
+
+            Input:
+            ------
+                - scope: String, the tensorflow scope of the network
+                - state: The current state of the system using quaternion
+                representation. Shape [k, 12/13, 1].
+                - action: The 6D force/torque tensor. Shape [k, 6, 1]
+
+
+            Output:
+            -------
+                - nextState: The next state of the system.
+                [X_pose_{t+1}_I.T, X_vel_{t+1}_B].T. Shape [k, 13, 1]
+        '''
+        state = tf.convert_to_tensor(state, dtype=tf.float64)
+        with tf.name_scope(scope) as scope:
+            x = self.prepare_data(state, action)
+            normVelDelta = self._predict_nn("nn", x)
+            velDelta = self.denormalize(normVelDelta)
+            velDelta = tf.expand_dims(velDelta, axis=-1)
+            nextState = self.next_state(state, velDelta)
+        return nextState
+
+    def prepare_training_data(self, stateT, stateT1, action, norm=True):
+        '''
+            Create new frame such that:
+                - stateT's position is on the origin.
+                - stateT1 is expressed in this new frame.
+            It then creates the training data by computing deltaT from
+            the two new representations of stateT and stateT1.
+
+            Input:
+            ------
+                - stateT: state of the plant at time t.
+                    Tensor with shape [k, 13, 1].
+                - stateT1: state of the plant at time t+1.
+                    Tensor with shape [k, 13, 1].
+                - action: applied action on the plant at time t.
+                    Tensor with shape [k, 6, 1]
+
+            Output:
+            -------
+                - (X, y) pair containing:
+                    X: The concatenation of the state and the action, 
+                    without the position as it's set to 0. and the 
+                    rotation expressed in euler representation.
+                    Tensor with shape [k, 15]
+
+                    y: The delta between stateT and stateT1.
+                        shape: [k, 6]
+        '''
+        if not tf.is_tensor(stateT):
+            stateT = tf.convert_to_tensor(stateT, dtype=tf.float64)
+        
+        if not tf.is_tensor(stateT1):
+            stateT1 = tf.convert_to_tensor(stateT1, dtype=tf.float64)
+        
+        if not tf.is_tensor(action):
+            action = tf.convert_to_tensor(action, dtype=tf.float64)
+
+        tFrom = self.mask*stateT
+        poseBIt = stateT - tFrom
+        poseBIt1 = stateT1 - tFrom
+
+        stateEuler = self.to_euler(stateT)
+
+        X = tf.squeeze(tf.concat([stateEuler[:, 3:], action],
+                                 axis=1),
+                       axis=-1)
+        Y = tf.squeeze((poseBIt1 - poseBIt)[:, 7:], axis=-1)
+
+        if norm:
+            X = (X-self.Xmean)/self.Xstd
+            Y = (Y-self.Ymean)/self.Ystd
+
+        return (X, Y)
+    
+    def prepare_data(self, state, action):
+        '''
+            Prepares the data before feeding it to the network. 
+            Changes the state to the euler representation and 
+            appends the action vector a the end of it.
+
+            - Input:
+            --------
+                - state: The state of the system in quaternion
+                    representation. Shape [k, 13, 1].
+
+                - action: The action applied on the system.
+                    Shape [k, 6, 1].
+            
+            - Output:
+            ---------
+                - the input vector for the network.
+                    shape [k, 15, 1]
+        '''
+
+        stateEuler = self.to_euler(state)
+        X = tf.concat([stateEuler[:, 3:], action], axis=1)
+        X = tf.squeeze(X, axis=-1)
+        X = (X-self.Xmean)/self.Xstd
+        return X
+
+    def denormalize(self, normDelta):
+        norm = normDelta*self.Ystd + self.Ymean
+        return norm
+
+    def next_state(self, state, delta):
+        pose = state[:, 0:7, :]
+        speed = state[:, 7:13, :]
+        pDot = tf.matmul(self.get_jacobian(state), speed)
+        nextPose = pose + pDot*self._dt
+        nextVel = speed + delta
+        return tf.concat([nextPose, nextVel], axis=1)
+
+    def get_jacobian(self, state):
+        '''
+        Returns J(nu) in $mathbb{R}^{7 cross 7}$
+                     ---------------------------------------
+            J(nu) = | q_{n}^{b}(Theta) 0^{3 cross 3}    |
+                     | 0^{3 cross 3} T_{theta}(theta)   |
+                     ---------------------------------------
+        '''
+        k = state.shape[0]
+        OPad3x3 = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
+        OPad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
+        rotBtoI, TBtoIquat = self.body2inertial_transform(state)
+        jacR1 = tf.concat([rotBtoI, OPad3x3], axis=-1)
+
+        jacR2 = tf.concat([OPad4x3, TBtoIquat], axis=-1)
+        jac = tf.concat([jacR1, jacR2], axis=1)
+
+        return jac
+
+    def body2inertial_transform(self, pose):
+        '''
+            Computes the rotational transform from
+            body to inertial Rot_{n}^{b}(q)
+            and the attitude transformation T_{q}(q).
+
+            input:
+            ------
+                - pose the robot pose expressed in inertial frame.
+                    Shape [k, 7, 1]
+
+        '''
+        quat = pose[:, 3:7, :]
+        w = quat[:, 3]
+        x = quat[:, 0]
+        y = quat[:, 1]
+        z = quat[:, 2]
+
+        r1 = tf.expand_dims(tf.concat([1 - 2 * (tf.pow(y, 2) + tf.pow(z, 2)),
+                                       2 * (x * y - z * w),
+                                       2 * (x * z + y * w)], axis=-1),
+                            axis=1)
+
+        r2 = tf.expand_dims(tf.concat([2 * (x * y + z * w),
+                                       1 - 2 * (tf.pow(x, 2) + tf.pow(z, 2)),
+                                       2 * (y * z - x * w)], axis=-1),
+                            axis=1)
+
+        r3 = tf.expand_dims(tf.concat([2 * (x * z - y * w),
+                                       2 * (y * z + x * w),
+                                       1 - 2 * (tf.pow(x, 2) + tf.pow(y, 2))],
+                                      axis=-1),
+                            axis=1)
+
+        rotBtoI = tf.concat([r1, r2, r3], axis=1)
+
+        r1t = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
+
+        r2t = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
+
+        r3t = tf.expand_dims(tf.concat([z, w, -x], axis=-1), axis=1)
+
+        r4t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
+
+        TBtoIquat = 0.5 * tf.concat([r1t, r2t, r3t, r4t], axis=1)
+
+        return rotBtoI, TBtoIquat
+
+    def to_euler(self, stateQ):
+        '''
+            Converts a state from quaternion representation to
+            a euler representation.
+
+            - input:
+            --------
+                - stateQ, the quaternion representation of the 
+                state. shape [k, 13, 1]
+            
+            - output:
+            ---------
+                - stateEuler, the euler representaiton of the state.
+                shape [k, 12, 1]
+        '''
+        samples = stateQ.shape[0]
+        pos = stateQ[:, 0:3, :]
+        quats = tf.squeeze(stateQ[:, 3:7, :], axis=-1)
+        euler = tfg.geometry.transformation.euler.from_quaternion(quats)
+        
+        euler = tf.expand_dims(euler, axis=-1)
+
+        vel = stateQ[:, 7:, :]
+        state_euler = tf.concat([pos, euler, vel], axis=1)
+        return state_euler
