@@ -227,7 +227,7 @@ class NNAUVModel(NNModel):
         with tf.name_scope(scope) as scope:
             x = self.prepare_data(state, action)
             normDelta = self._predict_nn("nn", x)
-            delta = self.denormalize(normDelta)
+            delta = self.denormalizeY(normDelta)
             delta = tf.expand_dims(delta, axis=-1)
             nextState = self.next_state(state, delta)
         return nextState
@@ -286,8 +286,12 @@ class NNAUVModel(NNModel):
         data = (data-self.Xmean)/self.Xstd
         return data
 
-    def denormalize(self, normDelta):
-        norm = normDelta*self.Ystd + self.Ymean
+    def denormalizeY(self, normY):
+        norm = normY*self.Ystd + self.Ymean
+        return norm
+    
+    def denormalizeX(self, normX):
+        norm = normX*self.Xstd + self.Xmean
         return norm
 
     def next_state(self, state, delta):
@@ -326,11 +330,11 @@ class NNAUVModelSpeed(NNAUVModel):
                             weightFile=weightFile)
 
         self.nn = tf.keras.Sequential([
-            tf.keras.layers.Dense(32, activation='relu',
-                                  input_shape=(stateDim+actionDim-3 -1,)),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(6, activation='linear')
+            tf.keras.layers.Dense(16, activation='relu', kernel_regularizer='l2',
+                                  input_shape=(stateDim+actionDim-3 -1,), name="dense1"),
+            tf.keras.layers.Dense(16, activation='relu', kernel_regularizer='l2', name="dense2"),
+            tf.keras.layers.Dense(16, activation='relu', kernel_regularizer='l2', name="dense3"),
+            tf.keras.layers.Dense(6, activation='linear', name="dense4")
         ])
 
         if weightFile is not None:
@@ -366,7 +370,7 @@ class NNAUVModelSpeed(NNAUVModel):
         with tf.name_scope(scope) as scope:
             x = self.prepare_data(state, action)
             normVelDelta = self._predict_nn("nn", x)
-            velDelta = self.denormalize(normVelDelta)
+            velDelta = self.denormalizeY(normVelDelta)
             velDelta = tf.expand_dims(velDelta, axis=-1)
             nextState = self.next_state(state, velDelta)
         return nextState
@@ -451,17 +455,38 @@ class NNAUVModelSpeed(NNAUVModel):
         X = (X-self.Xmean)/self.Xstd
         return X
 
-    def denormalize(self, normDelta):
-        norm = normDelta*self.Ystd + self.Ymean
-        return norm
-
     def next_state(self, state, delta):
         pose = state[:, 0:7, :]
         speed = state[:, 7:13, :]
         pDot = tf.matmul(self.get_jacobian(state), speed)
         nextPose = pose + pDot*self._dt
+        nextPose = self.normalize_quat(nextPose)
         nextVel = speed + delta
         return tf.concat([nextPose, nextVel], axis=1)
+
+    def normalize_quat(self, pose):
+        '''
+            Normalizes the quaternions.
+
+            input:
+            ------
+                - pose. Float64 Tensor. Shape [k, 13, 1]
+
+            ouput:
+            ------
+                - the pose with normalized quaternion. Float64 Tensor.
+                    Shape [k, 13, 1]
+        '''
+
+        pos = pose[:, 0:3]
+        quat = tf.squeeze(pose[:, 3:7], axis=-1)
+        vel = pose[:, 7:13]
+
+        quat = tf.math.l2_normalize(quat, axis=-1)
+        quat = tf.expand_dims(quat, axis=-1)
+        #quat = tf.divide(quat, tf.linalg.norm(quat, axis=1, keepdims=True))
+        pose = tf.concat([pos, quat, vel], axis=1)
+        return pose
 
     def get_jacobian(self, state):
         '''
