@@ -36,6 +36,8 @@ class PointMassModel(ModelBase):
                  dt=0.1,
                  stateDim=2,
                  actionDim=1,
+                 limMax=tf.ones(shape=(1,), dtype=tf.float64),
+                 limMin=-tf.ones(shape=(1,), dtype=tf.float64),
                  name="point_mass"):
         '''
             Constructor of the point mass model.
@@ -49,7 +51,14 @@ class PointMassModel(ModelBase):
 
         '''
 
-        ModelBase.__init__(self, stateDim, actionDim, dt=dt, name=name)
+        ModelBase.__init__(self,
+                           stateDim,
+                           actionDim,
+                           limMax=limMax,
+                           limMin=limMin,
+                           dt=dt,
+                           name=name)
+
         mass = tf.Variable([[mass]],
                            name="mass",
                            trainable=True,

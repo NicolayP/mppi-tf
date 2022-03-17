@@ -12,6 +12,8 @@ class NNModel(ModelBase):
     def __init__(self,
                  stateDim=2,
                  actionDim=1,
+                 limMax=tf.ones(shape=(1,), dtype=tf.float64),
+                 limMin=-tf.ones(shape=(1,), dtype=tf.float64),
                  k=tf.Variable(1),
                  name="nn_model",
                  inertialFrameId="world",
@@ -29,6 +31,8 @@ class NNModel(ModelBase):
         ModelBase.__init__(self,
                            stateDim=stateDim,
                            actionDim=actionDim,
+                           limMax=limMax,
+                           limMin=limMin,
                            k=k,
                            name=name,
                            inertialFrameId=inertialFrameId)
@@ -136,6 +140,8 @@ class NNAUVModel(NNModel):
                  k=tf.Variable(1),
                  stateDim=13,
                  actionDim=6,
+                 limMax=tf.ones(shape=(1,), dtype=tf.float64),
+                 limMin=-tf.ones(shape=(1,), dtype=tf.float64),
                  name="auv_nn_model",
                  weightFile=None):
 
@@ -143,6 +149,8 @@ class NNAUVModel(NNModel):
                          inertialFrameId=inertialFrameId,
                          stateDim=stateDim,
                          actionDim=actionDim,
+                         limMax=limMax,
+                         limMin=limMin,
                          name=name,
                          k=k,
                          weightFile=weightFile)

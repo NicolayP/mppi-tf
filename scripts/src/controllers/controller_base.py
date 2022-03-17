@@ -141,8 +141,8 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
-        #if self._log:
-        #    self._observer.save_graph(self._next_fct, self._graphMode)
+        if self._log:
+            self._observer.save_graph(self._next_fct, self._graphMode)
 
     def save(self, x, u, xNext):
         '''
@@ -231,9 +231,9 @@ class ControllerBase(tf.Module):
         if profile:
             tf.profiler.experimental.start(self._observer.get_logdir())
 
-        with tf.name_scope("Controller") as cont:
-            action = self.build_graph(cont, k, state, actionSeq,
-                                    normalize=normalizeCost)
+        
+        action = self.build_graph("Controller", k, state, actionSeq,
+                                  normalize=normalizeCost)
         if profile:
             tf.profiler.experimental.stop()
         return action
@@ -317,7 +317,7 @@ class ControllerBase(tf.Module):
                     'next' the next action to be applied.
                         Shape: [aDim, 1]
         '''
-        with tf.name_scope(scope) as scope:
+        with tf.name_scope(scope) as s:
             with tf.name_scope("random") as rand:
                 noises = self.build_noise(rand, k)
             with tf.name_scope("Rollout") as roll:
@@ -352,7 +352,7 @@ class ControllerBase(tf.Module):
                                stddev=1.,
                                mean=0.,
                                dtype=tf.float64,
-                               seed=1)
+                               seed=2)
 
         return tf.linalg.matmul(self._upsilon*self._sigma, rng)
 
@@ -391,15 +391,24 @@ class ControllerBase(tf.Module):
                 with tf.name_scope("Prepare_data_" + str(i)) as pd:
                     action = self.prepare_action(pd, actionSeq, i)
                     noise = self.prepare_noise(pd, noises, i)
+                    #print("*"*5, " Noise: {}".format(i), "*"*5)
+                    #print(noise)                    
                     toApply = tf.add(action, noise, name="toApply")
+                    #print("*"*5, " To apply: {}".format(i), "*"*5)
+                    #print(toApply)
                 with tf.name_scope("Step_" + str(i)) as s:
                     nextState = self._model.build_step_graph(s,
                                                              state,
                                                              toApply)
+                    #print("*"*5, " Next State: {}".format(i), "*"*5)
+                    #print(nextState)
                 with tf.name_scope("Cost_" + str(i)) as c:
                     tmp = self._cost.build_step_cost_graph(c, nextState,
                                                            action, noise)
                     cost = self._cost.add_cost(c, cost, tmp)
+                state = nextState
+            #print("*"*5, " Cost: {}".format(i), "*"*5)
+            #print(cost)
 
             state = nextState
 
@@ -428,7 +437,9 @@ class ControllerBase(tf.Module):
         with tf.name_scope("Weighted_Noise"):
             weighted_noises = self.weighted_noise(scope, weights, noises)
         with tf.name_scope("Sequence_update"):
-            update = tf.add(self._actionSeq, weighted_noises)
+            rawUpdate = tf.add(self._actionSeq, weighted_noises)
+            #update = self.clip_act("clipping", rawUpdate)
+            update = rawUpdate
 
         self._observer.write_control("weights", weights)
         self._observer.write_control("nabla", nabla)
@@ -473,6 +484,12 @@ class ControllerBase(tf.Module):
                     tf.expand_dims(weights, -1),
                     noises),
                 0)
+
+    def clip_act(self, scope, update):
+        maxInp = self._model.max_act()
+        minInp = self._model.min_act()
+        updateClipped = tf.clip_by_value(update, minInp, maxInp, scope)
+        return updateClipped
 
     def prepare_action(self, scope, actions, timestep):
         '''
