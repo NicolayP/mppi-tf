@@ -97,6 +97,7 @@ class ElipseCost(CostBase):
         return_dict["v_dist"] = v_dist[0]
         return return_dict
 
+
 class ElipseCost3D(CostBase):
     def __init__(self,
                  lam,

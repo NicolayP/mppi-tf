@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import tensorflow as tf
 from datetime import datetime
 import os
@@ -174,7 +175,7 @@ class ObserverBase(tf.Module):
                                       tf.squeeze(tensor[i, :]),
                                       step=self.step)
                 for i in self._velId:
-                    tf.summary.scalar("State/velicity_{}".format(i),
+                    tf.summary.scalar("State/velocity_{}".format(i),
                                       tf.squeeze(tensor[i, :]),
                                       step=self.step)
 
