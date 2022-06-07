@@ -1,11 +1,10 @@
 import tensorflow as tf
+#gpu = tf.config.list_physical_devices('GPU')
+#tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 import tensorflow_graphics as tfg
 
 import numpy as np
 from .model_base import ModelBase
-
-# gpu = tf.config.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
 
 def skew_op(vec):
     S = np.zeros(shape=(3, 3))
@@ -239,16 +238,17 @@ class AUVModel(ModelBase):
 
     def print_info(self):
         """Print the vehicle's parameters."""
-        print('Body frame: {}'.format(self._bodyFrameId))
+        print("="*5, " Model Info ", "="*5)
+        #print('Body frame: {}'.format(self._bodyFrameId))
         print('Mass: {0:.3f} kg'.format(self._mass.numpy()))
-        print('System inertia matrix:\n{}'.format(self._rbMass))
-        print('Added-mass:\n{}'.format(self._addedMass))
+        #print('System inertia matrix:\n{}'.format(self._rbMass))
+        #print('Added-mass:\n{}'.format(self._addedMass))
+        #print('Inertial:\n{}'.format(self._inertial))
         print('M:\n{}'.format(self._mTot))
-        print('Linear damping: {}'.format(self._linearDamping))
-        print('Quad. damping: {}'.format(self._quadDamping))
-        print('Center of gravity: {}'.format(self._cog))
-        print('Center of buoyancy: {}'.format(self._cob))
-        print('Inertial:\n{}'.format(self._inertial))
+        print('Linear damping:\n{}'.format(self._linearDamping))
+        print('Quad. damping:\n{}'.format(self._quadDamping))
+        print('Center of gravity:\n{}'.format(self._cog))
+        print('Center of buoyancy:\n{}'.format(self._cob))
 
     def rigid_body_mass(self):
         upper = tf.concat([self._massEye, -self._massLower], axis=1)
@@ -483,11 +483,15 @@ class AUVModel(ModelBase):
                 - $D(\nu)\nu$ the damping matrix. Shape [k, 6, 6]
         '''
         with tf.name_scope(scope) as scope:
+            foo = tf.multiply(
+                    tf.expand_dims(vel[:, 0],
+                                   axis=-1),
+                    self._linearDampingForwardSpeed)
+
             D = -1*self._linearDamping - tf.multiply(
                                            tf.expand_dims(vel[:, 0],
                                                           axis=-1),
                                            self._linearDampingForwardSpeed)
-
             tmp = -1*tf.linalg.matmul(tf.expand_dims(self._quadDamping,
                                                      axis=0),
                                       tf.abs(
@@ -539,12 +543,12 @@ class AUVModel(ModelBase):
                 tensGenForce = genForce
 
             D = self.damping_matrix("Damping", vel)
-
+            Dv = tf.matmul(D, vel)
             C = self.coriolis_matrix("Coriolis", vel)
-
+            Cv = tf.matmul(C, vel)
             g = self.restoring_forces("Restoring")
 
-            rhs = tensGenForce - tf.matmul(C, vel) - tf.matmul(D, vel) - g
+            rhs = tensGenForce - Cv - Dv - g
             lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
             acc = tf.matmul(lhs, rhs)
             return acc
@@ -554,3 +558,63 @@ class AUVModel(ModelBase):
 
     def load_params(self, path):
         pass
+
+
+def main():
+    params = dict()
+    params["mass"] = 1862.87
+    params["volume"] = 1.8121303501945525
+    params["density"] = 1028
+    params["height"] = 1.6
+    params["length"] = 2.5
+    params["width"] = 1.5
+    params["cog"] = [0, 0, 0]
+    params["cob"] = [0, 0, 0.3]
+    params["Ma"] = [[779.79, -6.8773, -103.32,  8.5426, -165.54, -7.8033],
+                    [-6.8773, 1222, 51.29, 409.44, -5.8488, 62.726],
+                    [-103.32, 51.29, 3659.9, 6.1112, -386.42, 10.774],
+                    [8.5426, 409.44, 6.1112, 534.9, -10.027, 21.019],
+                    [-165.54, -5.8488, -386.42, -10.027,  842.69, -1.1162],
+                    [-7.8033, 62.726, 10.775, 21.019, -1.1162, 224.32]]
+    params["linear_damping"] = [-70., -70., -700., -300., -300., -100.]
+    params["quad_damping"] = [-740., -990., -1800., -670., -770., -520.]
+    inertial = dict()
+    inertial["ixx"] = 525.39
+    inertial["iyy"] = 794.2
+    inertial["izz"] = 691.23
+    inertial["ixy"] = 1.44
+    inertial["ixz"] = 33.41
+    inertial["iyz"] = 2.6
+    params["inertial"] = inertial
+    params["rk"] = 2
+    params["linear_damping_forward_speed"] = [0., 0., 0., 0., 0., 0.]
+    model = AUVModel({}, k=tf.Variable(2), parameters=params)
+    model.print_info()
+    x = tf.expand_dims(
+         tf.constant([[6., 7., 8.,
+                       0.5, 0., 0., 0.5,
+                       9., 10., 11.,
+                       12., 13., 14.,],
+                      [6., 7., 8.,
+                       0., 0.5, 0., 0.5,
+                       9., 10., 11.,
+                       12., 13., 14.,],
+                      ], dtype=tf.float64),
+         axis=-1)
+
+    u = tf.expand_dims(
+         tf.constant([[0., 1., 2.,
+                       3., 4., 5.],
+                      [1., 2., 3.,
+                       4., 5., 6.,],
+                      ], dtype=tf.float64),
+         axis=-1)
+    
+    #model.print_info()
+    print("*"*5, " Step ", "*"*5)
+    print(tf.squeeze(model.build_step_graph("Foo", x, u)).numpy())
+
+
+if __name__ == "__main__":
+
+    main()
