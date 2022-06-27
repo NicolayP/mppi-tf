@@ -9,6 +9,8 @@ class ModelBase(tf.Module):
     def __init__(self, modelDict,
                  stateDim=2,
                  actionDim=1,
+                 limMax=tf.ones(shape=(1,), dtype=tf.float64),
+                 limMin=-tf.ones(shape=(1,), dtype=tf.float64),
                  k=tf.Variable(1),
                  dt=0.1,
                  name="model",
@@ -27,6 +29,8 @@ class ModelBase(tf.Module):
         self._inertialFrameId = inertialFrameId
         self._stateDim = stateDim
         self._actionDim = actionDim
+        self._actMax = limMax
+        self._actMin = limMin
         self._modelVars = {}
         self._dt = dt
         self._optimizer = tf.optimizers.Adam(learning_rate=0.5)
@@ -68,6 +72,33 @@ class ModelBase(tf.Module):
         self.set_k(1)
         return self.build_step_graph("predict", state, action)
 
+    def run_model(self, initState, sequence):
+        '''
+            rollouts the model for a given inital state and 
+            action sequence.
+
+            - input:
+            --------
+                - initState: the inital state tensor.
+                    Shape [1, sDim, 1]
+                - sequence: the action sequence tensor.
+                    Shape [1, tau, aDim, 1]
+
+            - output:
+            ---------
+                - the generated trajectory. Shape [1, tau, sDim, 1]
+        '''
+        traj = [initState]
+        state = initState
+        steps = sequence.shape[1]
+        for i in range(steps-1):
+            toApply = sequence[:, i]
+            nextState = self.predict(state, toApply)
+            traj.append(nextState)
+            state=nextState
+        traj = tf.concat(traj, axis=0)
+        return traj
+
     def get_name(self):
         '''
             Get the name of the model.
@@ -86,6 +117,12 @@ class ModelBase(tf.Module):
 
     def set_k(self, k):
         self._k.assign(k)
+
+    def max_act(self):
+        return self._actMax
+
+    def min_act(self):
+        return self._actMin
 
     def set_observer(self, observer):
         self._observer = observer
