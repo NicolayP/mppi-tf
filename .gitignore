@@ -21,3 +21,4 @@ config/tasks/*
 *data*
 *learnerTests*
 scripts/src/models/bluerov2
+tensorboard/*
