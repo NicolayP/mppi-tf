@@ -1,7 +1,7 @@
 import yaml
 import torch
 import numpy as np
-from models.torch_utils import SE3enc, SE3integ
+from .torch_utils import SE3enc, SE3integ, ToSE3Mat, SE3int, FlattenSE3
 from torch.nn.utils.parametrizations import spectral_norm
 
 class AUVFossen(torch.nn.Module):
@@ -403,6 +403,112 @@ class AUVMulti(torch.nn.Module):
     @property
     def multi(self):
         return True
+
+
+class StatePredictor(torch.nn.Module):
+    def __init__(self, internal, dt):
+        super(StatePredictor, self).__init__()
+        self.internal = internal
+        self.int = SE3int()
+        self.toMat = ToSE3Mat()
+        self.flat = FlattenSE3()
+        self.dt = dt
+        self.name = f"Predictor_{self.internal.name}"
+
+    def forward(self, x, u):
+        if x.dim() < 2:
+            x = x.unsqueeze(dim=0)
+            u = u.unsqueeze(dim=0)
+        # Remove x, y, z
+        x_red = x[:, 3:]
+
+        v_next = self.internal(x_red, u)
+        v = x[:, 12:]
+        tau = v*self.dt
+
+        M = self.toMat(x)
+        M = self.int(M, tau)
+
+        return self.flat(M, v_next).squeeze()
+
+    @property
+    def multi(self):
+        return False
+
+
+class StatePredictorHistory(torch.nn.Module):
+    def __init__(self, internal, dt, h=1):
+        super(StatePredictorHistory, self).__init__()
+        self.internal = internal
+        self.int = SE3int()
+        self.toMat = ToSE3Mat()
+        self.flat = FlattenSE3()
+        self.dt = dt
+        self.name = f"Predictor_{self.internal.name}"
+        self.h = h
+
+    def forward(self, x, u):
+        '''
+            input:
+            ------
+                - x the state vector with shape [batch, history, sDim] or [history, sDim]
+                - u the action vecotr with shape [batch, history, aDim] or [history, aDim]
+        '''
+        if x.dim() < 3:
+            x = x.unsqueeze(dim=0)
+            u = u.unsqueeze(dim=0)
+        # Remove x, y, z
+        x_red = x[:, :, 3:]
+        v_next = self.internal(x_red.flatten(1), u.flatten(1))
+        x_last = x[:, -1]
+        v = x[:, -1, 12:]
+        tau = v*self.dt
+        M = self.toMat(x_last)
+        M = self.int(M, tau)
+        return self.flat(M, v_next)
+
+    @property
+    def history(self):
+        return self.h
+
+
+class VelPred(torch.nn.Module):
+    def __init__(self, in_size=21, topology=[64]):
+        super(VelPred, self).__init__()
+        self.name = "nn-velocity"
+        bias = False
+        layers = []
+        for i, s in enumerate(topology):
+            if i == 0:
+                self.name += f"_{in_size}"
+                layer = torch.nn.Linear(in_size, s, bias=bias)
+            else:
+                self.name += f"x{topology[i-1]}"
+                layer = torch.nn.Linear(topology[i-1], s, bias=bias)
+            layers.append(layer)
+            layers.append(torch.nn.LeakyReLU(negative_slope=0.1))
+
+        self.name += f"x{topology[-1]}x6"
+        layer = torch.nn.Linear(topology[-1], 6, bias=bias)
+        layers.append(layer)
+
+        self.nn = torch.nn.Sequential(*layers)
+        self.nn.apply(init_weights)
+
+
+    def forward(self, x, u):
+        #x = x[:, 3:] # Remove x, y, z for prediciton.
+        return self.nn(torch.cat((x, u), dim=1))
+
+    @property
+    def multi(self):
+        return False
+
+
+def init_weights(m):
+    if isinstance(m, torch.nn.Linear):
+        torch.nn.init.xavier_uniform(m.weight)
+        #m.bias.data.fill_(0.01)
 
 
 def main():

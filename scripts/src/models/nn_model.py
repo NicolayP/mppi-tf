@@ -1,7 +1,11 @@
+import imp
+from turtle import forward
 from types import DynamicClassAttribute
 import tensorflow as tf
 import tensorflow_graphics as tfg
-from .model_base import ModelBase
+
+from model_utils import ToSE3Mat, SE3int, FlattenSE3
+from model_base import ModelBase
 import numpy as np
 import os
 
@@ -580,3 +584,65 @@ class NNAUVModelSpeed(NNAUVModel):
         vel = stateQ[:, 7:, :]
         state_euler = tf.concat([pos, euler, vel], axis=1)
         return state_euler
+
+
+class VelPred(tf.Module):
+    def __init__(self, in_size=21, topology=[64]):
+        self.n = "nn-veloctiy"
+        bias = False
+        layers = [tf.keras.Input(shape=(in_size,))]
+        for i, s in enumerate(topology):
+            if i == 0:
+                self.n += f"_{in_size}"
+                layer = tf.keras.layers.Dense(s, use_bias=bias)
+            else:
+                self.n += f"x{topology[i-1]}"
+                layer = tf.keras.layers.Dense(s, use_bias=bias)
+            layers.append(layer)
+            layers.append(tf.keras.layers.LeakyReLU(alpha=0.1))
+        
+        self.n += f"x{topology[-1]}x6"
+        layer = tf.keras.layers.Dense(6, activation="linear", use_bias=bias)
+        layers.append(layer)
+        self.nn = tf.keras.Sequential(layers)
+
+    def forward(self, x, u):
+        print(x.shape)
+        print(u.shape)
+        return self.nn(tf.concat((x, u), axis=1))
+
+
+class Predictor(tf.Module):
+    def __init__(self, internal, dt, h=1):
+        self.internal = internal
+        self.int = SE3int()
+        self.toMat = ToSE3Mat()
+        self.flat = FlattenSE3()
+        self.dt = dt
+        self.n = f"Predictor_{self.internal.n}"
+        self.h = h
+
+    def forward(self, x, u):
+        k = x.shape[0]
+        x_red = x[:, :, 3:]
+        x_flat = tf.reshape(x_red, (k, -1))
+        u_flat = tf.reshape(u, (k, -1))
+        v_next = self.internal.forward(x_flat, u_flat)
+        x_last = x[:, -1]
+        v = x[:, -1, 12:]
+        tau = v*self.dt
+        M = self.toMat.forward(x_last)
+        M = self.int.forward(M, tau)
+        return self.flat.forward(M, v_next)
+
+
+def main():
+    velPred = VelPred(in_size=5*21, topology=[128, 128, 128])
+    pred = Predictor(velPred, dt=0.1, h=4)
+    x = tf.random.uniform(shape=(1, 5, 18))
+    u = tf.random.uniform(shape=(1, 5, 6))
+    p = pred.forward(x, u)
+    print(p.shape)
+
+if __name__ == "__main__":
+    main()
