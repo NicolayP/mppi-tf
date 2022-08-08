@@ -4,8 +4,8 @@ from types import DynamicClassAttribute
 import tensorflow as tf
 import tensorflow_graphics as tfg
 
-from model_utils import ToSE3Mat, SE3int, FlattenSE3
-from model_base import ModelBase
+from .model_utils import ToSE3Mat, SE3int, FlattenSE3
+from .model_base import ModelBase
 import numpy as np
 import os
 
@@ -452,7 +452,6 @@ class NNAUVModelSpeed(NNAUVModel):
                 - the input vector for the network.
                     shape [k, 15, 1]
         '''
-
         stateEuler = self.to_euler(state)
         X = tf.concat([stateEuler[:, 3:], action], axis=1)
         X = tf.squeeze(X, axis=-1)
@@ -607,8 +606,6 @@ class VelPred(tf.Module):
         self.nn = tf.keras.Sequential(layers)
 
     def forward(self, x, u):
-        print(x.shape)
-        print(u.shape)
         return self.nn(tf.concat((x, u), axis=1))
 
 
@@ -627,13 +624,31 @@ class Predictor(tf.Module):
         x_red = x[:, :, 3:]
         x_flat = tf.reshape(x_red, (k, -1))
         u_flat = tf.reshape(u, (k, -1))
-        v_next = self.internal.forward(x_flat, u_flat)
+
+        v_next = tf.cast(
+            self.internal.forward(x_flat, u_flat),
+            dtype=tf.float64, name="casting_output"
+        )
         x_last = x[:, -1]
         v = x[:, -1, 12:]
         tau = v*self.dt
         M = self.toMat.forward(x_last)
         M = self.int.forward(M, tau)
         return self.flat.forward(M, v_next)
+
+class LaggedNNAUVSpeed(ModelBase):
+    def __init__(self, k, h, dt, sDim=18, aDim=6, topology=[128, 128, 128]):
+        super(LaggedNNAUVSpeed, self).__init__(
+            {}, stateDim=sDim, actionDim=aDim, k=k, dt=dt
+        )
+        self.velPred = VelPred(in_size=h*(sDim-3+aDim), topology=topology)
+        self.pred = Predictor(self.velPred, dt=0.1, h=4)
+    
+    def build_step_graph(self, scope, state, action):
+        state = tf.squeeze(state, axis=-1)
+        action = tf.squeeze(action, axis=-1)
+        foo = self.pred.forward(state, action)
+        return foo[..., None]
 
 
 def main():

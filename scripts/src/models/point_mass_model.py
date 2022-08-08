@@ -56,8 +56,6 @@ class PointMassModel(ModelBase):
                            trainable=True,
                            dtype=tf.float64)
 
-        self.add_model_vars("mass", mass)
-
         with tf.name_scope("Const") as c:
             self.create_const(c)
 

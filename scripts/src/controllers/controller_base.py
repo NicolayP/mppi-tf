@@ -4,7 +4,7 @@ from cpprb import ReplayBuffer
 import numpy as np
 import scipy.signal
 
-from ..misc.utile import assert_shape
+from ..misc.utile import assert_shape, push_to_tensor
 from ..observer.observer_base import ObserverBase
 import time as t
 
@@ -164,87 +164,21 @@ class ControllerBase(tf.Module):
         return error
 
     # @tf.function
-    def predict(self, x, u, actionSeq, xNext):
-        # TODO: get first predicted next state, predict action sequence,
-        # compute diff between first next state and next state
-        # log error on prediction, predicted cost, action input, state input.
-        nextState = self._model.predict(tf.expand_dims(x, axis=0),
-                                        tf.expand_dims(u, axis=0))
-        error = self.state_error(xNext, nextState)
-        dist = self._cost.dist(x)
-        costPred = self._cost.state_cost("predict", nextState)
-
-        state = nextState
-
-        for i in range(actionSeq.shape[0]):
-            with tf.name_scope("Prepare_data_" + str(i)) as pd:
-                action = tf.expand_dims(self.prepare_action(pd, actionSeq, i), axis=0)
-            with tf.name_scope("Step_" + str(i)) as s:
-                nextState = self._model.build_step_graph(s, state, action)
-            with tf.name_scope("Cost_" + str(i)) as c:
-                tmp = self._cost.state_cost(c, nextState)
-                costPred = self._cost.add_cost(c, tmp, costPred)
-            state = nextState
-
-        with tf.name_scope("terminal_cost") as s:
-            fCost = self._cost.build_final_step_cost_graph(s, nextState)
-        with tf.name_scope("Rollout_cost"):
-            sampleCosts = self._cost.add_cost(c, fCost, costPred)
-
-        self._observer.write_predict("predicted/next_state", xNext)
-        self._observer.write_predict("predicted/state", x)
-        self._observer.write_predict("predicted/error", error)
-        self._observer.write_predict("predicted/dist", dist)
-        self._observer.write_predict("predicted/sample_cost", sampleCosts)
-
-        return nextState
+    def predict(self, model_input, actionSeq, xNext):
+        raise NotImplementedError
 
     def print_concrete(self):
         print(self._next_fct.pretty_printed_concrete_signatures())
 
-    def _next(self, k, state, actionSeq, normalizeCost=False, profile=False):
-        '''
-            Internal tensorflow part of the controller.
-            Computes the next action based on the number of samples,
-            the state, the current action sequence.
-            Should not be called by user directly.
-
-            - input:
-            --------
-                - k: tf.Variable, dtype=int, the number of samples to use.
-                - state: tf.Placeholder, the current state of the system.
-                    Shape: [sDim, 1]
-                - actionSeq: tf.Placeholder, the current optimized action
-                sequence.
-                    Shape: [tau, aDim ,1]
-                - normalizeCost: Bool, if true the cost are normalized
-                    before the expodential.
-
-            - output:
-            ---------
-                - next the next action to be applied. Shape: [aDim, 1]
-
-        '''
-        print("Tracing with {}".format(state))
-        self._model.set_k(k)
-        # every input has already been check in parent function calls
-        if profile:
-            tf.profiler.experimental.start(self._observer.get_logdir())
-
-        with tf.name_scope("Controller") as cont:
-            action = self.build_graph(cont, k, state, actionSeq,
-                                    normalize=normalizeCost)
-        if profile:
-            tf.profiler.experimental.stop()
-        return action
-
-    def next(self, state):
+    def next(self, model_input):
         '''
             Computes the next action from MPPI controller.
             input:
             ------
-                -state. The Current observed state of the system.
-                    Shape: [sDim, 1]
+                - laggedState. The Current and previous observed states of the system.
+                    Shape: [history, sDim, 1]
+                - laggedAction: The previous actions applied to the system
+                    Shape: [history-1, aDim, 1]
 
             output:
             -------
@@ -259,7 +193,7 @@ class ControllerBase(tf.Module):
 
         # tf.profiler.experimental.start(self._observer.get_logdir())
         next = self._next_fct(self._k,
-                              state,
+                              model_input,
                               self._actionSeq,
                               self._normalizeCost)
         # tf.profiler.experimental.stop()
@@ -286,7 +220,45 @@ class ControllerBase(tf.Module):
         self._timingDict['calls'] += 1
         return np.squeeze(next.numpy())
 
-    def build_graph(self, scope, k, state, actionSeq, normalize=False):
+    def _next(self, k, model_input, actionSeq, normalizeCost=False, profile=False):
+        '''
+            Internal tensorflow part of the controller.
+            Computes the next action based on the number of samples,
+            the state, the current action sequence.
+            Should not be called by user directly.
+
+            - input:
+            --------
+                - k: tf.Variable, dtype=int, the number of samples to use.
+                - laggedState: tf.Placeholder, the current state of the system.
+                    Shape: [history, sDim, 1]
+                - laggedAction: tf.Placeholder, the previous acitons applied to the system.
+                    Shape: [history-1, aDim, 1]
+                - actionSeq: tf.Placeholder, the current optimized action
+                sequence.
+                    Shape: [tau, aDim ,1]
+                - normalizeCost: Bool, if true the cost are normalized
+                    before the expodential.
+
+            - output:
+            ---------
+                - next the next action to be applied. Shape: [aDim, 1]
+
+        '''
+        #print("Tracing with {}".format(model_input))
+        self._model.set_k(k)
+        # every input has already been check in parent function calls
+        if profile:
+            tf.profiler.experimental.start(self._observer.get_logdir())
+
+        with tf.name_scope("Controller") as cont:
+            action = self.build_graph(cont, k, model_input, actionSeq,
+                                    normalize=normalizeCost)
+        if profile:
+            tf.profiler.experimental.stop()
+        return action
+
+    def build_graph(self, scope, k, model_input, actionSeq, normalize=False):
         '''
             Builds the tensorflow computational graph for the
             controller update. First it generates the noise used
@@ -299,8 +271,10 @@ class ControllerBase(tf.Module):
             - input:
             --------
                 - k: tf.Variable, dtype=int, the number of samples to use.
-                - state: tf.Placeholder, the current state of the system.
-                    Shape: [sDim, 1]
+                - laggedState: tf.Placeholder, the current and previous states of the system.
+                    Shape: [history, sDim, 1]
+                - laggedAction: tf.Placeholder, the previous actions applied on the system.
+                    Shape: [history-1, aDim, 1]
                 - actionSeq: tf.Variable, the current optimized
                 action sequence.
                     Shape: [tau, aDim ,1]
@@ -321,7 +295,7 @@ class ControllerBase(tf.Module):
             with tf.name_scope("random") as rand:
                 noises = self.build_noise(rand, k)
             with tf.name_scope("Rollout") as roll:
-                cost = self.build_model(roll, k, state, noises, actionSeq)
+                cost = self.build_model(roll, k, model_input, noises, actionSeq)
             with tf.name_scope("Update") as up:
                 update = self.update(up, cost, noises, normalize=normalize)
             with tf.name_scope("Next") as n:
@@ -330,9 +304,12 @@ class ControllerBase(tf.Module):
                 init = self.init_zeros(si, 1)
                 actionSeq = self.shift(si, update, init, 1)
 
-        self._observer.write_control("state", state)
+        self._observer.write_control("state", model_input)
         self._observer.write_control("next", next)
         return next
+
+    def build_model(self, scope, k, model_input, noises, actionsSeq):
+        raise NotImplementedError
 
     def build_noise(self, scope, k):
         '''
@@ -355,62 +332,6 @@ class ControllerBase(tf.Module):
                                seed=1)
 
         return tf.linalg.matmul(self._upsilon*self._sigma, rng)
-
-    def build_model(self, scope, k, state, noises, actionSeq):
-        '''
-            Builds the rollout graph and computes the cost for every sample.
-
-            - input:
-            --------
-                - scope: string, the tensorflow scope name.
-                - k: the number of samples. tf.Variable shape [1]
-                - state: the current state of the system.
-                    tf.Tensor Shape [sDim, 1]
-                - noises: the noise tensor to use for the rollouts.
-                    tf.tensor Shape [k, tau, aDim, 1]
-                - actionSeq: the current action sequence.
-                    tf.tensor Shape [tau, aDim, 1]
-
-            - output:
-            ---------
-                - sample costs. Tensor containing the cost of
-                every samples. tf.Tensor, shape [k, 1, 1]
-
-        '''
-        with tf.name_scope("setup") as setup:
-            state = tf.expand_dims(state, axis=0)
-            state = tf.broadcast_to(state,
-                                    [k, self._sDim, 1],
-                                    name="Broadcast_inital_state")
-            nextState = tf.zeros(shape=tf.shape(state), dtype=tf.float64)
-            cost = tf.zeros(shape=(k, 1, 1), dtype=tf.float64)
-
-        # PAY ATTENTION TO THE FOR LOOPS WITH @tf.function.
-        for i in range(self._tau):
-            with tf.name_scope("Rollout_" + str(i)):
-                with tf.name_scope("Prepare_data_" + str(i)) as pd:
-                    action = self.prepare_action(pd, actionSeq, i)
-                    noise = self.prepare_noise(pd, noises, i)
-                    toApply = tf.add(action, noise, name="toApply")
-                with tf.name_scope("Step_" + str(i)) as s:
-                    nextState = self._model.build_step_graph(s,
-                                                             state,
-                                                             toApply)
-                with tf.name_scope("Cost_" + str(i)) as c:
-                    tmp = self._cost.build_step_cost_graph(c, nextState,
-                                                           action, noise)
-                    cost = self._cost.add_cost(c, cost, tmp)
-
-            state = nextState
-
-        with tf.name_scope("terminal_cost") as s:
-            fCost = self._cost.build_final_step_cost_graph(s, nextState)
-        with tf.name_scope("Rollout_cost"):
-            sampleCosts = self._cost.add_cost(c, fCost, cost)
-            
-        self._observer.write_control("sample_costs", sampleCosts)
-
-        return sampleCosts
 
     def update(self, scope, cost, noises, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
@@ -470,7 +391,7 @@ class ControllerBase(tf.Module):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
         return tf.math.reduce_sum(
                 tf.math.multiply(
-                    tf.expand_dims(weights, -1),
+                    weights[..., None],
                     noises),
                 0)
 
@@ -490,7 +411,7 @@ class ControllerBase(tf.Module):
                     tf.Tensor. Shape [aDim, 1], dtype=tf.float64
         '''
 
-        return tf.squeeze(tf.slice(actions, [timestep, 0, 0], [1, -1, -1]), 0)
+        return actions[timestep]
 
     def prepare_noise(self, scope, noises, timestep):
         '''
@@ -509,22 +430,17 @@ class ControllerBase(tf.Module):
                 - noise at time timestep.
                     tf.Tensor Shape [k, aDim, 1]
         '''
-
-        return tf.squeeze(tf.slice(noises,
-                                   [0, timestep, 0, 0],
-                                   [-1, 1, -1, -1]),
-                          1)
+        return noises[:, timestep]
 
     def shift(self, scope, actionSeq, init, length):
         # shapes: in [tau, aDim, 1], [x, aDim, 1], scalar;
         # out [tau-len + x, aDim, 1]
-        remain = tf.slice(actionSeq, [length, 0, 0],
-                          [self._tau-length, -1, -1])
-        return tf.concat([remain, init], 0)
+        remain = actionSeq[length:]
+        return tf.concat([remain, init], axis=0)
 
     def get_next(self, scope, current, length):
-        # shapes: in [tau, aDim, 1], scalar; out [scalar, aDim, 1]
-        return tf.slice(current, [0, 0, 0], [length, -1, -1])
+        # shapes: in [tau, aDim, 1], out [length, aDim, 1]
+        return current[:length]
 
     def init_zeros(self, scope, size):
         # shape: out [size, aDim, 1]
@@ -544,12 +460,12 @@ class ControllerBase(tf.Module):
             --------
                 None.
         '''
-        fake_state = np.zeros((self._sDim, 1))
-        fake_state[6] = 1.
+        fake_input = self._model.fake_input()
+        
         fake_sequence = np.zeros((self._tau, self._aDim, 1))
 
         _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
-                           fake_state,
+                           fake_input,
                            fake_sequence,
                            self._normalizeCost)
         if not self._graphMode:

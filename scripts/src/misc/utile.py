@@ -131,3 +131,8 @@ def gif_path(len, gif):
             writer.append_data(image)
             os.remove(filename)
     return
+
+
+def push_to_tensor(tensor, element):
+    tmp = tf.expand_dims(element, axis=1) # shape [k, 1, dim, 1]
+    return tf.concat([tensor[:, 1:], tmp], axis=1)

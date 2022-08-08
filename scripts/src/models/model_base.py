@@ -9,7 +9,7 @@ class ModelBase(tf.Module):
     def __init__(self, modelDict,
                  stateDim=2,
                  actionDim=1,
-                 k=tf.Variable(1),
+                 k=1,
                  dt=0.1,
                  name="model",
                  inertialFrameId="world"):
@@ -23,7 +23,10 @@ class ModelBase(tf.Module):
                 - name: string. the model name. Used for logging.
         '''
         self._modelDict = modelDict
-        self._k = k
+        self._k = self._k = tf.Variable(k,
+                              trainable=False,
+                              dtype=tf.int32,
+                              name="samples")
         self._inertialFrameId = inertialFrameId
         self._stateDim = stateDim
         self._actionDim = actionDim
