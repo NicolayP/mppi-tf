@@ -9,6 +9,61 @@ from tabulate import tabulate
 from tqdm import tqdm
 import os
 
+
+class ListDataset(torch.utils.data.Dataset):
+    def __init__(self, data_list, steps=1, history=1, rot='rot'):
+        self.data_list = data_list
+        self.s = steps
+        self.h = history
+        if rot == "rot":
+            self.rot = ["r00", "r01", "r02", "r10", "r11", "r12", "r20", "r21", "r22"]
+        elif rot == "quat":
+            self.rot = ["qw", "qx", "qy", "qz"]
+        elif rot == "euler":
+            self.rot = ["roll", "pitch", "yaw"]
+        else:
+            raise TypeError
+        self.pos = ["x", "y", "z"]
+        self.lin_vel = ["u", "v", "w"]
+        self.ang_vel = ["p", "q", "r"]
+        self.x_labels = self.pos + self.rot + self.lin_vel + self.ang_vel
+        self.u_labels = ["Fx", "Fy", "Fz", "Tx", "Ty", "Tz"]
+        self.y_labels = self.x_labels.copy()
+        
+        self.nb_traj = len(data_list)
+        
+        self.samples = [traj.shape[0] - self.h - self.s + 1 for traj in data_list]
+        
+        self.len = sum(self.samples)
+        
+        self.bins = self.create_bins()
+        
+    def create_bins(self):
+        bins = [0]
+        cummul = 0
+        for s in self.samples:
+            cummul += s
+            bins.append(cummul)
+        return bins
+    
+    def __len__(self):
+        return self.len
+    
+    def __getitem__(self, idx):
+        i = (np.digitize([idx], self.bins) -1)[0]
+        traj = self.data_list[i]
+        traj_samples = self.samples[i]
+        j = idx - self.bins[i]
+        sub_frame = traj.iloc[j:j+self.s+self.h]
+        s = sub_frame[self.x_labels].to_numpy()
+        u = sub_frame[self.u_labels].to_numpy()
+        x = s[:self.h]
+        u = u[:self.h+self.s-1]
+        y = s[self.h:self.h+self.s]
+        return x, u, y
+
+
+
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, data, steps=1, history=1):
         '''
