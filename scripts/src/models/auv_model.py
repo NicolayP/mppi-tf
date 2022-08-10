@@ -559,6 +559,13 @@ class AUVModel(ModelBase):
     def load_params(self, path):
         pass
 
+    def fake_input(self):
+        dummy_state = np.array([
+            [0.], [0.], [0.],
+            [0.], [0.], [0.], [1.],
+            [0.], [0.], [0.],
+            [0.], [0.], [0.]
+        ])
 
 def main():
     params = dict()
