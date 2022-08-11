@@ -106,7 +106,7 @@ class StaticQuatCost(CostBase):
     def getGoal(self):
         return self.goal
 
-    def state_cost(self, scope, state):
+    def state_cost(self, scope, state, goal):
         '''
             Computes state cost for the static point.
 
@@ -120,7 +120,7 @@ class StaticQuatCost(CostBase):
                 - dict with entries:
                     "state_cost" = (state-goal)^T Q (state-goal)
         '''
-        diff = self.dist(state)
+        diff = self.dist(state, goal)
         stateCost = tf.linalg.matmul(
                         diff,
                         tf.linalg.matmul(self.Q,
@@ -135,9 +135,9 @@ class StaticQuatCost(CostBase):
         np_goal = self.goal
         return np_goal[0], np_goal[1]
 
-    def dist(self, state):
+    def dist(self, state, goal):
         state = tf.squeeze(state, axis=-1)
-        goal = tf.squeeze(self.goal, axis=-1)
+        goal = tf.squeeze(goal, axis=-1)
         quat = state[:, 3:7]
         goal_quat = goal[3:7]
         theta = 2*tf.math.acos(tf.tensordot(quat, goal_quat, 1))

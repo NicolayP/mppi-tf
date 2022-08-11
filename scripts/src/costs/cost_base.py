@@ -40,7 +40,7 @@ class CostBase(tf.Module):
                                      needs to be a semi definit positive.")
             self.invSig = tf.linalg.inv(s)
 
-    def build_step_cost_graph(self, scope, state, action, noise):
+    def build_step_cost_graph(self, scope, state, action, noise, goal):
         '''
             Computes the step cost of a sample.
             - input:
@@ -69,7 +69,7 @@ class CostBase(tf.Module):
                 should be [k/1, {}, 1], got shape {}".format(self.sig_shape[0], noise.shape))
 
         with tf.name_scope("step_cost") as s:
-            stateCost = self.state_cost(s, state)
+            stateCost = self.state_cost(s, state, goal)
             actionCost = self.action_cost(s, action, noise)
             stepCost = tf.add(stateCost, actionCost,
                                name="add")
@@ -95,7 +95,7 @@ class CostBase(tf.Module):
         cost = tf.add(currentCost, newCost, name="tmp_cost")
         return cost
 
-    def build_final_step_cost_graph(self, scope, state):
+    def build_final_step_cost_graph(self, scope, state, goal):
         '''
             terminal cost function
 
@@ -109,7 +109,7 @@ class CostBase(tf.Module):
                 - $$psi(state)$$
 
         '''
-        return self.state_cost(scope, state)
+        return self.state_cost(scope, state, goal)
 
     def action_cost(self, scope, action, noise):
         '''
@@ -169,7 +169,7 @@ class CostBase(tf.Module):
 
         return actionCost
 
-    def state_cost(self, scope, state):
+    def state_cost(self, scope, state, goal):
         '''
             Computes a step state cost. $q(x)$
 
