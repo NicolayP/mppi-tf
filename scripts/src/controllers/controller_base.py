@@ -160,8 +160,13 @@ class ControllerBase(tf.Module):
             self._observer.advance()
 
     def state_error(self, stateGt, statePred):
-        error = tf.linalg.norm(tf.subtract(stateGt, statePred))
-        return error
+        stateGt = tf.squeeze(stateGt)
+        statePred = tf.squeeze(statePred)
+        error_position = tf.linalg.norm(tf.subtract(stateGt[:3], statePred[:3]))
+        error_rot = 1 - tf.tensordot(stateGt[3:7], statePred[3:7], 1)
+        error_vel = tf.linalg.norm(tf.subtract(stateGt[-6:], statePred[-6:]))
+        error_vel_dec = tf.subtract(stateGt[-6:], statePred[-6:])
+        return error_position, error_rot, error_vel, error_vel_dec
 
     # @tf.function
     def predict(self, x, u, actionSeq, xNext):
@@ -170,32 +175,37 @@ class ControllerBase(tf.Module):
         # log error on prediction, predicted cost, action input, state input.
         nextState = self._model.predict(tf.expand_dims(x, axis=0),
                                         tf.expand_dims(u, axis=0))
-        error = self.state_error(xNext, nextState)
-        dist = self._cost.dist(x)
-        costPred = self._cost.state_cost("predict", nextState)
+        errors = self.state_error(xNext, nextState)
 
-        state = nextState
+        dist = tf.squeeze(self._cost.dist(tf.expand_dims(x, axis=0)), axis=0)
 
-        for i in range(actionSeq.shape[0]):
-            with tf.name_scope("Prepare_data_" + str(i)) as pd:
-                action = tf.expand_dims(self.prepare_action(pd, actionSeq, i), axis=0)
-            with tf.name_scope("Step_" + str(i)) as s:
-                nextState = self._model.build_step_graph(s, state, action)
-            with tf.name_scope("Cost_" + str(i)) as c:
-                tmp = self._cost.state_cost(c, nextState)
-                costPred = self._cost.add_cost(c, tmp, costPred)
-            state = nextState
+        step_cost = tf.squeeze(self._cost.state_cost("step_cost", x[None, ...]), axis=0)
 
-        with tf.name_scope("terminal_cost") as s:
-            fCost = self._cost.build_final_step_cost_graph(s, nextState)
-        with tf.name_scope("Rollout_cost"):
-            sampleCosts = self._cost.add_cost(c, fCost, costPred)
+        #costPred = self._cost.state_cost("predict", nextState)
 
-        self._observer.write_predict("predicted/next_state", xNext)
-        self._observer.write_predict("predicted/state", x)
-        self._observer.write_predict("predicted/error", error)
+        #state = nextState
+
+        #for i in range(actionSeq.shape[0]):
+        #    with tf.name_scope("Prepare_data_" + str(i)) as pd:
+        #        action = tf.expand_dims(self.prepare_action(pd, actionSeq, i), axis=0)
+        #    with tf.name_scope("Step_" + str(i)) as s:
+        #        nextState = self._model.build_step_graph(s, state, action)
+        #    with tf.name_scope("Cost_" + str(i)) as c:
+        #        tmp = self._cost.state_cost(c, nextState)
+        #        costPred = self._cost.add_cost(c, tmp, costPred)
+        #    state = nextState
+
+        #with tf.name_scope("terminal_cost") as s:
+        #    fCost = self._cost.build_final_step_cost_graph(s, nextState)
+        #with tf.name_scope("Rollout_cost"):
+        #    sampleCosts = self._cost.add_cost(c, fCost, costPred)
+
+        #self._observer.write_predict("predicted/next_state", xNext)
+        #self._observer.write_predict("predicted/state", x)
+        self._observer.write_predict("predicted/error", errors)
         self._observer.write_predict("predicted/dist", dist)
-        self._observer.write_predict("predicted/sample_cost", sampleCosts)
+        self._observer.write_predict("predicted/step_cost", step_cost)
+        #self._observer.write_predict("predicted/sample_cost", sampleCosts)
 
         return nextState
 
@@ -273,7 +283,7 @@ class ControllerBase(tf.Module):
                                     np.expand_dims(
                                         scipy.signal.savgol_filter(
                                             self._actionSeq.numpy()[:, :, 0],
-                                            29,
+                                            10,
                                             9,
                                             deriv=0,
                                             delta=1.0,
@@ -330,6 +340,7 @@ class ControllerBase(tf.Module):
                 init = self.init_zeros(si, 1)
                 actionSeq = self.shift(si, update, init, 1)
 
+        self._observer.write_control("noises", noises)
         self._observer.write_control("state", state)
         self._observer.write_control("next", next)
         return next
@@ -354,7 +365,8 @@ class ControllerBase(tf.Module):
                                dtype=tf.float64,
                                seed=2)
 
-        return tf.linalg.matmul(self._upsilon*self._sigma, rng)
+        noises = tf.linalg.matmul(self._upsilon*self._sigma, rng)
+        return noises
 
     def build_model(self, scope, k, state, noises, actionSeq):
         '''

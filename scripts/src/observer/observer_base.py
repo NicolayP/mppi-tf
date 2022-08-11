@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from distutils.log import error
 import tensorflow as tf
 from datetime import datetime
 import os
@@ -28,7 +29,7 @@ class ObserverBase(tf.Module):
         self._k = k
         self._log = log
         self._stateName = ["x", "y", "z",
-                            "qw", "qx", "qy", "qz",
+                            "theta",
                             "u", "v", "w",
                             "p", "q", "r"]
         self._poseId = [0, 1, 2, 3, 4, 5, 6]
@@ -106,6 +107,12 @@ class ObserverBase(tf.Module):
                 tf.summary.scalar("Controller/update",
                                 tensor,
                                 step=self.step)
+
+            elif name == "noises":
+                for i in range(6):
+                    tf.summary.histogram(f"Controller/noises_{i}",
+                                         tensor[:, :, i],
+                                         step=self.step)
 
             elif name == "next":
                 action = tensor[0]
@@ -196,13 +203,32 @@ class ObserverBase(tf.Module):
                                         tf.squeeze(tensor[i, :]),
                                         step=self.step)
 
+            elif name == "predicted/step_cost":
+                tf.summary.scalar(f"Predicted/Step_cost",
+                                    tf.squeeze(tensor),
+                                    step=self.step)
+
             elif name == "predicted/error":
-                tf.summary.scalar("Predicted/error",
-                                tf.squeeze(tensor),
+                error_pos, error_rot, error_vel, error_vel_dec = tensor
+                tf.summary.scalar("Predicted/error_position",
+                                tf.squeeze(error_pos),
                                 step=self.step)
 
+                tf.summary.scalar("Predicted/error_orientation",
+                                tf.squeeze(error_rot),
+                                step=self.step)
+
+                tf.summary.scalar("Predicted/error_velocities",
+                                tf.squeeze(error_vel),
+                                step=self.step)
+                
+                for i in range(6):
+                    tf.summary.scalar(f"Predicted/error_vel_{i}",
+                                      error_vel_dec[i],
+                                      step=self.step)
+
             elif name == "predicted/dist":
-                for i in range(self._sDim):
+                for i in range(len(self._stateName)):
                     tf.summary.scalar("Predicted/goal_distance_{}".format(self._stateName[i]),
                                     tf.squeeze(tensor[i, :]),
                                     step=self.step)

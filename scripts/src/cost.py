@@ -1,6 +1,6 @@
 import numpy as np
 
-from .costs.static_cost import StaticCost
+from .costs.static_cost import StaticCost, StaticQuatCost
 from .costs.elipse_cost import ElipseCost, ElipseCost3D
 
 
@@ -10,6 +10,12 @@ def static(task_dic, lam, gamma, upsilon, sigma):
     Q = np.array(task_dic['Q'])
     diag = task_dic["diag"]
     return StaticCost(lam, gamma, upsilon, sigma, goal, Q, diag)
+
+def staticQuat(task_dic, lam, gamma, upsilon, sigma):
+    goal = np.expand_dims(np.array(task_dic['goal']), -1)
+    Q = np.array(task_dic['Q'])
+    diag = task_dic["diag"]
+    return StaticQuatCost(lam, gamma, upsilon, sigma, goal, Q, diag)
 
 
 def elipse(task_dic, lam, gamma, upsilon, sigma):
@@ -46,6 +52,7 @@ def get_cost(task, lam, gamma, upsilon, sigma):
 
     switcher = {
         "static": static,
+        "static_quat": staticQuat,
         "elipse": elipse,
         "elipse3d": elipse3d,
         "waypoints": waypoints
