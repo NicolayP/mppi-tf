@@ -22,3 +22,4 @@ config/tasks/*
 *learnerTests*
 scripts/src/models/bluerov2
 tensorboard/*
+scripts/bluerov_hist
