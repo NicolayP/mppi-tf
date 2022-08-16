@@ -235,7 +235,7 @@ class ControllerBase(tf.Module):
                 - next the next action to be applied. Shape: [aDim, 1]
 
         '''
-        print("Tracing with {}".format(state))
+        print("Tracing with state: {}, actionSeq: {}".format(state, actionSeq))
         self._model.set_k(k)
         # every input has already been check in parent function calls
         if profile:
@@ -593,3 +593,6 @@ class ControllerBase(tf.Module):
                            fake_sequence,
                            self._normalizeCost,
                            profile=True)
+
+    def set_goal(self, goal):
+        self._cost.set_goal(goal)

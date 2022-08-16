@@ -95,15 +95,22 @@ class StaticQuatCost(CostBase):
         self.q_shape = self.Q.shape
         if not assert_shape(self.Q, (10, 10)):
             raise AssertionError("Goal tensor shape error, expected: [10, 10], got {}".format(self.q_shape))
-        self.setGoal(goal)
+
+        self.goal = tf.Variable(
+            goal,
+            trainable=False,
+            dtype=tf.float64,
+            name="goal")
+
+        self.set_goal(goal)
         
-    def setGoal(self, goal):
+    def set_goal(self, goal):
         if not assert_shape(goal, (13, 1)):
             raise AssertionError("Goal tensor shape error, expected: [{}, 1], got {}".format(self.q_shape[0], goal.shape))
 
-        self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
+        self.goal.assign(goal)
 
-    def getGoal(self):
+    def get_goal(self):
         return self.goal
 
     def state_cost(self, scope, state):
