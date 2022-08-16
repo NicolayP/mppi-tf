@@ -95,18 +95,25 @@ class StaticQuatCost(CostBase):
         self.q_shape = self.Q.shape
         if not assert_shape(self.Q, (10, 10)):
             raise AssertionError("Goal tensor shape error, expected: [10, 10], got {}".format(self.q_shape))
-        self.setGoal(goal)
+
+        self.goal = tf.Variable(
+            goal,
+            trainable=False,
+            dtype=tf.float64,
+            name="goal")
+
+        self.set_goal(goal)
         
-    def setGoal(self, goal):
+    def set_goal(self, goal):
         if not assert_shape(goal, (13, 1)):
             raise AssertionError("Goal tensor shape error, expected: [{}, 1], got {}".format(self.q_shape[0], goal.shape))
 
-        self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
+        self.goal.assign(goal)
 
-    def getGoal(self):
+    def get_goal(self):
         return self.goal
 
-    def state_cost(self, scope, state, goal):
+    def state_cost(self, scope, state):
         '''
             Computes state cost for the static point.
 
@@ -120,7 +127,7 @@ class StaticQuatCost(CostBase):
                 - dict with entries:
                     "state_cost" = (state-goal)^T Q (state-goal)
         '''
-        diff = self.dist(state, goal)
+        diff = self.dist(state)
         stateCost = tf.linalg.matmul(
                         diff,
                         tf.linalg.matmul(self.Q,
@@ -135,9 +142,9 @@ class StaticQuatCost(CostBase):
         np_goal = self.goal
         return np_goal[0], np_goal[1]
 
-    def dist(self, state, goal):
+    def dist(self, state):
         state = tf.squeeze(state, axis=-1)
-        goal = tf.squeeze(goal, axis=-1)
+        goal = tf.squeeze(self.goal, axis=-1)
         quat = state[:, 3:7]
         goal_quat = goal[3:7]
         theta = 2*tf.math.acos(tf.tensordot(quat, goal_quat, 1))

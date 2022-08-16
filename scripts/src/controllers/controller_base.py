@@ -98,12 +98,6 @@ class ControllerBase(tf.Module):
         self._debug = debug
         self._graphMode = graphMode
 
-        self._goal = tf.Variable(
-            np.zeros((sDim, 1)),
-            trainable=False,
-            dtype=tf.float64,
-            name="goal")
-
         self._observer = ObserverBase(logPath=logPath,
                                       log=log,
                                       debug=debug,
@@ -183,9 +177,9 @@ class ControllerBase(tf.Module):
                                         tf.expand_dims(u, axis=0))
         errors = self.state_error(xNext, nextState)
 
-        dist = tf.squeeze(self._cost.dist(tf.expand_dims(x, axis=0), self._goal), axis=0)
+        dist = tf.squeeze(self._cost.dist(tf.expand_dims(x, axis=0)), axis=0)
 
-        step_cost = tf.squeeze(self._cost.state_cost("step_cost", x[None, ...], self._goal), axis=0)
+        step_cost = tf.squeeze(self._cost.state_cost("step_cost", x[None, ...]), axis=0)
 
         #costPred = self._cost.state_cost("predict", nextState)
 
@@ -218,7 +212,7 @@ class ControllerBase(tf.Module):
     def print_concrete(self):
         print(self._next_fct.pretty_printed_concrete_signatures())
 
-    def _next(self, k, state, actionSeq, goal, normalizeCost=False, profile=False):
+    def _next(self, k, state, actionSeq, normalizeCost=False, profile=False):
         '''
             Internal tensorflow part of the controller.
             Computes the next action based on the number of samples,
@@ -241,14 +235,14 @@ class ControllerBase(tf.Module):
                 - next the next action to be applied. Shape: [aDim, 1]
 
         '''
-        print("Tracing with state: {}, actionSeq: {}, goal: {}".format(state, actionSeq, goal))
+        print("Tracing with state: {}, actionSeq: {}".format(state, actionSeq))
         self._model.set_k(k)
         # every input has already been check in parent function calls
         if profile:
             tf.profiler.experimental.start(self._observer.get_logdir())
 
         
-        action = self.build_graph("Controller", k, state, actionSeq, goal,
+        action = self.build_graph("Controller", k, state, actionSeq,
                                   normalize=normalizeCost)
         if profile:
             tf.profiler.experimental.stop()
@@ -277,7 +271,6 @@ class ControllerBase(tf.Module):
         next = self._next_fct(self._k,
                               state,
                               self._actionSeq,
-                              self._goal,
                               self._normalizeCost)
         # tf.profiler.experimental.stop()
 
@@ -303,7 +296,7 @@ class ControllerBase(tf.Module):
         self._timingDict['calls'] += 1
         return np.squeeze(next.numpy())
 
-    def build_graph(self, scope, k, state, actionSeq, goal, normalize=False):
+    def build_graph(self, scope, k, state, actionSeq, normalize=False):
         '''
             Builds the tensorflow computational graph for the
             controller update. First it generates the noise used
@@ -338,7 +331,7 @@ class ControllerBase(tf.Module):
             with tf.name_scope("random") as rand:
                 noises = self.build_noise(rand, k)
             with tf.name_scope("Rollout") as roll:
-                cost = self.build_model(roll, k, state, noises, actionSeq, goal)
+                cost = self.build_model(roll, k, state, noises, actionSeq)
             with tf.name_scope("Update") as up:
                 update = self.update(up, cost, noises, normalize=normalize)
             with tf.name_scope("Next") as n:
@@ -375,7 +368,7 @@ class ControllerBase(tf.Module):
         noises = tf.linalg.matmul(self._upsilon*self._sigma, rng)
         return noises
 
-    def build_model(self, scope, k, state, noises, actionSeq, goal):
+    def build_model(self, scope, k, state, noises, actionSeq):
         '''
             Builds the rollout graph and computes the cost for every sample.
 
@@ -423,7 +416,7 @@ class ControllerBase(tf.Module):
                     #print(nextState)
                 with tf.name_scope("Cost_" + str(i)) as c:
                     tmp = self._cost.build_step_cost_graph(c, nextState,
-                                                           action, noise, goal)
+                                                           action, noise)
                     cost = self._cost.add_cost(c, cost, tmp)
                 state = nextState
             #print("*"*5, " Cost: {}".format(i), "*"*5)
@@ -432,7 +425,7 @@ class ControllerBase(tf.Module):
             state = nextState
 
         with tf.name_scope("terminal_cost") as s:
-            fCost = self._cost.build_final_step_cost_graph(s, nextState, goal)
+            fCost = self._cost.build_final_step_cost_graph(s, nextState)
         with tf.name_scope("Rollout_cost"):
             sampleCosts = self._cost.add_cost(c, fCost, cost)
             
@@ -583,12 +576,10 @@ class ControllerBase(tf.Module):
         fake_state = np.zeros((self._sDim, 1))
         fake_state[6] = 1.
         fake_sequence = np.zeros((self._tau, self._aDim, 1))
-        fake_goal = np.zeros((self._sDim, 1))
 
         _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
                            fake_state,
                            fake_sequence,
-                           fake_goal,
                            self._normalizeCost)
         if not self._graphMode:
             warnings.warn("Not using graph mode, no trace to generate.")
@@ -604,4 +595,4 @@ class ControllerBase(tf.Module):
                            profile=True)
 
     def set_goal(self, goal):
-        self._goal.assign(goal)
+        self._cost.set_goal(goal)

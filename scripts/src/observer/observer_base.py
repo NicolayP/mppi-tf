@@ -84,12 +84,11 @@ class ObserverBase(tf.Module):
     def save_graph(self, function, graphMode=True):
         state = tf.zeros((self._sDim, 1), dtype=tf.float64)
         seq = tf.zeros((self._tau, self._aDim, 1), dtype=tf.float64)
-        goal = tf.zeros((self._sDim, 1), dtype=tf.float64)
         with self._writer.as_default():
             if graphMode:
-                graph = function.get_concrete_function(1, state, seq, goal).graph
+                graph = function.get_concrete_function(1, state, seq).graph
             else:
-                graph = tf.function(function).get_concrete_function(1, state, seq, goal).graph
+                graph = tf.function(function).get_concrete_function(1, state, seq).graph
             # visualize
             summary_ops_v2.graph(graph.as_graph_def())
 
