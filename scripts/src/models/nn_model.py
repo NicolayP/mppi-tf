@@ -1,10 +1,11 @@
 import tensorflow_graphics as tfg
 import tensorflow as tf
 
-from model_utils import ToSE3Mat, SE3int, FlattenSE3, load_onnx_model
-from model_base import ModelBase
+from .model_utils import ToSE3Mat, SE3int, FlattenSE3, load_onnx_model
+from .model_base import ModelBase
 import numpy as np
 import os
+from ..misc.utile import assert_shape, dtype
 
 # Gets rid of the error triggered when running
 # tfg in graph mode.
@@ -47,13 +48,12 @@ class NNModel(ModelBase):
                            k=k,
                            name=name,
                            inertialFrameId=inertialFrameId)
-        tf.keras.backend.set_floatx('float64')
         self.nn = tf.keras.Sequential([
             tf.keras.layers.Dense(32, activation='relu',
-                                  input_shape=(stateDim+actionDim-3,)),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(32, activation='relu'),
-            tf.keras.layers.Dense(stateDim, activation='linear')
+                                  input_shape=(stateDim+actionDim-3,), dtype=dtype),
+            tf.keras.layers.Dense(32, activation='relu', dtype=dtype),
+            tf.keras.layers.Dense(32, activation='relu', dtype=dtype),
+            tf.keras.layers.Dense(stateDim, activation='linear', dtype=dtype)
         ])
 
         if weightFile is not None:
@@ -77,8 +77,8 @@ class NNModel(ModelBase):
                 - std: the std of the data for each input feature/axis
                     shape: [15/16, 1] 
         '''
-        self.Xmean = tf.constant(mean, dtype=tf.float64)
-        self.Xstd = tf.constant(std, dtype=tf.float64)
+        self.Xmean = tf.constant(mean, dtype=dtype)
+        self.Xstd = tf.constant(std, dtype=dtype)
 
     def set_Ymean_Ystd(self, mean, std):
         '''
@@ -92,8 +92,8 @@ class NNModel(ModelBase):
                 - std: the std of the data for each output feature/axis
                     shape: [15/16, 1] 
         '''
-        self.Ymean = tf.constant(mean, dtype=tf.float64)
-        self.Ystd = tf.constant(std, dtype=tf.float64)
+        self.Ymean = tf.constant(mean, dtype=dtype)
+        self.Ystd = tf.constant(std, dtype=dtype)
 
     def build_step_graph(self, scope, state, action):
         '''
@@ -157,7 +157,7 @@ class NNModel(ModelBase):
         tensor = tf.Variable(tensor_np,
                              True,
                              name=name,
-                             dtype=tf.float64)
+                             dtype=dtype)
         return tensor
 
     def _get_1d_tensor(self, tensor1d, name):
@@ -165,7 +165,7 @@ class NNModel(ModelBase):
         tensor = tf.Variable(tensor,
                              True,
                              name=name,
-                             dtype=tf.float64)
+                             dtype=dtype)
         return tensor
 
     def _predict_nn(self, scope, X):
@@ -205,7 +205,7 @@ class NNAUVModel(NNModel):
         
         self.mask = tf.constant(mask,
                                 name="mask",
-                                dtype=tf.float64)
+                                dtype=dtype)
 
     def build_step_graph(self, scope, state, action):
         '''
@@ -224,7 +224,7 @@ class NNAUVModel(NNModel):
                 - nextState: The next state of the system.
                 [X_pose_{t+1}_I.T, X_vel_{t+1}_B].T. Shape [k, 13, 1]
         '''
-        state = tf.convert_to_tensor(state, dtype=tf.float64)
+        state = tf.convert_to_tensor(state, dtype=dtype)
         with tf.name_scope(scope) as scope:
             x = self.prepare_data(state, action)
             normDelta = self._predict_nn("nn", x)
@@ -261,13 +261,13 @@ class NNAUVModel(NNModel):
                         shape: [k, 12/13]
         '''
         if not tf.is_tensor(stateT):
-            stateT = tf.convert_to_tensor(stateT, dtype=tf.float64)
+            stateT = tf.convert_to_tensor(stateT, dtype=dtype)
         
         if not tf.is_tensor(stateT1):
-            stateT1 = tf.convert_to_tensor(stateT1, dtype=tf.float64)
+            stateT1 = tf.convert_to_tensor(stateT1, dtype=dtype)
         
         if not tf.is_tensor(action):
-            action = tf.convert_to_tensor(action, dtype=tf.float64)
+            action = tf.convert_to_tensor(action, dtype=dtype)
 
         tFrom = self.mask*stateT
         poseBIt = stateT - tFrom
@@ -367,13 +367,14 @@ class NNAUVModelSpeed(NNAUVModel):
                 - nextState: The next state of the system.
                 [X_pose_{t+1}_I.T, X_vel_{t+1}_B].T. Shape [k, 13, 1]
         '''
-        state = tf.convert_to_tensor(state, dtype=tf.float64)
+        state = tf.convert_to_tensor(state, dtype=dtype)
         with tf.name_scope(scope) as scope:
             x = self.prepare_data(state, action)
             normVelDelta = self._predict_nn("nn", x)
             velDelta = self.denormalizeY(normVelDelta)
             velDelta = tf.expand_dims(velDelta, axis=-1)
             nextState = self.next_state(state, velDelta)
+
         return nextState
 
     def prepare_training_data(self, stateT, stateT1, action, norm=True):
@@ -405,13 +406,13 @@ class NNAUVModelSpeed(NNAUVModel):
                         shape: [k, 6]
         '''
         if not tf.is_tensor(stateT):
-            stateT = tf.convert_to_tensor(stateT, dtype=tf.float64)
+            stateT = tf.convert_to_tensor(stateT, dtype=dtype)
         
         if not tf.is_tensor(stateT1):
-            stateT1 = tf.convert_to_tensor(stateT1, dtype=tf.float64)
+            stateT1 = tf.convert_to_tensor(stateT1, dtype=dtype)
         
         if not tf.is_tensor(action):
-            action = tf.convert_to_tensor(action, dtype=tf.float64)
+            action = tf.convert_to_tensor(action, dtype=dtype)
 
         tFrom = self.mask*stateT
         poseBIt = stateT - tFrom
@@ -497,8 +498,8 @@ class NNAUVModelSpeed(NNAUVModel):
                      ---------------------------------------
         '''
         k = state.shape[0]
-        OPad3x3 = tf.zeros(shape=(k, 3, 3), dtype=tf.float64)
-        OPad4x3 = tf.zeros(shape=(k, 4, 3), dtype=tf.float64)
+        OPad3x3 = tf.zeros(shape=(k, 3, 3), dtype=dtype)
+        OPad4x3 = tf.zeros(shape=(k, 4, 3), dtype=dtype)
         rotBtoI, TBtoIquat = self.body2inertial_transform(state)
         jacR1 = tf.concat([rotBtoI, OPad3x3], axis=-1)
 
@@ -637,12 +638,12 @@ class Predictor(tf.Module):
         if self.onnx:
             v_next = tf.cast(
                 self.internal(x=x_flat, u=u_flat)['vel'],
-                dtype=tf.float64, name="casting_output"
+                dtype=dtype, name="casting_output"
             )
         else:
             v_next = tf.cast(
                 self.internal.forward(x_flat, u_flat),
-                dtype=tf.float64, name="casting_output"
+                dtype=dtype, name="casting_output"
             )
         x_last = x[:, -1]
         v = x[:, -1, 12:]
@@ -670,8 +671,8 @@ def main():
     #velPred = VelPred(in_size=5*21, topology=[128, 128, 128])
     velPredTorch = load_onnx_model("/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/scripts/bluerov_hist/nn-velocity_105x32x6.pb")
     pred = Predictor(velPredTorch, dt=0.1, h=4, onnx=True)
-    x = tf.random.uniform(shape=(1, 5, 18), dtype=tf.float64)
-    u = tf.random.uniform(shape=(1, 5, 6), dtype=tf.float64)
+    x = tf.random.uniform(shape=(1, 5, 18), dtype=dtype)
+    u = tf.random.uniform(shape=(1, 5, 6), dtype=dtype)
     p = pred.forward(x, u)
     print(p.shape)
 

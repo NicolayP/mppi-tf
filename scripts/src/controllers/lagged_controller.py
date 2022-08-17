@@ -2,7 +2,7 @@
 import tensorflow as tf
 import numpy as np
 
-from ..misc.utile import assert_shape, push_to_tensor
+from ..misc.utile import assert_shape, push_to_tensor, dtype
 from .controller_base import ControllerBase
 
 
@@ -56,7 +56,7 @@ class LaggedModelController(ControllerBase):
                 name="Broadcast_inital_aciton"
             ) # shape [k, history-1, aDim, 1]
 
-            cost = tf.zeros(shape=(k, 1, 1), dtype=tf.float64)
+            cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
         with tf.name_scope("Rollout") as r:
             for i in range(self._tau):
                 with tf.name_scope(f"Rollout_{i}"):

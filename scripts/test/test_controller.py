@@ -9,6 +9,7 @@ from ..src.models.point_mass_model import PointMassModel
 from ..src.models.nn_model import NNAUVModelSpeed
 from ..src.models.nn_model import LaggedNNAUVSpeed
 from ..src.costs.static_cost import StaticCost
+from ..src.misc.utile import dtype, npdtype
 
 
 class TestControllerBase(tf.test.TestCase):
@@ -23,21 +24,21 @@ class TestControllerBase(tf.test.TestCase):
         self.gamma = 1.
         self.upsilon = 1.
 
-        self.goal = np.array([[0.], [1.], [0.], [1.]])
-        self.sigma = np.array([[1., 0.], [0., 1.]])
+        self.goal = np.array([[0.], [1.], [0.], [1.]], dtype=npdtype)
+        self.sigma = np.array([[1., 0.], [0., 1.]], dtype=npdtype)
         self.Q = np.array([[1., 0., 0., 0.],
                            [0., 1., 0., 0.],
                            [0., 0., 1., 0.],
-                           [0., 0., 0., 1.]])
+                           [0., 0., 0., 1.]], dtype=npdtype)
 
-        self.c = np.array([[[3.]], [[10.]], [[0.]], [[1.]], [[5.]]])
+        self.c = np.array([[[3.]], [[10.]], [[0.]], [[1.]], [[5.]]], dtype=npdtype)
         self.n = np.array([[[[1.], [-0.5]], [[1.], [-0.5]], [[2.], [1.]]],
                            [[[0.3], [0.]], [[2.], [0.2]], [[1.2], [3.]]],
                            [[[0.5], [0.5]], [[0.5], [0.5]], [[0.5], [0.5]]],
                            [[[0.6], [0.7]], [[0.2], [-0.3]], [[0.1], [-0.4]]],
-                           [[[-2.], [-3.]], [[-4.], [-1.]], [[0.], [0.]]]])
+                           [[[-2.], [-3.]], [[-4.], [-1.]], [[0.], [0.]]]], dtype=npdtype)
 
-        self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
+        self.a = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]], dtype=npdtype)
         model = PointMassModel(self.mass, self.dt, self.sDim, self.aDim)
         cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
         self.cont = ControllerBase(model=model,
@@ -50,12 +51,12 @@ class TestControllerBase(tf.test.TestCase):
                                    sigma=self.sigma)
 
     def testDataPrep(self):
-        exp_a0 = np.array([[1.], [0.5]])
-        exp_a1 = np.array([[2.3], [4.5]])
-        exp_a2 = np.array([[2.1], [-0.4]])
-        exp_n0 = np.array([[[1.], [-0.5]], [[0.3], [0.]], [[0.5], [0.5]], [[0.6], [0.7]], [[-2.], [-3.]]])
-        exp_n1 = np.array([[[1.], [-0.5]], [[2.], [0.2]], [[0.5], [0.5]], [[0.2], [-0.3]], [[-4], [-1]]])
-        exp_n2 = np.array([[[2.], [1.]], [[1.2], [3.]], [[0.5], [0.5]], [[0.1], [-0.4]], [[0.], [0.]]])
+        exp_a0 = np.array([[1.], [0.5]], dtype=npdtype)
+        exp_a1 = np.array([[2.3], [4.5]], dtype=npdtype)
+        exp_a2 = np.array([[2.1], [-0.4]], dtype=npdtype)
+        exp_n0 = np.array([[[1.], [-0.5]], [[0.3], [0.]], [[0.5], [0.5]], [[0.6], [0.7]], [[-2.], [-3.]]], dtype=npdtype)
+        exp_n1 = np.array([[[1.], [-0.5]], [[2.], [0.2]], [[0.5], [0.5]], [[0.2], [-0.3]], [[-4], [-1]]], dtype=npdtype)
+        exp_n2 = np.array([[[2.], [1.]], [[1.2], [3.]], [[0.5], [0.5]], [[0.1], [-0.4]], [[0.], [0.]]], dtype=npdtype)
 
 
         a0 = self.cont.prepare_action("", self.a, 0)
@@ -77,27 +78,27 @@ class TestControllerBase(tf.test.TestCase):
         self.assertAllClose(n2, exp_n2)
 
     def testUpdate(self):
-        beta = np.array([[0]])
-        exp_arg = np.array([[[-3.]], [[-10.]], [[0.]], [[-1.]], [[-5.]]])
+        beta = np.array([[0]], dtype=npdtype)
+        exp_arg = np.array([[[-3.]], [[-10.]], [[0.]], [[-1.]], [[-5.]]], dtype=npdtype)
         exp = np.array([[[0.049787068367863944]],
                         [[4.5399929762484854e-05]],
                         [[1]],
                         [[0.36787944117144233]],
-                        [[0.006737946999085467]]])
+                        [[0.006737946999085467]]], dtype=npdtype)
 
-        nabla = np.array([[1.424449856468154]])
+        nabla = np.array([[1.424449856468154]], dtype=npdtype)
         weights = np.array([[[0.034951787275480706]],
                            [[3.1871904480408675e-05]],
                            [[0.7020254138530686]],
                            [[0.2582607169364174]],
-                           [[0.004730210030553017]]])
+                           [[0.004730210030553017]]], dtype=npdtype)
 
         expected = np.array([[[0.034951787275480706*1. + 3.1871904480408675e-05*0.3 + 0.7020254138530686*0.5 + 0.2582607169364174*0.6 + 0.004730210030553017*(-2)],
                               [0.034951787275480706*(-0.5) + 3.1871904480408675e-05*0 + 0.7020254138530686*0.5 + 0.2582607169364174*0.7 + 0.004730210030553017*(-3)]],
                              [[0.034951787275480706*1 + 3.1871904480408675e-05*2 + 0.7020254138530686*0.5 + 0.2582607169364174*0.2 + 0.004730210030553017*(-4)],
                               [0.034951787275480706*(-0.5) + 3.1871904480408675e-05*0.2 + 0.7020254138530686*0.5 + 0.2582607169364174*(-0.3) + 0.004730210030553017*(-1)]],
                              [[0.034951787275480706*2 + 3.1871904480408675e-05*1.2 + 0.7020254138530686*0.5 + 0.2582607169364174*0.1 + 0.004730210030553017*0],
-                              [0.034951787275480706*1 + 3.1871904480408675e-05*3 + 0.7020254138530686*0.5 + 0.2582607169364174*(-0.4) + 0.004730210030553017*0]]])
+                              [0.034951787275480706*1 + 3.1871904480408675e-05*3 + 0.7020254138530686*0.5 + 0.2582607169364174*(-0.4) + 0.004730210030553017*0]]], dtype=npdtype)
 
         b = self.cont.beta("", self.c)
         arg = self.cont.norm_arg("", self.c, b, False)
@@ -120,9 +121,9 @@ class TestControllerBase(tf.test.TestCase):
         self.assertAllClose(sum, 1.)
 
     def testNew(self):
-        next1 = np.array([[[1.], [0.5]]])
-        next2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]])
-        next3 = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]])
+        next1 = np.array([[[1.], [0.5]]], dtype=npdtype)
+        next2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]], dtype=npdtype)
+        next3 = np.array([[[1.], [0.5]], [[2.3], [4.5]], [[2.1], [-0.4]]], dtype=npdtype)
 
         n1 = self.cont.get_next("", self.a, 1)
         n2 = self.cont.get_next("", self.a, 2)
@@ -133,11 +134,11 @@ class TestControllerBase(tf.test.TestCase):
         self.assertAllClose(n3, next3)
 
     def testShiftAndInit(self):
-        init1 = np.array([[[1.], [0.5]]])
-        init2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]])
+        init1 = np.array([[[1.], [0.5]]], dtype=npdtype)
+        init2 = np.array([[[1.], [0.5]], [[2.3], [4.5]]], dtype=npdtype)
 
-        exp1 = np.array([[[2.3], [4.5]], [[2.1], [-0.4]], [[1.], [0.5]]])
-        exp2 = np.array([[[2.1], [-0.4]], [[1.], [0.5]], [[2.3], [4.5]]])
+        exp1 = np.array([[[2.3], [4.5]], [[2.1], [-0.4]], [[1.], [0.5]]], dtype=npdtype)
+        exp2 = np.array([[[2.1], [-0.4]], [[1.], [0.5]], [[2.3], [4.5]]], dtype=npdtype)
 
         n1 = self.cont.shift("", self.a, init1, 1)
         n2 = self.cont.shift("", self.a, init2, 2)
@@ -151,9 +152,9 @@ class TestStateController(tf.test.TestCase):
         self.k, self.tau, self.sDim, self.aDim, self.dt = 5, 3, 13, 6, 0.1
         self.lam, self.gamma, self.upsilon = 1., 1., 1.
 
-        self.goal = np.zeros(shape=(self.sDim, 1))
-        self.sigma = np.eye(self.aDim)
-        self.Q = np.eye(self.sDim)
+        self.goal = np.zeros(shape=(self.sDim, 1), dtype=npdtype)
+        self.sigma = np.eye(self.aDim, dtype=npdtype)
+        self.Q = np.eye(self.sDim, dtype=npdtype)
 
         self.model = NNAUVModelSpeed({}, stateDim=self.sDim, actionDim=self.aDim, k=self.k)
         self.cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
@@ -169,19 +170,19 @@ class TestStateController(tf.test.TestCase):
         )
 
     def testBuildModel(self):
-        dummy_input = tf.random.normal(shape=(self.sDim, 1), dtype=tf.float64)
-        dummy_noise = tf.random.normal(shape=(self.k, self.tau, self.aDim, 1), dtype=tf.float64)
-        dummy_seq = tf.random.normal(shape=(self.tau, self.aDim, 1), dtype=tf.float64)
+        dummy_input = tf.random.normal(shape=(self.sDim, 1), dtype=dtype)
+        dummy_noise = tf.random.normal(shape=(self.k, self.tau, self.aDim, 1), dtype=dtype)
+        dummy_seq = tf.random.normal(shape=(self.tau, self.aDim, 1), dtype=dtype)
         costs = self.controller.build_model("test", self.k, dummy_input, dummy_noise, dummy_seq)
-        gt = np.zeros(shape=(self.k, 1, 1))
+        gt = np.zeros(shape=(self.k, 1, 1), dtype=npdtype)
 
         self.assertShapeEqual(gt, costs)
 
     def testStateController(self):
-        dummy_input = tf.random.normal(shape=(self.sDim, 1), dtype=tf.float64)
-        next_act = tf.constant(self.controller.next(dummy_input), dtype=tf.float64)
+        dummy_input = tf.random.normal(shape=(self.sDim, 1), dtype=dtype)
+        next_act = tf.constant(self.controller.next(dummy_input), dtype=dtype)
 
-        gt_shape = np.zeros(shape=(self.aDim, ))
+        gt_shape = np.zeros(shape=(self.aDim, ), dtype=npdtype)
         self.assertShapeEqual(gt_shape, next_act)
 
 
@@ -190,9 +191,9 @@ class TestLaggedStateController(tf.test.TestCase):
         self.h, self.k, self.tau, self.sDim, self.aDim, self.dt = 3, 5, 3, 18, 6, 0.1
         self.lam, self.gamma, self.upsilon = 1., 1., 1.
 
-        self.goal = np.zeros(shape=(self.sDim, 1))
-        self.sigma = np.eye(self.aDim)
-        self.Q = np.eye(self.sDim)
+        self.goal = np.zeros(shape=(self.sDim, 1), dtype=npdtype)
+        self.sigma = np.eye(self.aDim, dtype=npdtype)
+        self.Q = np.eye(self.sDim, dtype=npdtype)
 
         self.model = LaggedNNAUVSpeed(k=self.k, h=self.h, dt=self.dt)
         self.cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
@@ -209,31 +210,31 @@ class TestLaggedStateController(tf.test.TestCase):
         )
 
     def testPrepareToApply(self):
-        dummy_action = tf.random.normal(shape=(self.aDim, 1), dtype=tf.float64)
-        dummy_noise = tf.random.normal(shape=(self.k, self.aDim, 1), dtype=tf.float64)
-        dummy_lagged_action = tf.random.normal(shape=(self.k, self.h-1, self.aDim, 1), dtype=tf.float64)
+        dummy_action = tf.random.normal(shape=(self.aDim, 1), dtype=dtype)
+        dummy_noise = tf.random.normal(shape=(self.k, self.aDim, 1), dtype=dtype)
+        dummy_lagged_action = tf.random.normal(shape=(self.k, self.h-1, self.aDim, 1), dtype=dtype)
         preped = self.controller.prepare_to_apply("test", dummy_action, dummy_noise, dummy_lagged_action)
-        gt_shape = np.zeros(shape=(self.k, self.h, self.aDim, 1))
+        gt_shape = np.zeros(shape=(self.k, self.h, self.aDim, 1), dtype=npdtype)
         self.assertShapeEqual(gt_shape, preped)
 
     def testBuildModel(self):
         dummy_input = (
-            tf.random.normal(shape=(self.h, self.sDim, 1), dtype=tf.float64),
-            tf.random.normal(shape=(self.h-1, self.aDim, 1), dtype=tf.float64)
+            tf.random.normal(shape=(self.h, self.sDim, 1), dtype=dtype),
+            tf.random.normal(shape=(self.h-1, self.aDim, 1), dtype=dtype)
         )
-        dummy_noise = tf.random.normal(shape=(self.k, self.tau, self.aDim, 1), dtype=tf.float64)
-        dummy_seq = tf.random.normal(shape=(self.tau, self.aDim, 1), dtype=tf.float64)
+        dummy_noise = tf.random.normal(shape=(self.k, self.tau, self.aDim, 1), dtype=dtype)
+        dummy_seq = tf.random.normal(shape=(self.tau, self.aDim, 1), dtype=dtype)
         costs = self.controller.build_model("test", self.k, dummy_input, dummy_noise, dummy_seq)
-        gt_shape = np.zeros(shape=(self.k, 1, 1))
+        gt_shape = np.zeros(shape=(self.k, 1, 1), dtype=npdtype)
 
         self.assertShapeEqual(gt_shape, costs)
 
     def testLaggedController(self):
         dummy_input = (
-            tf.random.normal(shape=(self.h, self.sDim, 1), dtype=tf.float64),
-            tf.random.normal(shape=(self.h-1, self.aDim, 1), dtype=tf.float64)
+            tf.random.normal(shape=(self.h, self.sDim, 1), dtype=dtype),
+            tf.random.normal(shape=(self.h-1, self.aDim, 1), dtype=dtype)
         )
-        next_act = tf.constant(self.controller.next(dummy_input), dtype=tf.float64)
+        next_act = tf.constant(self.controller.next(dummy_input), dtype=dtype)
 
-        gt_shape = np.zeros(shape=(self.aDim, ))
+        gt_shape = np.zeros(shape=(self.aDim, ), dtype=npdtype)
         self.assertShapeEqual(gt_shape, next_act)

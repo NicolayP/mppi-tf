@@ -1,5 +1,5 @@
 import tensorflow as tf
-from ..misc.utile import assert_shape
+from ..misc.utile import assert_shape, dtype
 
 # TODO: compute all constants without tensorflow. Out of the graph
 # computation.
@@ -32,7 +32,7 @@ class CostBase(tf.Module):
             self.gamma = gamma
             self.upsilon = upsilon
 
-            s = tf.convert_to_tensor(sigma, dtype=tf.float64)
+            s = tf.convert_to_tensor(sigma, dtype=dtype)
 
             self.sig_shape = s.shape
             if len(self.sig_shape) != 2:
@@ -131,7 +131,6 @@ class CostBase(tf.Module):
                     "control_cost": $ \gamma [a_cost + 2mix_cost] $
                     "action_cost": the overall action cost.
         '''
-
         rhsNcost = tf.linalg.matmul(self.invSig, noise,
                                       name="rhs_noise")
 
@@ -142,7 +141,7 @@ class CostBase(tf.Module):
         mixCost = tf.linalg.matmul(action, rhsNcost, transpose_a=True,
                                     name="mix")
 
-        mixCost = tf.math.multiply(tf.cast(2., dtype=tf.float64), mixCost)
+        mixCost = tf.math.multiply(tf.cast(2., dtype=dtype), mixCost)
 
         # \epsilon^{T}_t \Sigma^{-1} \epsilon_t
         nCost = tf.linalg.matmul(noise, rhsNcost, transpose_a=True,
@@ -152,19 +151,19 @@ class CostBase(tf.Module):
         aCost = tf.linalg.matmul(action, rhsAcost, transpose_a=True,
                                   name="action")
 
-        aCost = tf.math.multiply(tf.cast(self.gamma, dtype=tf.float64),
+        aCost = tf.math.multiply(tf.cast(self.gamma, dtype=dtype),
                                  aCost)
 
-        mixCost = tf.math.multiply(tf.cast(self.gamma, dtype=tf.float64),
+        mixCost = tf.math.multiply(tf.cast(self.gamma, dtype=dtype),
                                    mixCost)
 
         nCost = tf.math.multiply(tf.cast(self.lam*(1.-1./self.upsilon),
-                                         dtype=tf.float64),
+                                         dtype=dtype),
                                  nCost)
 
         # \gamma [action_cost + 2mix_cost]
         controlCost = tf.add(aCost, mixCost)
-        actionCost = tf.math.multiply(tf.cast(0.5, dtype=tf.float64),
+        actionCost = tf.math.multiply(tf.cast(0.5, dtype=dtype),
                                       tf.add(controlCost, nCost))
 
         return actionCost

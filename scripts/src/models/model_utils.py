@@ -1,9 +1,9 @@
 import tensorflow as tf
-
+from ..misc.utile import assert_shape, dtype
 
 class ToSE3Mat(tf.Module):
     def __init__(self):
-        self.pad = tf.constant([[[0., 0., 0., 1.]]], dtype=tf.float64)
+        self.pad = tf.constant([[[0., 0., 0., 1.]]], dtype=dtype)
 
     def forward(self, x):
         k = x.shape[0]
@@ -22,7 +22,7 @@ class SE3int(tf.Module):
     def __init__(self):
         self.skew = Skew()
         self.so3int = SO3int(self.skew)
-        self.pad = tf.constant([[[0., 0., 0., 1.]]], dtype=tf.float64)
+        self.pad = tf.constant([[[0., 0., 0., 1.]]], dtype=dtype)
 
     def forward(self, M, tau):
         return M @ self.exp(tau)
@@ -46,7 +46,7 @@ class SE3int(tf.Module):
     def v(self, theta_vec):
         theta = tf.linalg.norm(theta_vec)
         skewT = self.skew.forward(theta_vec)
-        a = tf.eye(3, dtype=tf.float64)
+        a = tf.eye(3, dtype=dtype)
         b = (1-tf.cos(theta))/tf.pow(theta, 2) * skewT
         c = (theta - tf.sin(theta))/tf.pow(theta, 3) * tf.pow(skewT, 2)
         return a + b + c
@@ -66,7 +66,7 @@ class SO3int(tf.Module):
         theta = tf.linalg.norm(tau, axis=1)
         u = tau/theta[:, None]
         skewU = self.skew.forward(u)
-        a = tf.eye(3, dtype=tf.float64)
+        a = tf.eye(3, dtype=dtype)
         b = tf.sin(theta)[:, None, None]*skewU
         c = (1-tf.cos(theta))[:, None, None]*tf.pow(skewU, 2)
         return a + b + c
@@ -78,19 +78,19 @@ class Skew(tf.Module):
             [0., 0., 0.],
             [0., 0., -1.],
             [0., 1., 0.]
-        ], dtype=tf.float64)
+        ], dtype=dtype)
 
         self.e2 = tf.constant([
             [0., 0., 1.],
             [0., 0., 0.],
             [-1., 0., 0.]
-        ], dtype=tf.float64)
+        ], dtype=dtype)
 
         self.e3 = tf.constant([
             [0., -1., 0.],
             [1., 0., 0.],
             [0., 0., 0.]
-        ], dtype=tf.float64)
+        ], dtype=dtype)
 
     def forward(self, vec):
         a = self.e1 * vec[:, 0, None, None]

@@ -1,3 +1,4 @@
+import imp
 from tabnanny import verbose
 from cpprb import ReplayBuffer
 from sklearn.model_selection import KFold
@@ -14,6 +15,7 @@ import copy
 import time as t
 
 from ..model import copy_model
+from ..misc.utile import dtype
 
 
 class LearnerBase(tf.Module):
@@ -454,7 +456,7 @@ class LearnerBase(tf.Module):
         noise = tf.random.normal(shape=(XAug.shape),
                                  stddev=sigma,
                                  mean=0.,
-                                 dtype=tf.float64,
+                                 dtype=dtype,
                                  seed=1)
 
 
@@ -496,8 +498,8 @@ class LearnerBase(tf.Module):
             return loss, grads
 
     def _save_graph(self):
-        state = tf.zeros((1, self.model.get_state_dim(), 1), dtype=tf.float64)
-        action = tf.zeros((1, self.model.get_action_dim(), 1), dtype=tf.float64)
+        state = tf.zeros((1, self.model.get_state_dim(), 1), dtype=dtype)
+        action = tf.zeros((1, self.model.get_action_dim(), 1), dtype=dtype)
         with self.writer.as_default():
             graph = tf.function(
                         self.model.build_step_graph

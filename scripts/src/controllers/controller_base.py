@@ -4,7 +4,7 @@ from cpprb import ReplayBuffer
 import numpy as np
 import scipy.signal
 
-from ..misc.utile import assert_shape, push_to_tensor
+from ..misc.utile import assert_shape, push_to_tensor, dtype
 from ..observer.observer_base import ObserverBase
 import time as t
 
@@ -81,12 +81,12 @@ class ControllerBase(tf.Module):
 
         self._lam = tf.Variable(lam,
                                 trainable=False,
-                                dtype=tf.float64,
+                                dtype=dtype,
                                 name="lambda")
 
         self._upsilon = tf.Variable(upsilon,
                                     trainable=False,
-                                    dtype=tf.float64,
+                                    dtype=dtype,
                                     name="upsilon")
 
         self._tau = tau
@@ -115,7 +115,7 @@ class ControllerBase(tf.Module):
         self._cost.set_observer(self._observer)
 
         self._sigma = tf.convert_to_tensor(sigma,
-                                           dtype=tf.float64,
+                                           dtype=dtype,
                                            name="Sigma")
 
         if self._graphMode:
@@ -127,7 +127,7 @@ class ControllerBase(tf.Module):
 
         if initSeq.size == 0:
             self._actionSeq = tf.zeros((tau, aDim, 1),
-                                       dtype=tf.float64,
+                                       dtype=dtype,
                                        name="Action_sequence_init")
         else:
             if assert_shape(initSeq, (tau, aDim, 1)):
@@ -328,7 +328,7 @@ class ControllerBase(tf.Module):
         rng = tf.random.normal(shape=(k, self._tau, self._aDim, 1),
                                stddev=1.,
                                mean=0.,
-                               dtype=tf.float64,
+                               dtype=dtype,
                                seed=1)
 
         return tf.linalg.matmul(self._upsilon*self._sigma, rng)
@@ -408,7 +408,7 @@ class ControllerBase(tf.Module):
             - output:
             ---------
                 - the action to apply:
-                    tf.Tensor. Shape [aDim, 1], dtype=tf.float64
+                    tf.Tensor. Shape [aDim, 1], dtype=dtype
         '''
 
         return actions[timestep]
@@ -422,7 +422,7 @@ class ControllerBase(tf.Module):
             --------
                 - scope: string, the tensorflow scope name.
                 - noises: The noise tensor.
-                    tf.Tensor shape [k, tau, aDim, 1], dtype=tf.float64
+                    tf.Tensor shape [k, tau, aDim, 1], dtype=dtype
                 - timestep: the current timestep of the rollout.
 
             - output:
@@ -444,7 +444,7 @@ class ControllerBase(tf.Module):
 
     def init_zeros(self, scope, size):
         # shape: out [size, aDim, 1]
-        return tf.zeros([size, self._aDim, 1], dtype=tf.float64)
+        return tf.zeros([size, self._aDim, 1], dtype=dtype)
 
     def trace(self):
         '''

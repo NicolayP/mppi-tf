@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from ..misc.utile import assert_shape, push_to_tensor
+from ..misc.utile import assert_shape, push_to_tensor, dtype
 from .controller_base import ControllerBase
 import numpy as np
 
@@ -81,8 +81,8 @@ class StateModelController(ControllerBase):
             state = tf.broadcast_to(state,
                                     [k, self._sDim, 1],
                                     name="Broadcast_inital_state")
-            nextState = tf.zeros(shape=tf.shape(state), dtype=tf.float64)
-            cost = tf.zeros(shape=(k, 1, 1), dtype=tf.float64)
+            nextState = tf.zeros(shape=tf.shape(state), dtype=dtype)
+            cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
 
         # PAY ATTENTION TO THE FOR LOOPS WITH @tf.function.
         for i in range(self._tau):

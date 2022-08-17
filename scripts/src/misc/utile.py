@@ -10,6 +10,9 @@ from mpl_toolkits.mplot3d import proj3d
 
 import scipy.signal
 
+dtype = tf.float32
+npdtype = np.float32
+
 control_items: dict = {}
 control_step = 0
 

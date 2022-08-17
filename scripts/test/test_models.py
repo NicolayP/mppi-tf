@@ -6,6 +6,7 @@ from ..src.models.model_base import ModelBase
 from ..src.models.point_mass_model import PointMassModel
 from ..src.models.auv_model import AUVModel
 from ..src.models.nn_model import NNAUVModel, Predictor, VelPred
+from ..src.misc.utile import dtype, npdtype
 
 import numpy as np
 
@@ -21,7 +22,7 @@ def qmul(q1, q2):
                             w0*y1 - x0*z1 + y0*w1 + z0*x1,
                             w0*z1 + x0*y1 - y0*x1 + z0*w1
                         ]
-                        ], dtype=np.float64)
+                        ], dtype=npdtype)
 
         mul.append(res)
 
@@ -40,13 +41,13 @@ class TestPointMassModel(tf.test.TestCase):
         m = 1.
         model = PointMassModel(m, self.dt, s, a)
 
-        state_in = np.array([[[0.], [0.]]])
-        action_in = np.array([[[1.]]])
+        state_in = np.array([[[0.], [0.]]], dtype=npdtype)
+        action_in = np.array([[[1.]]], dtype=npdtype)
 
         acc = self.dt*self.dt/(2.*m)
         vel = self.dt/m
-        exp_u = np.array([[[acc], [vel]]])
-        exp_x = np.array([[[0.], [0.]]])
+        exp_u = np.array([[[acc], [vel]]], dtype=npdtype)
+        exp_x = np.array([[[0.], [0.]]], dtype=npdtype)
         exp = exp_u + exp_x
 
         x_pred = model.build_free_step_graph("", state_in)
@@ -63,13 +64,13 @@ class TestPointMassModel(tf.test.TestCase):
         m = 1.
         model = PointMassModel(m, self.dt, s, a)
 
-        state_in = np.array([[[0.], [0.], [0.], [0.]]])
-        action_in = np.array([[[1.], [1.]]])
+        state_in = np.array([[[0.], [0.], [0.], [0.]]], dtype=npdtype)
+        action_in = np.array([[[1.], [1.]]], dtype=npdtype)
 
         acc = self.dt*self.dt/(2.*m)
         vel = self.dt/m
-        exp_u = np.array([[[acc], [vel], [acc], [vel]]])
-        exp_x = np.array([[[0.], [0.], [0.], [0.]]])
+        exp_u = np.array([[[acc], [vel], [acc], [vel]]], dtype=npdtype)
+        exp_x = np.array([[[0.], [0.], [0.], [0.]]], dtype=npdtype)
         exp = exp_u + exp_x
 
         x_pred = model.build_free_step_graph("", state_in)
@@ -90,12 +91,12 @@ class TestPointMassModel(tf.test.TestCase):
                              [[2.], [1.], [5.], [0.], [-1.], [-2.]],
                              [[0.5], [0.5], [0.5], [0.5], [0.5], [0.5]],
                              [[1.], [0.], [1.], [0.], [1.], [0.]],
-                             [[-1.], [0.5], [-3.], [2.], [0.], [0.]]])
+                             [[-1.], [0.5], [-3.], [2.], [0.], [0.]]], dtype=npdtype)
         action_in = np.array([[[1.], [1.], [1.]],
                               [[2.], [0.], [-1.]],
                               [[0.], [0.], [0.]],
                               [[0.5], [-0.5], [0.5]],
-                              [[3.], [3.], [3.]]])
+                              [[3.], [3.], [3.]]], dtype=npdtype)
 
         acc = self.dt*self.dt/(2.*m)
         vel = self.dt/m
@@ -103,13 +104,13 @@ class TestPointMassModel(tf.test.TestCase):
                           [[2.*acc], [2.*vel], [0.*acc], [0.*vel], [-1.*acc], [-1.*vel]],
                           [[0.*acc], [0.*vel], [0.*acc], [0.*vel], [0.*acc], [0.*vel]],
                           [[0.5*acc], [0.5*vel], [-0.5*acc], [-0.5*vel], [0.5*acc], [0.5*vel]],
-                          [[3.*acc], [3.*vel], [3.*acc], [3.*vel], [3.*acc], [3.*vel]]])
+                          [[3.*acc], [3.*vel], [3.*acc], [3.*vel], [3.*acc], [3.*vel]]], dtype=npdtype)
 
         exp_x = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
                           [[2.+self.dt], [1.], [5.], [0.], [-1.-2.*self.dt], [-2.]],
                           [[0.5+0.5*self.dt], [0.5], [0.5+0.5*self.dt], [0.5], [0.5+0.5*self.dt], [0.5]],
                           [[1.], [0.], [1.], [0.], [1.], [0.]],
-                          [[-1.+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]]])
+                          [[-1.+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]]], dtype=npdtype)
         exp = exp_u + exp_x
 
         x_pred = model.build_free_step_graph("", state_in)
@@ -126,12 +127,12 @@ class TestPointMassModel(tf.test.TestCase):
         m = 1.5
         model = PointMassModel(m, self.dt, s, a)
 
-        state_in = np.array([[[-1.], [0.5], [-3.], [2.], [0.], [0.]]])
+        state_in = np.array([[[-1.], [0.5], [-3.], [2.], [0.], [0.]]], dtype=npdtype)
         action_in = np.array([[[1.], [1.], [1.]],
                               [[2.], [0.], [-1.]],
                               [[0.], [0.], [0.]],
                               [[0.5], [-0.5], [0.5]],
-                              [[3.], [3.], [3.]]])
+                              [[3.], [3.], [3.]]], dtype=npdtype)
 
         acc = self.dt*self.dt/(2.*m)
         vel = self.dt/m
@@ -139,13 +140,13 @@ class TestPointMassModel(tf.test.TestCase):
                           [[2.*acc], [2.*vel], [0.*acc], [0.*vel], [-1.*acc], [-1.*vel]],
                           [[0.*acc], [0.*vel], [0.*acc], [0.*vel], [0.*acc], [0.*vel]],
                           [[0.5*acc], [0.5*vel], [-0.5*acc], [-0.5*vel], [0.5*acc], [0.5*vel]],
-                          [[3.*acc], [3.*vel], [3.*acc], [3.*vel], [3.*acc], [3.*vel]]])
+                          [[3.*acc], [3.*vel], [3.*acc], [3.*vel], [3.*acc], [3.*vel]]], dtype=npdtype)
 
         exp_x = np.array([[[-1+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]],
                           [[-1+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]],
                           [[-1+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]],
                           [[-1+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]],
-                          [[-1+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]]])
+                          [[-1+0.5*self.dt], [0.5], [-3.+2.*self.dt], [2.], [0.], [0.]]], dtype=npdtype)
 
         exp = exp_u + exp_x
 
@@ -169,12 +170,12 @@ class TestPointMassModel(tf.test.TestCase):
                              [[2.], [1.], [5.], [0.], [-1.], [-2.]],
                              [[0.5], [0.5], [0.5], [0.5], [0.5], [0.5]],
                              [[1.], [0.], [1.], [0.], [1.], [0.]],
-                             [[-1.], [0.5], [-3.], [2.], [0.], [0.]]])
+                             [[-1.], [0.5], [-3.], [2.], [0.], [0.]]], dtype=npdtype)
         action_in = np.array([[[1.], [1.], [1.]],
                               [[2.], [0.], [-1.]],
                               [[0.], [0.], [0.]],
                               [[0.5], [-0.5], [0.5]],
-                              [[3.], [3.], [3.]]])
+                              [[3.], [3.], [3.]]], dtype=npdtype)
 
         acc = self.dt*self.dt/(2.*m)
         vel = self.dt/m
@@ -190,13 +191,13 @@ class TestPointMassModel(tf.test.TestCase):
                         [[2.0*3*(acc+vel*self.dt)], [2.0*vel*3], [0.0*3*(acc+vel*self.dt)], [0.0*vel*3], [-1.0*3*(acc+vel*self.dt)], [-1.0*vel*3]],
                         [[0.0*3*(acc+vel*self.dt)], [0.0*vel*3], [0.0*3*(acc+vel*self.dt)], [0.0*vel*3], [0.0*3*(acc+vel*self.dt)], [0.0*vel*3]],
                         [[0.5*3*(acc+vel*self.dt)], [0.5*vel*3], [-0.5*3*(acc+vel*self.dt)], [-0.5*vel*3], [0.5*3*(acc+vel*self.dt)], [0.5*vel*3]],
-                        [[3.0*3*(acc+vel*self.dt)], [3.0*vel*3], [3.0*3*(acc+vel*self.dt)], [3.0*vel*3], [3.0*3*(acc+vel*self.dt)], [3.0*vel*3]]])
+                        [[3.0*3*(acc+vel*self.dt)], [3.0*vel*3], [3.0*3*(acc+vel*self.dt)], [3.0*vel*3], [3.0*3*(acc+vel*self.dt)], [3.0*vel*3]]], dtype=npdtype)
 
         exp_x = np.array([[[0.], [0.], [0.], [0.], [0.], [0.]],
                           [[2.+self.dt*3], [1.], [5.], [0.], [-1.-2.*self.dt*3], [-2.]],
                           [[0.5+0.5*self.dt*3], [0.5], [0.5+0.5*self.dt*3], [0.5], [0.5+0.5*self.dt*3], [0.5]],
                           [[1.], [0.], [1.], [0.], [1.], [0.]],
-                          [[-1.+0.5*self.dt*3], [0.5], [-3.+2.*self.dt*3], [2.], [0.], [0.]]])
+                          [[-1.+0.5*self.dt*3], [0.5], [-3.+2.*self.dt*3], [2.], [0.], [0.]]], dtype=npdtype)
 
         exp = B_u + exp_x
 
@@ -212,9 +213,9 @@ class TestPointMassModel(tf.test.TestCase):
         m = 1.5
         model = PointMassModel(m, self.dt, s, a)
 
-        x = np.array([[0.5], [0.1], [0.2], [-0.1]])
-        u = np.array([[0.2], [-0.15]])
-        gt = np.array([[0.514], [0.14], [0.187], [-0.13]])
+        x = np.array([[0.5], [0.1], [0.2], [-0.1]], dtype=npdtype)
+        u = np.array([[0.2], [-0.15]], dtype=npdtype)
+        gt = np.array([[0.514], [0.14], [0.187], [-0.13]], dtype=npdtype)
 
         model.train_step(gt, x, u)
 
@@ -277,7 +278,7 @@ class TestAUVModel(tf.test.TestCase):
                            [-0.111618880991033], [0.633022223770408],
                            [0.492403876367579], [0.586824089619078],
                           [0.], [0.], [0.],
-                          [0.], [0.], [0.]]])
+                          [0.], [0.], [0.]]], dtype=npdtype)
 
         pose_quat, speed_quat = self.model_quat.prepare_data(quat)
 
@@ -300,7 +301,7 @@ class TestAUVModel(tf.test.TestCase):
                                   [ 0.4365945,  0.4901593,  0.7544065],
                                   [-0.8528685,  0.4924039,  0.1736482]
                                  ]
-                                ])
+                                ], dtype=npdtype)
 
         wid=6
         xid=3
@@ -367,9 +368,9 @@ class TestAUVModel(tf.test.TestCase):
                               1.-2.*(quat[2, xid, 0]**2. + quat[2, yid, 0]**2.)
                              ]
                             ]
-                           ])
+                           ], dtype=npdtype)
 
-        exp_TB2Iquat = np.zeros(shape=(k, 4, 3))
+        exp_TB2Iquat = np.zeros(shape=(k, 4, 3), dtype=npdtype)
 
         exp_TB2Iquat[:, 0, 0] = -quat[:, xid, 0]
         exp_TB2Iquat[:, 0, 1] = -quat[:, yid, 0]
@@ -396,7 +397,7 @@ class TestAUVModel(tf.test.TestCase):
 
         self.assertAllClose(self.model_quat._TBtoIquat, exp_TB2Iquat)
 
-        exp_jac_quat = np.zeros(shape=(k, 7, 6))
+        exp_jac_quat = np.zeros(shape=(k, 7, 6), dtype=npdtype)
         exp_jac_quat[:, 0:3, 0:3] = exp_rot
         exp_jac_quat[:, 3:7, 3:6] = exp_TB2Iquat
         jac_quat = self.model_quat.get_jacobian()
@@ -407,32 +408,32 @@ class TestAUVModel(tf.test.TestCase):
         k = 2
         self.model_quat.set_k(k)
 
-        roll = np.array([45., 13., 280.])*(np.pi/180.)
-        pitch = np.array([0., 110., 50.])*(np.pi/180.)
-        yaw = np.array([0., 25., 325.])*(np.pi/180.)
+        roll = np.array([45., 13., 280.], dtype=npdtype)*(np.pi/180.)
+        pitch = np.array([0., 110., 50.], dtype=npdtype)*(np.pi/180.)
+        yaw = np.array([0., 25., 325.], dtype=npdtype)*(np.pi/180.)
         pose = np.array([
                          [[1.0], [1.0], [1.0], [roll[0]], [pitch[0]], [yaw[0]]],
                          [[1.5], [2.3], [0.7], [roll[1]], [pitch[1]], [yaw[1]]],
                          [[5.2], [-2.], [1.7], [roll[2]], [pitch[2]], [yaw[2]]]
-                        ])
+                        ], dtype=npdtype)
 
         pose = np.array([
                          [[1.0], [1.0], [1.0], [0.3826834], [0.], [0.], [0.9238795]],
                          [[1.5], [2.3], [0.7], [-0.1127657], [0.8086476], [0.0328141], [0.5764513]],
                          [[5.2], [-2.], [1.7], [-0.4582488], [0.4839407], [0.0503092], [0.7438269]]
-                        ])
+                        ], dtype=npdtype)
 
-        roll = np.array([13., 280.])*(np.pi/180.)
-        pitch = np.array([110., 50.])*(np.pi/180.)
-        yaw = np.array([25., 325.])*(np.pi/180.)
+        roll = np.array([13., 280.], dtype=npdtype)*(np.pi/180.)
+        pitch = np.array([110., 50.], dtype=npdtype)*(np.pi/180.)
+        yaw = np.array([25., 325.], dtype=npdtype)*(np.pi/180.)
 
         pose = np.array([
                          [[1.5], [2.3], [0.7], [-0.1127657], [0.8086476], [0.0328141], [0.5764513]],
                          [[5.2], [-2.], [1.7], [-0.4582488], [0.4839407], [0.0503092], [0.7438269]]
-                        ])
+                        ], dtype=npdtype)
 
-        rotItoB = np.zeros(shape=(k, 3, 3))
-        rotBtoI = np.zeros(shape=(k, 3, 3))
+        rotItoB = np.zeros(shape=(k, 3, 3), dtype=npdtype)
+        rotBtoI = np.zeros(shape=(k, 3, 3), dtype=npdtype)
         
         for i in range(k):
             rotBtoI[i, :, :] = np.array([[
@@ -450,7 +451,7 @@ class TestAUVModel(tf.test.TestCase):
                                          np.cos(pitch[i])*np.sin(roll[i]),
                                          np.cos(pitch[i])*np.cos(roll[i])
                                         ]]
-                                        )
+                                        , dtype=npdtype)
             rotItoB[i, :, :] = rotBtoI[i, :, :].T
         
         W = self.model_quat._mass*self.model_quat._gravity
@@ -459,8 +460,8 @@ class TestAUVModel(tf.test.TestCase):
         r_g = self.model_quat._cog
         r_b = self.model_quat._cob
 
-        fng = np.array([0.0, 0.0, -W])
-        fnb = np.array([0.0, 0.0, B])
+        fng = np.array([0.0, 0.0, -W], dtype=npdtype)
+        fnb = np.array([0.0, 0.0, B], dtype=npdtype)
 
         fbg = np.dot(rotItoB, fng)
         fbb = np.dot(rotItoB, fnb)
@@ -468,7 +469,7 @@ class TestAUVModel(tf.test.TestCase):
         mbg = np.cross(r_g, fbg)
         mbb = np.cross(r_b, fbb)
 
-        exp_rest = np.zeros((k, 6, 1))
+        exp_rest = np.zeros((k, 6, 1), dtype=npdtype)
         fb = -(fbb+fbg)
         mb = -(mbb+mbg)
         exp_rest[:, 0, 0] = fb[:, 0]
@@ -493,9 +494,9 @@ class TestAUVModel(tf.test.TestCase):
                         [[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]],
                         [[2.0], [1.5], [1.0], [3.0], [3.5], [2.5]],
                         [[-2.0], [-1.5], [-1.0], [-3.0], [-3.5], [-2.5]]
-                       ])
+                       ], dtype=npdtype)
         d = self.model_quat.damping_matrix("damp", vel)
-        exp_damp = np.zeros(shape=(vel.shape[0], 6, 6))
+        exp_damp = np.zeros(shape=(vel.shape[0], 6, 6), dtype=npdtype)
         for i in range(vel.shape[0]):
             exp_damp[i, :, :] = -1* np.diag(self.params["linear_damping"]) - vel[i, 0, 0]*np.diag(self.params["linear_damping_forward_speed"])
 
@@ -505,25 +506,25 @@ class TestAUVModel(tf.test.TestCase):
     def test_corrolis(self):
         k = 1
         self.model_quat.set_k(k)
-        vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]])
+        vel = np.array([[[1.0], [1.0], [1.0], [0.0], [0.0], [0.0]]], dtype=npdtype)
         Iv = [self.inertial["ixx"]*vel[0, 3, 0] - self.inertial["ixy"]*vel[0, 4, 0] - self.inertial["ixz"]*vel[0, 5, 0], 
               - self.inertial["ixy"]*vel[0, 3, 0] + self.inertial["iyy"]*vel[0, 4, 0] - self.inertial["iyz"]*vel[0, 5, 0],
               - self.inertial["ixz"]*vel[0, 3, 0] - self.inertial["iyz"]*vel[0, 4, 0] + self.inertial["izz"]*vel[0, 5, 0]]
-        Mav = - np.dot(np.array(self.params["Ma"]), vel)
+        Mav = - np.dot(np.array(self.params["Ma"], dtype=npdtype), vel)
 
         crb = np.array([[[0., 0., 0., 0., self.params["mass"]*vel[0, 2, 0], -self.params["mass"]*vel[0, 1, 0]],
                         [0., 0., 0., -self.params["mass"]*vel[0, 2, 0], 0., self.params["mass"]*vel[0, 0, 0]],
                         [0., 0., 0., self.params["mass"]*vel[0, 1, 0], -self.params["mass"]*vel[0, 0, 0], 0.],
                         [0., self.params["mass"]*vel[0, 2, 0], -self.params["mass"]*vel[0, 1, 0], 0., Iv[2], -Iv[1]],
                         [-self.params["mass"]*vel[0, 2, 0], 0., self.params["mass"]*vel[0, 0, 0], -Iv[2], 0., Iv[0]],
-                        [self.params["mass"]*vel[0, 1, 0], -self.params["mass"]*vel[0, 0, 0], 0., Iv[1], -Iv[0], 0.]]])
+                        [self.params["mass"]*vel[0, 1, 0], -self.params["mass"]*vel[0, 0, 0], 0., Iv[1], -Iv[0], 0.]]], dtype=npdtype)
 
         ca = np.array([[[0., 0., 0., 0., -Mav[2, 0, 0], Mav[1, 0, 0]],
                        [0., 0., 0., Mav[2, 0, 0], 0., -Mav[0, 0, 0]],
                        [0., 0., 0., -Mav[1, 0, 0], Mav[0, 0, 0], 0.],
                        [0., -Mav[2, 0, 0], Mav[1, 0, 0], 0., -Mav[5, 0, 0], Mav[4, 0, 0]],
                        [Mav[2, 0, 0], 0., -Mav[0, 0, 0], Mav[5, 0, 0], 0., -Mav[3, 0, 0]],
-                       [-Mav[1, 0, 0], Mav[0, 0, 0], 0., -Mav[4, 0, 0], Mav[3, 0, 0], 0.]]])
+                       [-Mav[1, 0, 0], Mav[0, 0, 0], 0., -Mav[4, 0, 0], Mav[3, 0, 0], 0.]]], dtype=npdtype)
 
         c = self.model_quat.coriolis_matrix("coriolis", vel)
 
@@ -533,8 +534,8 @@ class TestAUVModel(tf.test.TestCase):
         k = 1
         self.model_quat.set_k(k)
         state = np.array([[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
-                           [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]])
-        action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]])
+                           [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]], dtype=npdtype)
+        action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]], dtype=npdtype)
         next_state = self.model_quat.build_step_graph("step", state, action)
 
         #print("*"*10 + " Next State " + "*"*10)
@@ -558,13 +559,13 @@ class TestAUVModel(tf.test.TestCase):
                              [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ],
 
                            [ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
-                             [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ] ])
+                             [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ] ], dtype=npdtype)
 
         action = np.array([[ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ],
                            [ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ],
                            [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ],
                            [ [2.0], [2.0], [2.0], [2.0], [2.0], [2.0] ],
-                           [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]])
+                           [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]], dtype=npdtype)
 
         next_state = self.model_quat.build_step_graph("step", state, action)
         #print("*"*10 + " Next State Many " + "*"*10)
@@ -585,7 +586,7 @@ class TestNNAUVModel(tf.test.TestCase):
                              [1.0], [0.0], [0.25], # Linear velocities
                              [0.0] ,[0.0] ,[0.0] # Angular velocities
                             ]
-                           ])
+                           ], dtype=npdtype)
 
         state_t1 = np.array([
                              [
@@ -594,13 +595,13 @@ class TestNNAUVModel(tf.test.TestCase):
                               [3.0], [3.5], [4.5], # Linear velocities
                               [5.5], [6.5], [7.5] # Angular velocities
                              ]
-                            ])
+                            ], dtype=npdtype)
 
         action = np.array([
                            [
                             [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]
                            ]
-                          ])
+                          ], dtype=npdtype)
 
 
         (X, y) = self.nn_auv.prepare_training_data(state_t, state_t1, action)
@@ -609,13 +610,13 @@ class TestNNAUVModel(tf.test.TestCase):
         exp_x = np.array([[[0.0], [0.0], [0.0], [1.0], # Quaternion
                            [1.0], [0.0], [0.25], # Linear velocities
                            [0.0], [0.0], [0.0], #Angular velocities
-                           [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]]) # Action
+                           [1.0], [2.0], [3.0], [4.0], [5.0], [6.0]]], dtype=npdtype) # Action
 
         # DeltaT. Atm it is a difference between states so negative quaterion.
         exp_y = np.array([[[1.0], [0.0], [0.25], # Next position
                            [0.0], [0.0], [0.0], [0.0], # Quaternion
                            [2.0], [3.5], [4.25], # Linear velocities
-                           [5.5], [6.5], [7.5]]]) # angular velocitiess
+                           [5.5], [6.5], [7.5]]], dtype=npdtype) # angular velocitiess
 
         self.assertAllClose(X, exp_x)
         self.assertAllClose(y, exp_y)
@@ -626,17 +627,17 @@ class TestNNAUVModel(tf.test.TestCase):
                            [3.0], [4.0], [5.0], [6.0], # Quaternion
                            [7.0], [8.0], [9.0], # Linera velocities
                            [10.0], [11.0], [12.0] # Angular velocities
-                         ]])
+                         ]], dtype=npdtype)
         action = np.array([[
                             [13.0], [14.0], [15.0], # Forces
                             [16.0], [17.0], [18.0] # Torques
-                           ]])
+                           ]], dtype=npdtype)
         inp_data = self.nn_auv.prepare_data(state, action)
         exp_inp_data = np.array([[3.0, 4.0, 5.0, 6.0, # Quaternion
                                   7.0, 8.0, 9.0, # Linear velocities
                                   10.0, 11.0, 12.0, # Angular velocities
                                   13.0, 14.0, 15.0, # Forces
-                                  16.0, 17.0, 18.0]]) # Torques
+                                  16.0, 17.0, 18.0]], dtype=npdtype) # Torques
 
         self.assertAllClose(exp_inp_data, inp_data)
 
@@ -648,7 +649,7 @@ class TestNNAUVModel(tf.test.TestCase):
                           [[-18.0], [-17.0], [-16.0], [-15.0], [-14.0], [-13.0], [-12.0], [-11.0], [-10.0], [-9.0], [-8.0], [-7.0], [-6.0]],
                           [[-0.5], [-1.5], [-2.5], [-3.5], [-4.5], [-5.5], [-6.5], [-7.5], [-8.5], [-9.5], [-10.5], [-11.5], [-12.5]],
                           [[0.5], [1.5], [2.5], [3.5], [4.5], [5.5], [6.5], [7.5], [8.5], [9.5], [10.5], [11.5], [12.5]],
-                         ])
+                         ], dtype=npdtype)
         action = np.array([
                            [[13.0], [14.0], [15.0], [16.0], [17.0], [18.0]],
                            [[5.0], [4.0], [3.0], [2.0], [1.0], [0.0]],
@@ -656,7 +657,7 @@ class TestNNAUVModel(tf.test.TestCase):
                            [[-5.0], [-4.0], [-3.0], [-2.0], [-1.0], [-0.0]],
                            [[-13.5], [-14.5], [-15.5], [-16.5], [-17.5], [-18.5]],
                            [[13.5], [14.5], [15.5], [16.5], [17.5], [18.5]],
-                          ])
+                          ], dtype=npdtype)
 
         inp_data = self.nn_auv.prepare_data(state, action)
         exp_inp_data = np.array([
@@ -666,7 +667,7 @@ class TestNNAUVModel(tf.test.TestCase):
                                  [-15.0, -14.0, -13.0, -12.0, -11.0, -10.0, -9.0, -8.0, -7.0, -6.0, -5.0, -4.0, -3.0, -2.0, -1.0, -0.0],
                                  [-3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5],
                                  [3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5]
-                                ])
+                                ], dtype=npdtype)
         self.assertAllClose(exp_inp_data, inp_data)
 
 
@@ -687,11 +688,11 @@ class TestVelPred(tf.test.TestCase):
         for s, a in zip(self.in_sizes_state, self.in_sizes_action):
             for t in self.topologies:
                 vel_pred = VelPred(s, t)
-                dummy_state = tf.random.normal(shape=(1, s))
-                dummy_input = tf.random.normal(shape=(1, a))
+                dummy_state = tf.random.normal(shape=(1, s), dtype=dtype)
+                dummy_input = tf.random.normal(shape=(1, a), dtype=dtype)
                 vel_pred = VelPred(s+a, t)
                 out_vel = vel_pred.forward(dummy_state, dummy_input)
-                gt_out = np.zeros(shape=(1, 6))
+                gt_out = np.zeros(shape=(1, 6), dtype=npdtype)
 
                 self.assertShapeEqual(gt_out, out_vel)
 
@@ -700,11 +701,11 @@ class TestVelPred(tf.test.TestCase):
         for s, a in zip(self.in_sizes_state, self.in_sizes_action):
             for t in self.topologies:
                 vel_pred = VelPred(s, t)
-                dummy_state = tf.random.normal(shape=(k, s))
-                dummy_input = tf.random.normal(shape=(k, a))
+                dummy_state = tf.random.normal(shape=(k, s), dtype=dtype)
+                dummy_input = tf.random.normal(shape=(k, a), dtype=dtype)
                 vel_pred = VelPred(s+a, t)
                 out_vel = vel_pred.forward(dummy_state, dummy_input)
-                gt_out = np.zeros(shape=(k, 6))
+                gt_out = np.zeros(shape=(k, 6), dtype=npdtype)
 
                 self.assertShapeEqual(gt_out, out_vel)
 
@@ -721,8 +722,8 @@ class TestPredictor(tf.test.TestCase):
         self.pred = Predictor(self.vel_pred, self.dt, h=self.h)
 
     def testSingleStep(self):
-        dummy_state = tf.random.normal(shape=(1, self.h, self.in_size_state), dtype=tf.float64)
-        dummy_act = tf.random.normal(shape=(1, self.h, self.in_size_act), dtype=tf.float64)
+        dummy_state = tf.random.normal(shape=(1, self.h, self.in_size_state), dtype=dtype)
+        dummy_act = tf.random.normal(shape=(1, self.h, self.in_size_act), dtype=dtype)
 
         next_state = self.pred.forward(dummy_state, dummy_act)
         gt_shape = np.zeros(shape=(1, self.in_size_state))
@@ -731,10 +732,10 @@ class TestPredictor(tf.test.TestCase):
 
     def testBatchStep(self):
         k = 64
-        dummy_state = tf.random.normal(shape=(k, self.h, self.in_size_state), dtype=tf.float64)
-        dummy_act = tf.random.normal(shape=(k, self.h, self.in_size_act), dtype=tf.float64)
+        dummy_state = tf.random.normal(shape=(k, self.h, self.in_size_state), dtype=dtype)
+        dummy_act = tf.random.normal(shape=(k, self.h, self.in_size_act), dtype=dtype)
 
         next_state = self.pred.forward(dummy_state, dummy_act)
-        gt_shape = np.zeros(shape=(k, self.in_size_state))
+        gt_shape = np.zeros(shape=(k, self.in_size_state), dtype=npdtype)
 
         self.assertShapeEqual(gt_shape, next_state)

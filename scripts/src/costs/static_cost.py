@@ -1,6 +1,6 @@
 import tensorflow as tf
 from .cost_base import CostBase
-from ..misc.utile import assert_shape
+from ..misc.utile import assert_shape, dtype
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class StaticCost(CostBase):
@@ -20,7 +20,7 @@ class StaticCost(CostBase):
 
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
         
-        self.Q = tf.convert_to_tensor(Q, dtype=tf.float64)
+        self.Q = tf.convert_to_tensor(Q, dtype=dtype)
 
         if diag:
             self.Q = tf.linalg.diag(self.Q)
@@ -32,7 +32,7 @@ class StaticCost(CostBase):
         if not assert_shape(goal, (self.q_shape[0], 1)):
             raise AssertionError("Goal tensor shape error, expected: [{}, 1], got {}".format(self.q_shape[0], goal.shape))
 
-        self.goal = tf.convert_to_tensor(goal, dtype=tf.float64)
+        self.goal = tf.convert_to_tensor(goal, dtype=dtype)
 
     def getGoal(self):
         return self.goal

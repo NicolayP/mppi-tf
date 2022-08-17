@@ -1,5 +1,5 @@
 from .cost_base import CostBase
-from ..misc.utile import assert_shape
+from ..misc.utile import assert_shape, dtype
 
 import numpy as np
 import tensorflow as tf
@@ -40,8 +40,8 @@ class ElipseCost(CostBase):
         self.cx = center_x
         self.cy = center_y
         self.gv = speed
-        self.mx = tf.cast(m_state, tf.float64)
-        self.mv = tf.cast(m_vel, tf.float64)
+        self.mx = tf.cast(m_state, dtype)
+        self.mv = tf.cast(m_vel, dtype)
 
     def state_cost(self, scope, state):
         '''
@@ -130,16 +130,16 @@ class ElipseCost3D(CostBase):
         '''
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
         axis = np.concatenate([axis, np.array([[1.]])], axis=0)
-        self.axis = tf.convert_to_tensor(axis, dtype=tf.float64)
-        self.aVec = tf.convert_to_tensor(aVec, dtype=tf.float64)
-        self.normal = tf.convert_to_tensor(normal, dtype=tf.float64)
+        self.axis = tf.convert_to_tensor(axis, dtype=dtype)
+        self.aVec = tf.convert_to_tensor(aVec, dtype=dtype)
+        self.normal = tf.convert_to_tensor(normal, dtype=dtype)
         self.bVec = tf.expand_dims(
                         tf.linalg.cross(
                             tf.squeeze(self.normal, axis=-1),
                             tf.squeeze(self.aVec, axis=-1)
                         ), axis=-1
                     )
-        self.center = tf.convert_to_tensor(center, dtype=tf.float64)
+        self.center = tf.convert_to_tensor(center, dtype=dtype)
 
         self.mapping = tf.constant([
                                     [
@@ -148,14 +148,14 @@ class ElipseCost3D(CostBase):
                                      [0.]
                                     ]
                                    ],
-                                   dtype=tf.float64)
+                                   dtype=dtype)
         self.prepare_consts()
-        self.gv = tf.constant(speed, dtype=tf.float64)
+        self.gv = tf.constant(speed, dtype=dtype)
 
         #self.gv = speed
         #self.vz = v_speed
-        self.mS = tf.cast(mState, tf.float64)
-        self.mV = tf.cast(mVel, tf.float64)
+        self.mS = tf.cast(mState, dtype)
+        self.mV = tf.cast(mVel, dtype)
 
     def prepare_consts(self):
         N = tf.concat([self.aVec, self.bVec, self.normal], axis=-1)
@@ -220,7 +220,7 @@ class ElipseCost3D(CostBase):
         tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
         tgVec = tf.squeeze(tf.multiply(tgVec, self.mapping), axis=-1)
         tgVec = tf.linalg.normalize(tgVec, axis=-1)[0]
-        x = tf.constant([1., 0., 0.], dtype=tf.float64)
+        x = tf.constant([1., 0., 0.], dtype=dtype)
         q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, tgVec)
         err = tfg.geometry.transformation.quaternion.relative_angle(q, quaterion)
         return err

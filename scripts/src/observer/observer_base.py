@@ -6,6 +6,8 @@ from shutil import copyfile
 from tensorflow.python.ops import summary_ops_v2
 import yaml
 
+from ..misc.utile import assert_shape, dtype
+
 class ObserverBase(tf.Module):
 
     def __init__(self,
@@ -81,8 +83,8 @@ class ObserverBase(tf.Module):
         return self.logdir
 
     def save_graph(self, function, graphMode=True):
-        state = tf.zeros((self._sDim, 1), dtype=tf.float64)
-        seq = tf.zeros((self._tau, self._aDim, 1), dtype=tf.float64)
+        state = tf.zeros((self._sDim, 1), dtype=dtype)
+        seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
         with self._writer.as_default():
             if graphMode:
                 graph = function.get_concrete_function(1, state, seq).graph
@@ -156,7 +158,7 @@ class ObserverBase(tf.Module):
             elif name == "nabla":
                 tf.summary.scalar("Controller/Nabla_percent",
                                 tf.squeeze(tensor/tf.cast(self._k,
-                                                            dtype=tf.float64)),
+                                                            dtype=dtype)),
                                 step=self.step)
 
             elif name == "arg":

@@ -5,6 +5,7 @@ import tensorflow_graphics as tfg
 
 import numpy as np
 from .model_base import ModelBase
+from ..misc.utile import assert_shape, dtype, npdtype
 
 def skew_op(vec):
     S = np.zeros(shape=(3, 3))
@@ -17,13 +18,13 @@ def skew_op(vec):
 
     S[2, 0] = -vec[1]
     S[2, 1] = vec[0]
-    return tf.constant(S, dtype=tf.float64)
+    return tf.constant(S, dtype=dtype)
 
 
 def tf_skew_op(scope, vec):
     with tf.name_scope(scope) as scope:
         vec = tf.expand_dims(vec, axis=-1)
-        OPad = tf.zeros(shape=(1), dtype=tf.float64)
+        OPad = tf.zeros(shape=(1), dtype=dtype)
         r0 = tf.expand_dims(tf.concat([OPad, -vec[2], vec[1]],
                                       axis=-1),
                             axis=1)
@@ -60,7 +61,7 @@ def tf_skew_op_k(scope, batch):
         k = tf.shape(batch)[0]
         vec = tf.expand_dims(batch, axis=-1)
 
-        OPad = tf.zeros(shape=(k, 1), dtype=tf.float64)
+        OPad = tf.zeros(shape=(k, 1), dtype=dtype)
         r0 = tf.expand_dims(tf.concat([OPad, -vec[:, 2], vec[:, 1]],
                                       axis=-1),
                             axis=1)
@@ -123,7 +124,7 @@ class AUVModel(ModelBase):
         if "mass" in parameters:
             self._mass = tf.Variable(parameters['mass'],
                                      trainable=True,
-                                     dtype=tf.float64)
+                                     dtype=dtype)
         assert (self._mass > 0), "Mass has to be positive."
 
         self._volume = 0
@@ -155,7 +156,7 @@ class AUVModel(ModelBase):
         assert (self._width > 0), "Width has to be positive."
 
         if "cog" in parameters:
-            self._cog = tf.constant(parameters["cog"], dtype=tf.float64)
+            self._cog = tf.constant(parameters["cog"], dtype=dtype)
             assert (len(self._cog) == 3), 'Invalid center of \
                                            gravity vector. Size != 3'
         else:
@@ -163,7 +164,7 @@ class AUVModel(ModelBase):
                                  gravity in the body frame")
 
         if "cob" in parameters:
-            self._cob = tf.constant(parameters["cob"], dtype=tf.float64)
+            self._cob = tf.constant(parameters["cob"], dtype=dtype)
             assert (len(self._cob) == 3), "Invalid center of buoyancy \
                                            vector. Size != 3"
         else:
@@ -174,7 +175,7 @@ class AUVModel(ModelBase):
         if "Ma" in parameters:
             addedMass = np.array(parameters["Ma"])
             assert (addedMass.shape == (6, 6)), "Invalid add mass matrix"
-        self._addedMass = tf.constant(addedMass, dtype=tf.float64)
+        self._addedMass = tf.constant(addedMass, dtype=dtype)
 
         damping = np.zeros(shape=(6, 6))
         if "linear_damping" in parameters:
@@ -185,21 +186,22 @@ class AUVModel(ModelBase):
                                                given as a 6x6 matrix or \
                                                the diagonal coefficients"
 
-        self._linearDamping = tf.constant(damping, dtype=tf.float64)
+        self._linearDamping = tf.constant(damping, dtype=dtype)
 
-        qaudDamping = np.zeros(shape=(6,))
+        qaudDamping = np.zeros(shape=(6,), dtype=npdtype)
         if "quad_damping" in parameters:
-            qaudDamping = np.array(parameters["quad_damping"])
+            qaudDamping = np.array(parameters["quad_damping"], dtype=npdtype)
             assert (qaudDamping.shape == (6,)), "Quadratic damping must \
                                                  be given defined with 6 \
                                                  coefficients"
 
         self._quadDamping = tf.linalg.diag(qaudDamping)
 
-        dampingForward = np.zeros(shape=(6, 6))
+        dampingForward = np.zeros(shape=(6, 6), dtype=npdtype)
         if "linear_damping_forward_speed" in parameters:
             dampingForward = np.array(
-                                parameters["linear_damping_forward_speed"])
+                                parameters["linear_damping_forward_speed"],
+                                dtype=npdtype)
             if dampingForward.shape == (6,):
                 dampingForward = np.diag(dampingForward)
             assert (dampingForward.shape == (6, 6)), "Linear damping \
@@ -211,7 +213,7 @@ class AUVModel(ModelBase):
 
         self._linearDampingForwardSpeed = tf.expand_dims(
                                             tf.constant(dampingForward,
-                                                        dtype=tf.float64),
+                                                        dtype=dtype),
                                             axis=0)
 
         inertial = dict(ixx=0, iyy=0, izz=0, ixy=0, ixz=0, iyz=0)
@@ -223,11 +225,11 @@ class AUVModel(ModelBase):
 
         self._inertial = self.get_inertial(inertialArg)
 
-        self._unitZ = tf.constant([[[0.], [0.], [1.]]], dtype=tf.float64)
+        self._unitZ = tf.constant([[[0.], [0.], [1.]]], dtype=dtype)
 
         self._gravity = 9.81
 
-        self._massEye = self._mass * tf.eye(3, dtype=tf.float64)
+        self._massEye = self._mass * tf.eye(3, dtype=dtype)
         self._massLower = self._mass * tf_skew_op("Skew_cog", self._cog)
         self._rbMass = self.rigid_body_mass()
         self._mTot = self.total_mass()
@@ -260,12 +262,12 @@ class AUVModel(ModelBase):
 
     def get_inertial(self, dict):
         # buid the inertial matrix
-        ixx = tf.Variable(dict['ixx'], trainable=True, dtype=tf.float64)
-        ixy = tf.Variable(dict['ixy'], trainable=True, dtype=tf.float64)
-        ixz = tf.Variable(dict['ixz'], trainable=True, dtype=tf.float64)
-        iyy = tf.Variable(dict['iyy'], trainable=True, dtype=tf.float64)
-        iyz = tf.Variable(dict['iyz'], trainable=True, dtype=tf.float64)
-        izz = tf.Variable(dict['izz'], trainable=True, dtype=tf.float64)
+        ixx = tf.Variable(dict['ixx'], trainable=True, dtype=dtype)
+        ixy = tf.Variable(dict['ixy'], trainable=True, dtype=dtype)
+        ixz = tf.Variable(dict['ixz'], trainable=True, dtype=dtype)
+        iyy = tf.Variable(dict['iyy'], trainable=True, dtype=dtype)
+        iyz = tf.Variable(dict['iyz'], trainable=True, dtype=dtype)
+        izz = tf.Variable(dict['izz'], trainable=True, dtype=dtype)
 
         row0 = tf.expand_dims(tf.concat([ixx, ixy, ixz], axis=0), axis=0)
         row1 = tf.expand_dims(tf.concat([ixy, iyy, iyz], axis=0), axis=0)
@@ -336,8 +338,8 @@ class AUVModel(ModelBase):
                      | 0^{3 cross 3} T_{theta}(theta)   |
                      ---------------------------------------
         '''
-        OPad3x3 = tf.zeros(shape=(self._k, 3, 3), dtype=tf.float64)
-        OPad4x3 = tf.zeros(shape=(self._k, 4, 3), dtype=tf.float64)
+        OPad3x3 = tf.zeros(shape=(self._k, 3, 3), dtype=dtype)
+        OPad4x3 = tf.zeros(shape=(self._k, 4, 3), dtype=dtype)
 
         jacR1 = tf.concat([self._rotBtoI, OPad3x3], axis=-1)
 
@@ -487,7 +489,6 @@ class AUVModel(ModelBase):
                     tf.expand_dims(vel[:, 0],
                                    axis=-1),
                     self._linearDampingForwardSpeed)
-
             D = -1*self._linearDamping - tf.multiply(
                                            tf.expand_dims(vel[:, 0],
                                                           axis=-1),
@@ -514,7 +515,7 @@ class AUVModel(ModelBase):
         '''
         with tf.name_scope(scope) as scope:
 
-            OPad = tf.zeros(shape=(self._k, 3, 3), dtype=tf.float64)
+            OPad = tf.zeros(shape=(self._k, 3, 3), dtype=dtype)
 
             skewCori = tf.squeeze(tf.matmul(self._mTot[0:3, 0:3],
                                             vel[:, 0:3]) +
@@ -606,7 +607,7 @@ def main():
                        0., 0.5, 0., 0.5,
                        9., 10., 11.,
                        12., 13., 14.,],
-                      ], dtype=tf.float64),
+                      ], dtype=dtype),
          axis=-1)
 
     u = tf.expand_dims(
@@ -614,7 +615,7 @@ def main():
                        3., 4., 5.],
                       [1., 2., 3.,
                        4., 5., 6.,],
-                      ], dtype=tf.float64),
+                      ], dtype=dtype),
          axis=-1)
     
     #model.print_info()

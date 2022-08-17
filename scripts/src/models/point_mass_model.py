@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from .model_base import ModelBase
-
+from ..misc.utile import assert_shape, dtype
 
 def block_diag(vec, pad, dim):
     vecNp = np.array([])
@@ -54,7 +54,7 @@ class PointMassModel(ModelBase):
         mass = tf.Variable([[mass]],
                            name="mass",
                            trainable=True,
-                           dtype=tf.float64)
+                           dtype=dtype)
 
         with tf.name_scope("Const") as c:
             self.create_const(c)
@@ -139,9 +139,9 @@ class PointMassModel(ModelBase):
         a = np.array([[1., self._dt], [0., 1.]])
         aPad = np.array([[0, 0], [0, 0]])
         aNp = block_diag(a, aPad, int(self._stateDim/2))
-        self._A = tf.constant(aNp, dtype=tf.float64, name="A")
+        self._A = tf.constant(aNp, dtype=dtype, name="A")
 
         b = np.array([[(self._dt*self._dt)/2.], [self._dt]])
         bPad = np.array([[0], [0]])
         bNp = block_diag(b, bPad, self._actionDim)
-        self._B = tf.constant(bNp, dtype=tf.float64, name="B")
+        self._B = tf.constant(bNp, dtype=dtype, name="B")
