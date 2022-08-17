@@ -1,9 +1,6 @@
-import quaternion
 import tensorflow as tf
 gpu = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
-
-import tensorflow_graphics as tfg
 
 from ..src.models.model_base import ModelBase
 from ..src.models.point_mass_model import PointMassModel
@@ -11,9 +8,6 @@ from ..src.models.auv_model import AUVModel
 from ..src.models.nn_model import NNAUVModel, Predictor, VelPred
 
 import numpy as np
-from uuv_control_msgs import srv
-
-from quaternion import from_euler_angles
 
 def qmul(q1, q2):
     mul = []
