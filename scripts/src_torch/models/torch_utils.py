@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate
 from tqdm import tqdm
 import os
+import onnx
+from onnx_tf.backend import prepare
 
 
 class ListDataset(torch.utils.data.Dataset):
@@ -623,10 +625,26 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
     pass
 
 
-def save_model(model, filename=None):
-    if filename is None:
-        filename = f"{model.name}.pt"
-    torch.save(model.state_dict(), filename)
+def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_names=[]):
+    torch_filename = os.path.join(dir, f"{model.name}.pth")
+    onnx_filename = os.path.join(dir, f"{model.name}.onnx")
+    tf_filename = os.path.join(dir, f"{model.name}.pb")
+    torch.save(model.state_dict(), torch_filename)
+    if tf:
+        torch.onnx.export(
+            model,
+            dummy_input,
+            onnx_filename,
+            verbose=True,
+            input_names=input_names,
+            output_names=output_names
+        )
+        onnx_model = onnx.load(onnx_filename)
+        onnx.checker.check_model(onnx_model)
+        print(onnx.helper.printable_graph(onnx_model.graph))
+
+        tf_rep = prepare(onnx_model)
+        tf_rep.export_graph(tf_filename)
 
 
 def learn(dataLoaders, model, loss, opti, writer=None, maxEpochs=1, device="cpu"):

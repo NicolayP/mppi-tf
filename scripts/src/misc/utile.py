@@ -5,11 +5,9 @@ import yaml
 import os
 
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 
-import imageio
 import scipy.signal
 
 control_items: dict = {}
@@ -119,18 +117,6 @@ def plt_paths(paths, weights, noises, action_seq, cost):
 
     plt.savefig('/tmp/mppi_{}.png'.format(control_step-1))
     plt.close("all")
-
-
-def gif_path(len, gif):
-    if gif is None:
-        return
-    with imageio.get_writer(gif, mode='I') as writer:
-        files = ["/tmp/mppi_{}.png".format(i) for i in range(len)]
-        for filename in files:
-            image = imageio.imread(filename)
-            writer.append_data(image)
-            os.remove(filename)
-    return
 
 
 def push_to_tensor(tensor, element):

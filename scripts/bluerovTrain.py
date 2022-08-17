@@ -17,7 +17,7 @@ params = {'batch_size': 1024,
 s=1
 
 
-csvs = glob.glob('bluerovData/clean-*.csv')
+csvs = glob.glob('/home/pierre/workspace/uuv_ws/src/mppi_ros/data/bluerovData/clean-*.csv')
 
 dfs = []
 for csv in csvs:
@@ -32,7 +32,7 @@ ds = (torch.utils.data.DataLoader(
         **params), None)
 
 dim = 18 + 6 - 3 #State + aciton - position
-max_epoch = 100
+max_epoch = 1
 
 loss_fn = torch.nn.MSELoss()
 
@@ -43,6 +43,7 @@ torch.backends.cudnn.benchmark = True
 
 histories=[5]
 topologies = [
+    [32],
     #[32, 32],
     #[32, 32, 32],
     #[32, 32, 32, 32],
@@ -51,8 +52,8 @@ topologies = [
     #[64, 64, 64, 64],
     #[128],
     #[128, 128, 128],
-    [128, 128, 128, 128],
-    [128, 128, 128, 128, 128],
+    #[128, 128, 128, 128],
+    #[128, 128, 128, 128, 128],
 ]
 
 nns = []
@@ -67,6 +68,7 @@ for t in topologies:
         writer = SummaryWriter(dir + nn.name)
         learn(ds, nn, loss_fn, opti, writer, max_epoch, device)
         predictors.append(StatePredictorHistory(nn, 0.1, h))
-        save_model(nn, os.path.join(dir, f"{nn.name}.pt"))
+        dummy_state, dummy_action = torch.zeros((1, h*(18-3))).to(device), torch.zeros((1, h*6)).to(device)
+        save_model(nn, dir, True, (dummy_state, dummy_action), ['x', 'u'], ['vel'])
         nns.append(nn)
 

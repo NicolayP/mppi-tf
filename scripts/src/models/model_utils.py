@@ -110,6 +110,12 @@ class FlattenSE3(tf.Module):
         return x
 
 
+def load_onnx_model(dir):
+    tf_model = tf.saved_model.load(dir)
+    f = tf_model.signatures["serving_default"]
+    return f
+
+
 def push_to_tensor(tensor, x):
     tmp = tf.expand_dims(x, axis=1) # shape [k, 1, dim, 1]
     return tf.concat([tensor[:, 1:], tmp], axis=1)

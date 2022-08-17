@@ -1,11 +1,8 @@
-import imp
-from turtle import forward
-from types import DynamicClassAttribute
-import tensorflow as tf
 import tensorflow_graphics as tfg
+import tensorflow as tf
 
-from .model_utils import ToSE3Mat, SE3int, FlattenSE3
-from .model_base import ModelBase
+from model_utils import ToSE3Mat, SE3int, FlattenSE3, load_onnx_model
+from model_base import ModelBase
 import numpy as np
 import os
 
@@ -610,25 +607,43 @@ class VelPred(tf.Module):
 
 
 class Predictor(tf.Module):
-    def __init__(self, internal, dt, h=1):
+    def __init__(self, internal, dt, h=1, onnx=False):
         self.internal = internal
         self.int = SE3int()
         self.toMat = ToSE3Mat()
         self.flat = FlattenSE3()
         self.dt = dt
-        self.n = f"Predictor_{self.internal.n}"
+        if onnx:
+            self.n = "Predictor_onnx_model"
+        else:
+            self.n = f"Predictor_{self.internal.n}"
         self.h = h
+        self.onnx = onnx
 
     def forward(self, x, u):
         k = x.shape[0]
         x_red = x[:, :, 3:]
-        x_flat = tf.reshape(x_red, (k, -1))
-        u_flat = tf.reshape(u, (k, -1))
-
-        v_next = tf.cast(
-            self.internal.forward(x_flat, u_flat),
-            dtype=tf.float64, name="casting_output"
+        x_flat = tf.cast(
+            tf.reshape(x_red, (k, -1)),
+            dtype=tf.float32,
+            name="casting_input_state"
         )
+        u_flat = tf.cast(
+            tf.reshape(u, (k, -1)),
+            dtype=tf.float32,
+            name="casting_input_action"
+        )
+
+        if self.onnx:
+            v_next = tf.cast(
+                self.internal(x=x_flat, u=u_flat)['vel'],
+                dtype=tf.float64, name="casting_output"
+            )
+        else:
+            v_next = tf.cast(
+                self.internal.forward(x_flat, u_flat),
+                dtype=tf.float64, name="casting_output"
+            )
         x_last = x[:, -1]
         v = x[:, -1, 12:]
         tau = v*self.dt
@@ -652,10 +667,11 @@ class LaggedNNAUVSpeed(ModelBase):
 
 
 def main():
-    velPred = VelPred(in_size=5*21, topology=[128, 128, 128])
-    pred = Predictor(velPred, dt=0.1, h=4)
-    x = tf.random.uniform(shape=(1, 5, 18))
-    u = tf.random.uniform(shape=(1, 5, 6))
+    #velPred = VelPred(in_size=5*21, topology=[128, 128, 128])
+    velPredTorch = load_onnx_model("/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/scripts/bluerov_hist/nn-velocity_105x32x6.pb")
+    pred = Predictor(velPredTorch, dt=0.1, h=4, onnx=True)
+    x = tf.random.uniform(shape=(1, 5, 18), dtype=tf.float64)
+    u = tf.random.uniform(shape=(1, 5, 6), dtype=tf.float64)
     p = pred.forward(x, u)
     print(p.shape)
 
