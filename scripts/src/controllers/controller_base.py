@@ -141,8 +141,8 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
-        #if self._log:
-        #    self._observer.save_graph(self._next_fct, self._graphMode)
+        if self._log:
+            self._observer.save_graph(self._next_fct, self._graphMode)
 
     def save(self, x, u, xNext):
         '''
@@ -291,7 +291,7 @@ class ControllerBase(tf.Module):
                     'next' the next action to be applied.
                         Shape: [aDim, 1]
         '''
-        with tf.name_scope(scope) as scope:
+        with tf.name_scope(scope) as s:
             with tf.name_scope("random") as rand:
                 noises = self.build_noise(rand, k)
             with tf.name_scope("Rollout") as roll:
@@ -349,7 +349,9 @@ class ControllerBase(tf.Module):
         with tf.name_scope("Weighted_Noise"):
             weighted_noises = self.weighted_noise(scope, weights, noises)
         with tf.name_scope("Sequence_update"):
-            update = tf.add(self._actionSeq, weighted_noises)
+            rawUpdate = tf.add(self._actionSeq, weighted_noises)
+            #update = self.clip_act("clipping", rawUpdate)
+            update = rawUpdate
 
         self._observer.write_control("weights", weights)
         self._observer.write_control("nabla", nabla)
@@ -394,6 +396,12 @@ class ControllerBase(tf.Module):
                     weights[..., None],
                     noises),
                 0)
+
+    def clip_act(self, scope, update):
+        maxInp = self._model.max_act()
+        minInp = self._model.min_act()
+        updateClipped = tf.clip_by_value(update, minInp, maxInp, scope)
+        return updateClipped
 
     def prepare_action(self, scope, actions, timestep):
         '''

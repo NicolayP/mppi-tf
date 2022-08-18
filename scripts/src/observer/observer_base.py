@@ -30,9 +30,9 @@ class ObserverBase(tf.Module):
         self._k = k
         self._log = log
         self._stateName = ["x", "y", "z",
-                            "w", "wx", "wy", "wz",
-                            "x_dot", "y_dot", "z_dot",
-                            "r_dot", "p_dot", "y_dot"]
+                            "qw", "qx", "qy", "qz",
+                            "u", "v", "w",
+                            "p", "q", "r"]
         self._poseId = [0, 1, 2, 3, 4, 5, 6]
         self._velId = [7, 8, 9, 10, 11, 12]
         self._tau = tau
@@ -112,7 +112,7 @@ class ObserverBase(tf.Module):
             elif name == "next":
                 action = tensor[0]
                 for i in range(self._aDim):
-                    tf.summary.scalar("input/input_{}".format(i),
+                    tf.summary.scalar("input/{}".format(i),
                                     action[i, 0],
                                     step=self.step)
 

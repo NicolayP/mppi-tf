@@ -9,6 +9,8 @@ def nn(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
     return NNModel(modelDict=modelDict,
                    state_dim=state_dim,
                    action_dim=action_dim,
+                   limMax=limMax,
+                   limMin=limMin,
                    name=name,
                    weightFile=paramFile)
 
@@ -34,19 +36,24 @@ def pm(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
                           dt=dt, 
                           state_dim=state_dim, 
                           action_dim=action_dim,
+                          limMax=limMax,
+                          limMin=limMin,
                           name=name)
 
 def auv(modelDict, samples, dt, stateDim, actionDim, name, paramFile=None):
     return AUVModel(modelDict=modelDict,
                     inertialFrameId=modelDict['frame_id'],
                     actionDim=actionDim,
+                    limMax=limMax,
+                    limMin=limMin,
                     name=name,
                     k=samples,
                     dt=dt,
                     parameters=modelDict)
 
 
-def get_model(model_dict, samples, dt, state_dim, action_dim, name, paramFile=None):
+def get_model(model_dict, samples, dt, state_dim, action_dim,
+              limMax, limMin, name, paramFile=None):
 
     switcher = {
         "point_mass": pm,
@@ -55,11 +62,11 @@ def get_model(model_dict, samples, dt, state_dim, action_dim, name, paramFile=No
         "auv_nn": auv_nn,
         "auv_nn_speed": auv_nn_speed
     }
-
     model_type = model_dict['type']
     getter = switcher.get(model_type, lambda: "invalid model type, check\
                 spelling, supporter are: point_mass, neural_net, auv")
-    return getter(model_dict, samples, dt, state_dim, action_dim, name, paramFile)
+    return getter(model_dict, samples, dt, state_dim, action_dim,
+                  limMax, limMin, name, paramFile)
 
 
 def copy_model(model):
