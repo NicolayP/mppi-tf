@@ -14,11 +14,18 @@ config/tasks/*
 !config/envs/*.default.yaml
 !config/tasks/*.default.yaml
 
+train_configs/dataset/*
+train_configs/optimizer/*
+train_configs/topologies/*
+
+!train_configs/dataset/*.default.yaml
+!train_configs/optimizer/*.default.yaml
+!train_configs/topologies/*.default.yaml
+
 *ipynb*
 *bags*
 *.rar*
 
-*data*
 *learnerTests*
 scripts/src/models/bluerov2
 tensorboard/*
