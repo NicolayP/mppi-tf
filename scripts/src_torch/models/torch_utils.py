@@ -65,7 +65,6 @@ class ListDataset(torch.utils.data.Dataset):
         return x, u, y
 
 
-
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, data, steps=1, history=1):
         '''
@@ -590,7 +589,14 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
     torch.autograd.set_detect_anomaly(True)
     size = len(dataloader.dataset)
     model.train()
-    for batch, data in enumerate(dataloader):
+    t = tqdm(
+        enumerate(dataloader),
+        desc=f"Epoch: {epoch}",
+        ncols=150,
+        colour="red",
+        leave=False
+    )
+    for batch, data in t:
         X, U, Y = data
         X, U, Y = X.to(device), U.to(device), Y.to(device)
         X = X[:, :, 3:] # remove all x, y and z.
@@ -618,11 +624,7 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
             for dim in range(6):
                 lossDim = loss(pred[:, dim], y[:, dim])
                 writer.add_scalar("loss/"+ str(dim), lossDim, epoch*size + batch)
-
-    if epoch % 10 == 0 and verbose:
-        l, current = l.item(), batch*len(X)
-        print(f'Loss: {l:>7f} [{current:>5d}/{size:>5d}]')
-    pass
+    return l.item(), batch*len(X)
 
 
 def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_names=[]):
@@ -649,14 +651,19 @@ def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_nam
 
 def learn(dataLoaders, model, loss, opti, writer=None, maxEpochs=1, device="cpu"):
     dls = dataLoaders
-    for e in tqdm(range(maxEpochs)):
-        train(dataloader=dls[0],
+    size = len(dls[0].dataset)
+    l = np.nan
+    current = 0
+    t = tqdm(range(maxEpochs), desc="Training", ncols=150, colour="blue", postfix={"loss": f"Loss: {l:>7f} [{current:>5d}/{size:>5d}]"})
+    for e in t:
+        l, current = train(dataloader=dls[0],
               model=model,
               loss=loss,
               opti=opti,
               writer=writer,
               epoch=e,
               device=device)
+        t.set_postfix({"loss": f"Loss: {l:>7f} [{current:>5d}/{size:>5d}]"})
     print("Done!\n")
 
 
@@ -720,158 +727,3 @@ def val(dataLoader, models, metric, device="cpu", plot=False, plotCols=None, hor
                 plt.savefig(name)
                 plt.close()
     pass
-
-
-def main():
-    params = {'batch_size': 1024,
-          'shuffle': True,
-          'num_workers': 1}
-
-    max_epoch = 100
-
-    (ds, dsVal) = get_dataloader("/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/scripts/transitions.csv", params)
-    # Skew symetric
-    '''
-    vec1 = torch.Tensor([1.5, 2.0, 1.9])
-    vec2 = torch.Tensor([[1.5, 2.0, 1.9], [3., 3.1, 3.2], [4., 4.1, 4.2]])    
-
-    skew = Skew()
-    print("*"*5, " Vec 1 ", "*"*5)
-    print(vec1.shape)
-    print(skew(vec1))
-
-    print("*"*5, " Vec 2 ", "*"*5)
-    print(vec2.shape)
-    print(skew(vec2))
-    '''
-    # SO3 integration
-    '''
-    dt = 0.1
-    tau1 = torch.Tensor([0.1, 0.2, 0.05])*dt
-    tau2 = torch.Tensor([
-        [0.1, 0.2, 0.05],
-        [0.01, 0.12, 0.5],
-        [0.2, 0.3, 0.02],
-        [0., 0., 0.1],
-    ])*dt
-    R = torch.eye(3)
-    so3 = SO3int()
-
-    print("*"*5, " Tau 1 ", "*"*5)
-    print(tau1.shape)
-    print(so3(R, tau1).shape)
-
-    print("*"*5, " Tau 2 ", "*"*5)
-    print(tau2.shape)
-    print(so3(R, tau2).shape)
-    '''
-    # SE3 integration
-    '''
-    se3  = SE3int()
-    dt = 0.1
-    tau1 = torch.Tensor([0.01, 3., 0.0, 0.1, 0.2, 0.05])*dt
-    tau2 = torch.Tensor([
-        [0.01, 3., 0.0, 0.1, 0.2, 0.05],
-        [0.01, 2., 1.2, 0.01, 0.12, 0.5],
-    ])*dt
-    M = torch.eye(4)    
-
-    print("*"*5, " Tau 1 ", "*"*5)
-    print(tau1.shape)
-    print(se3(M, tau1).shape)
-
-    print("*"*5, " Tau 2 ", "*"*5)
-    print(tau2.shape)
-    print(se3(M, tau2).shape)
-    '''
-    # To SE3
-    '''
-    toMat = ToSE3Mat()
-    x1 = torch.Tensor(
-        [2., 3., 0.,
-         1., 0., 0.,
-         0., 1., 0.,
-         0., 0., 1.,
-         4., 1., 2.,
-         0.2, 0.1, 0.2]
-    )
-    x2 = torch.Tensor([
-        [2., 3., 0.,
-         1., 0., 0.,
-         0., 1., 0.,
-         0., 0., 1.,
-         4., 1., 2.,
-         0.2, 0.1, 0.2],
-        [2.5, 3.5, 0.5,
-         1., 0., 0.,
-         0., 1., 0.,
-         0., 0., 1.,
-         4., 1., 2.,
-         0.2, 0.1, 0.2],
-        [0., 0., 0.,
-         0.5, 0., 0.1,
-         0., 0.5, 0.,
-         0., 0.1, 0.5,
-         4., 1., 2.,
-         0.2, 0.1, 0.2]
-    ])
-
-    print("*"*5, " x1 ", "*"*5)
-    print(x1.shape)
-    print(toMat(x1).shape)
-
-    print("*"*5, " x2 ", "*"*5)
-    print(x2.shape)
-    print(toMat(x2).shape)
-
-    '''
-    # Flatten SE3 matrix together with velocity.
-    '''
-    toMat = ToSE3Mat()
-    flat = FlattenSE3()
-    x1 = torch.Tensor(
-        [2., 3., 0.,
-         1., 0., 0.,
-         0., 1., 0.,
-         0., 0., 1.,
-         4., 1., 2.,
-         0.2, 0.1, 0.2]
-    )
-    x2 = torch.Tensor([
-        [2., 3., 0.,
-         1., 0., 0.,
-         0., 1., 0.,
-         0., 0., 1.,
-         4., 1., 2.,
-         0.2, 0.1, 0.2],
-        [2.5, 3.5, 0.5,
-         1., 0., 0.,
-         0., 1., 0.,
-         0., 0., 1.,
-         4., 1., 2.,
-         0.2, 0.1, 0.2],
-        [0., 0., 0.,
-         0.5, 0., 0.1,
-         0., 0.5, 0.,
-         0., 0.1, 0.5,
-         4., 1., 2.,
-         0.2, 0.1, 0.2]
-    ])
-
-    print("*"*5, " M1 ", "*"*5)
-    M1 = toMat(x1)
-    vel1 = x1[-6:]
-    print(vel1.shape)
-    print(M1.shape)
-    print(flat(M1, vel1).shape)
-
-    print("*"*5, " M2 ", "*"*5)
-    M2 = toMat(x2)
-    vel2 = x2[:, -6:]
-    print(vel2.shape)
-    print(M2.shape)
-    print(flat(M2, vel2).shape)
-    '''
-
-if __name__ == "__main__":
-    main()

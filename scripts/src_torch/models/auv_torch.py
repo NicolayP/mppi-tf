@@ -509,48 +509,4 @@ def init_weights(m):
     if isinstance(m, torch.nn.Linear):
         torch.nn.init.xavier_uniform(m.weight)
         #m.bias.data.fill_(0.01)
-
-
-def main():
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    device = 'cpu'
-
-    params = dict()
-    params["mass"] = (1862.87, True)
-    params["volume"] = (1.8121303501945525, True)
-    params["cog"] = ([0, 0, 0], True)
-    params["cob"] = ([0, 0, 0.3], True)
-    params["mtot"] = ([[2.64266e+03, -6.87730e+00, -1.03320e+02,  8.54260e+00, -1.65540e+02, -7.80330e+00],
-                       [-6.87730e+00,  3.08487e+03,  5.12900e+01,  4.09440e+02, -5.84880e+00, 6.27260e+01],
-                       [-1.03320e+02,  5.12900e+01,  5.52277e+03,  6.11120e+00, -3.86420e+02, 1.07740e+01],
-                       [8.54260e+00,  4.09440e+02,  6.11120e+00,  1.06029e+03, -8.58700e+00, 5.44290e+01],
-                       [-1.65540e+02, -5.84880e+00, -3.86420e+02, -8.58700e+00,  1.63689e+03, 1.48380e+00],
-                       [-7.80330e+00,  6.27260e+01,  1.07750e+01,  5.44290e+01,  1.48380e+00, 9.15550e+02]], True)
-    params["linear_damping"] = ([-70., -70., -700., -300., -300., -100.], True)
-    params["quad_damping"] = ([-740., -990., -1800., -670., -770., -520.], True)
-    params["linear_damping_forward"] = ([0., 0., 0., 0., 0., 0.], True)
-
-    model = AUVNN().to(device)
-    x = torch.tensor([[6., 7., 8.,
-                       0., 0., 0., 1.,
-                       9., 10., 11.,
-                       12., 13., 14.,],
-                      [6., 7., 8.,
-                       0., 0., 0., 1.,
-                       9., 10., 11.,
-                       12., 13., 14.,],
-                      ])
-
-    u = torch.tensor([[0., 1., 2.,
-                       3., 4., 5.],
-                      [1., 2., 3.,
-                       4., 5., 6.,],
-                      ])
-
-    #model.print_info()
-    print("*"*5, " Step ", "*"*5)
-    print(model(x, u).detach().numpy())
     pass
-
-if __name__ == "__main__":
-    main()

@@ -1,8 +1,5 @@
 # General program to train a model using torch.
 import argparse
-import warnings
-import yaml
-import os
 
 
 def parse_args():
@@ -11,34 +8,16 @@ def parse_args():
         description="General program to train a network using torch."
     )
     parser.add_argument(
-        'topology', metavar='t', type=str,
-        help='Yaml file with the topology configuraiton.'
+        'params', metavar='p', type=str,
+        help='Yaml file containing the configuration for training.'
     )
     parser.add_argument(
-        'hyper', metavar='h', type=str,
-        help='Yaml file with the hyperparameters of the optimizer.'
+        '-t', '--tf', action=argparse.BooleanOptionalAction,
+        help='save the model as a tensorflow model (using onnx)'
     )
     parser.add_argument(
-        'data', metavar='d', type=str,
-        help='Yaml file containing the training data information.'
-    )
-    parser.add_argument(
-        'train_param', metavar='p', type=str,
-        help='Yaml file containing the training parameters.'
-    )
-    parser.add_argument(
-        '-e', '--epoch', type=int, default=20,
-        help='number of epoch used for training.'
-    )
-    parser.add_argument(
-        '-o', '--onnx', action=argparse.BooleanOptionalAction,
-        help='save the model as onnx model'
-    )
-    parser.add_argument(
-        '--onnx_dir', type=str, default=None,
-        help='if the onnx flag is activated, \
-            this flag indicates the saving directory \
-            for the onnx model'
+        '--save_dir', type=str, default=".",
+        help="saving directory for the model in it's different formats"
     )
     parser.add_argument(
         '-g', '--gpu', action=argparse.BooleanOptionalAction,
@@ -51,9 +30,6 @@ def parse_args():
 
     args = parser.parse_args()
 
-    if args.onnx and (args.onnx_dir is None):
-        parser.error("--onnx requires --onnx_dir.")
-
     return args
 
 args = parse_args()
@@ -62,34 +38,59 @@ import torch
 import numpy as np
 import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
-from scripts.src_torch.models.torch_utils import learn, save_model
+import warnings
+import os
+from scripts.src_torch.models.auv_torch import VelPred
+from scripts.src_torch.models.torch_utils import ListDataset, learn, save_model
+from scripts.src.misc.utile import parse_config, npdtype
+from tqdm import tqdm
 
-def get_model(topology):
-    pass
+def get_model(config, device):
+    type = config['model']['type']
+    sDim = config['model']['sDim']
+    aDim = config['model']['aDim']
+    h = config['history']
+    t = config['model']['topology']
+    if type == 'velPred':
+        return VelPred(in_size=h*(sDim-3+aDim), topology=t).to(device)
 
-def get_optimizer(hyperparams):
-    pass
+def get_optimizer(model, config):
+    type = config['optimizer']['type']
+    params = model.parameters()
+    lr = config['optimizer']['lr']
+    if type == 'adam':
+        return torch.optim.Adam(params, lr=lr)
 
-def get_train_params(trainparams):
-    pass
+def get_loss(config, device):
+    type = config['loss']['type']
+    return torch.nn.MSELoss().to(device)
 
-def get_dataset(data):
-    pass
+def get_train_params(config, device):
+    return config['training_params']
 
+def get_dataset(config, device):
+    type = config['dataset']['type']
+    data_dir = config['dataset']['dir']
+    multi_dir = config['dataset']['multi_dir']
+    multi_file = config['dataset']['multi_file']
+
+    dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
+    dfs = []
+    if multi_dir:
+        for d in tqdm(dirs, desc="Directories", ncols=100, colour="green"):
+            sub_dir = os.path.join(data_dir, d)
+            files = [f for f in os.listdir(sub_dir) if os.path.isfile(os.path.join(sub_dir, f))]
+            for f in tqdm(files, leave=False, desc=f"Dir {d}", ncols=100, colour="blue"):
+                csv = os.path.join(sub_dir, f)
+                df = pd.read_csv(csv)
+                if 'x' not in df.columns:
+                    print('\n' + csv)
+                df = df.astype(npdtype)
+                dfs.append(df)
+    dataset = ListDataset(dfs, steps=config['steps'], history=config['history'], rot=config['dataset']['rot'])
+    return dataset
 
 def main():
-    model = get_model(args.topology)
-    optim, loss_fn = get_optimizer(args.hyper)
-    train_params = get_train_params(args.train_param)
-    dataset = get_dataset(args.data)
-
-    ds = (
-        torch.utils.data.DataLoader(
-            dataset,
-            **train_params), 
-        None
-    )
-    
     use_cuda = False
     if args.gpu:
         use_cuda = torch.cuda.is_available()
@@ -98,11 +99,41 @@ def main():
 
     device = torch.device("cuda:0" if use_cuda else "cpu")
 
+    config = parse_config(args.params)
+    model = get_model(config, device)
+    optim = get_optimizer(model, config)
+    loss_fn = get_loss(config, device)
+    train_params = get_train_params(config, device)
+    dataset = get_dataset(config, device)
+    epochs = config['epochs']
+    h = config['history']
+    steps = config['steps']
+
+    ds = (
+        torch.utils.data.DataLoader(
+            dataset,
+            **train_params), 
+        None
+    )
+
     writer = None
     if args.log is not None:
         writer = SummaryWriter(args.log)
 
-    learn(ds, model, loss_fn, optim, writer, args.epoch, device)
+    learn(ds, model, loss_fn, optim, writer, epochs, device)
+
+    dummy_state, dummy_action = torch.zeros((1, h*(18-3))).to(device), torch.zeros((1, h*6)).to(device)
+    dummy_inputs = (dummy_state, dummy_action)
+    input_names = ["x", "u"]
+    output_names = ["vel"]
+    
+    save_model(
+        model,
+        dir=args.save_dir,
+        tf=args.tf,
+        dummy_input=dummy_inputs,
+        input_names=input_names,
+        output_names=output_names)
 
 
 
