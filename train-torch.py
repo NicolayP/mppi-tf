@@ -16,7 +16,7 @@ def parse_args():
         help='save the model as a tensorflow model (using onnx)'
     )
     parser.add_argument(
-        '--save_dir', type=str, default=".",
+        '--save_dir', type=str, default="torch-training",
         help="saving directory for the model in it's different formats"
     )
     parser.add_argument(
@@ -44,6 +44,7 @@ from scripts.src_torch.models.auv_torch import VelPred
 from scripts.src_torch.models.torch_utils import ListDataset, learn, save_model
 from scripts.src.misc.utile import parse_config, npdtype
 from tqdm import tqdm
+from datetime import datetime
 
 def get_model(config, device):
     type = config['model']['type']
@@ -126,10 +127,12 @@ def main():
     dummy_inputs = (dummy_state, dummy_action)
     input_names = ["x", "u"]
     output_names = ["vel"]
-    
+
+    stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
+    dir = os.path.join(args.save_dir, stamp)
     save_model(
         model,
-        dir=args.save_dir,
+        dir=dir,
         tf=args.tf,
         dummy_input=dummy_inputs,
         input_names=input_names,

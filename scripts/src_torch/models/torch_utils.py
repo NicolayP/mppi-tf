@@ -11,7 +11,6 @@ import os
 import onnx
 from onnx_tf.backend import prepare
 
-
 class ListDataset(torch.utils.data.Dataset):
     def __init__(self, data_list, steps=1, history=1, rot='rot'):
         self.data_list = data_list
