@@ -141,9 +141,6 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
-        if self._log:
-            self._observer.save_graph(self._next_fct, self._graphMode)
-
     def save(self, x, u, xNext):
         '''
             Saves the transitions to the replay buffer.

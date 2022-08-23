@@ -20,6 +20,8 @@ class StateModelController(ControllerBase):
             configDict=configDict, taskDict=taskDict, modelDict=modelDict,
             log=log, logPath=logPath, graphMode=graphMode, debug=debug
         )
+        if self._log:
+            self._observer.save_graph(self._next_fct, self._graphMode)
 
     def predict(self, model_input, actionSeq, xNext):
         x, u = model_input

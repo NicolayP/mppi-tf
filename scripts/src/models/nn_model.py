@@ -1,11 +1,11 @@
 import tensorflow_graphics as tfg
 import tensorflow as tf
 
-from .model_utils import ToSE3Mat, SE3int, FlattenSE3, load_onnx_model
+from .model_utils import ToSE3Mat, SE3int, FlattenSE3
 from .model_base import ModelBase
 import numpy as np
 import os
-from ..misc.utile import assert_shape, dtype
+from ..misc.utile import dtype
 
 # Gets rid of the error triggered when running
 # tfg in graph mode.
@@ -642,15 +642,11 @@ class Predictor(tf.Module):
         )
 
         if self.onnx:
-            v_next = tf.cast(
-                self.internal(x=x_flat, u=u_flat)['vel'],
-                dtype=dtype, name="casting_output"
-            )
+            pred = self.internal(x=x_flat, u=u_flat)['vel']
         else:
-            v_next = tf.cast(
-                self.internal.forward(x_flat, u_flat),
-                dtype=dtype, name="casting_output"
-            )
+            pred = self.internal.forward(x_flat, u_flat)
+
+        v_next = tf.cast(pred, dtype=dtype, name="casting_output")
         x_last = x[:, -1]
         v = x[:, -1, 12:]
         tau = v*self.dt
@@ -658,29 +654,28 @@ class Predictor(tf.Module):
         M = self.int.forward(M, tau)
         return self.flat.forward(M, v_next)
 
+
 class LaggedNNAUVSpeed(ModelBase):
-    def __init__(self, k, h, dt, sDim=18, aDim=6, topology=[128, 128, 128]):
+    def __init__(self, k, h, dt, sDim=18, aDim=6, topology=[128, 128, 128], velPred=None):
         super(LaggedNNAUVSpeed, self).__init__(
             {}, stateDim=sDim, actionDim=aDim, k=k, dt=dt
         )
-        self.velPred = VelPred(in_size=h*(sDim-3+aDim), topology=topology)
-        self.pred = Predictor(self.velPred, dt=0.1, h=4)
-    
+        onnx = False
+        if velPred is not None:
+            self.velPred = velPred
+            onnx = True
+        else:
+            self.velPred = VelPred(in_size=h*(sDim-3+aDim), topology=topology)
+
+        self.pred = Predictor(self.velPred, dt=dt, h=h, onnx=onnx)
+
     def build_step_graph(self, scope, state, action):
         state = tf.squeeze(state, axis=-1)
         action = tf.squeeze(action, axis=-1)
+        print("*"*10)
+        print(state)
+        print("*"*10)
+        print(action)
+        print("*"*10)
         foo = self.pred.forward(state, action)
         return foo[..., None]
-
-
-def main():
-    #velPred = VelPred(in_size=5*21, topology=[128, 128, 128])
-    velPredTorch = load_onnx_model("/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/scripts/bluerov_hist/nn-velocity_105x32x6.pb")
-    pred = Predictor(velPredTorch, dt=0.1, h=4, onnx=True)
-    x = tf.random.uniform(shape=(1, 5, 18), dtype=dtype)
-    u = tf.random.uniform(shape=(1, 5, 6), dtype=dtype)
-    p = pred.forward(x, u)
-    print(p.shape)
-
-if __name__ == "__main__":
-    main()

@@ -11,6 +11,8 @@ class ModelBase(tf.Module):
                  actionDim=1,
                  k=1,
                  dt=0.1,
+                 limMax=10.,
+                 limMin=-10.,
                  name="model",
                  inertialFrameId="world"):
         '''

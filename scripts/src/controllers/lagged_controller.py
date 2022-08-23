@@ -4,6 +4,7 @@ import numpy as np
 
 from ..misc.utile import assert_shape, push_to_tensor, dtype
 from .controller_base import ControllerBase
+from ..observer.observer_base import ObserverLagged
 
 
 class LaggedModelController(ControllerBase):
@@ -22,6 +23,15 @@ class LaggedModelController(ControllerBase):
             log=log, logPath=logPath, graphMode=graphMode, debug=debug
         )
         self._h = h
+        self._observer = ObserverLagged(
+            logPath=logPath, log=log, debug=debug,
+            k=k, tau=tau, lam=lam,
+            configDict=configDict,
+            taskDict=taskDict,
+            modelDict=modelDict,
+            h=h, aDim=aDim, sDim=sDim, modelName=self._model.get_name())
+        if self._log:
+            self._observer.save_graph(self._next_fct, self._graphMode)
 
     def predict(self, model_input, actionSeq, xNext):
         laggedX, laggedU = model_input
@@ -43,6 +53,7 @@ class LaggedModelController(ControllerBase):
                 laggedState, shape: [history, sDim, 1]
                 laggedAction, shape: [history-1, aDim, 1]
         '''
+        print(model_input)
         laggedState, laggedAction = model_input
         with tf.name_scope("setup") as setup:
             laggedState = tf.broadcast_to(
@@ -97,4 +108,11 @@ class LaggedModelController(ControllerBase):
                 laggedInput: shape [k, history, aDim, 1]
         '''
         tmp = tf.expand_dims(tf.add(action, noise, name=""), axis=1)
-        return tf.concat([laggedAction, tmp], axis=1) # shape [k, history, adim, 1]
+        act = tf.concat([laggedAction, tmp], axis=1) # shape [k, history, adim, 1]
+        print("-"*10)
+        print(laggedAction)
+        print("-"*10)
+        print(tmp)
+        print("-"*10)
+        print(act)
+        return act

@@ -39,7 +39,8 @@ class ObserverBase(tf.Module):
 
         if log or debug:
             self.logdir = os.path.join(logPath, "controller")
-            os.makedirs(self.logdir)
+            if not os.path.exists(self.logdir):
+                os.makedirs(self.logdir)
             self._writer = tf.summary.create_file_writer(self.logdir)
 
             self._summary_name = ["x", "y", "z"]
@@ -213,3 +214,31 @@ class ObserverBase(tf.Module):
                 tf.summary.histogram("Predicted/Sample_cost",
                                     tf.squeeze(tensor),
                                     step=self.step)
+
+
+class ObserverLagged(ObserverBase):
+    def __init__(
+        self,
+        logPath, log, debug,
+        k, tau, lam,
+        configDict, taskDict, modelDict,
+        h, aDim, sDim, modelName):
+        super().__init__(
+            logPath, log, debug,
+            k, tau, lam,
+            configDict, taskDict, modelDict,
+            aDim, sDim, modelName)
+        self._h = h
+
+    def save_graph(self, function, graphMode=True):
+        state = (
+            tf.zeros((self._h, self._sDim, 1), dtype=dtype), 
+            tf.zeros((self._h-1, self._aDim, 1), dtype=dtype))
+        seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
+        with self._writer.as_default():
+            if graphMode:
+                graph = function.get_concrete_function(1, state, seq).graph
+            else:
+                graph = tf.function(function).get_concrete_function(1, state, seq).graph
+            # visualize
+            summary_ops_v2.graph(graph.as_graph_def())       
