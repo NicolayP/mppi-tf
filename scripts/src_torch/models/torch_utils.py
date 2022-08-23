@@ -53,7 +53,6 @@ class ListDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         i = (np.digitize([idx], self.bins) -1)[0]
         traj = self.data_list[i]
-        traj_samples = self.samples[i]
         j = idx - self.bins[i]
         sub_frame = traj.iloc[j:j+self.s+self.h]
         s = sub_frame[self.x_labels].to_numpy()
@@ -65,20 +64,20 @@ class ListDataset(torch.utils.data.Dataset):
 
 
 class Dataset(torch.utils.data.Dataset):
+    '''
+    Constructor.
+        input:
+        ------
+            - data: trajectories [h, Tau, x]
+                where h is the number of trajectories, 
+                tau is the number of timesteps and x
+                the dimension of the state.
+            - history: int (default: 1) the number 
+                of past timesteps to use
+            - steps: int (default: 1) the number of
+                futur steps to predict.
+    '''
     def __init__(self, data, steps=1, history=1):
-        '''
-        Constructor.
-            input:
-            ------
-                - data: trajectories [h, Tau, x]
-                    where h is the number of trajectories, 
-                    tau is the number of timesteps and x
-                    the dimension of the state.
-                - history: int (default: 1) the number 
-                    of past timesteps to use
-                - steps: int (default: 1) the number of
-                    futur steps to predict.
-        '''
         self.w = steps
         self.h = history
         self.x = data[:, :, :-6]
@@ -596,8 +595,10 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
         leave=False
     )
     for batch, data in t:
+
         X, U, Y = data
         X, U, Y = X.to(device), U.to(device), Y.to(device)
+        
         X = X[:, :, 3:] # remove all x, y and z.
         h = X.shape[1]
         w = Y.shape[1]

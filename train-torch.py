@@ -130,6 +130,10 @@ def main():
 
     stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
     dir = os.path.join(args.save_dir, stamp)
+    
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
     save_model(
         model,
         dir=dir,
