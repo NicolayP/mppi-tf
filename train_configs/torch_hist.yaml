@@ -1,8 +1,9 @@
 ---
 dataset:
   type: "ListDataset"
+  model_name: "rexrov2"
   #dir: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/foo"
-  dir: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/data_train_rexrov2"
+  dir: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/data_train/rexrov2"
   multi_dir: True
   multi_file: True
   rot: 'rot'

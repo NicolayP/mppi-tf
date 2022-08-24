@@ -1,6 +1,6 @@
 ---
 type: "lagged_controller"
-history: 4
+history: 2
 steps: 1
 dt: 0.1
 noise:
