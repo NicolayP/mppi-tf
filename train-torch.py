@@ -75,9 +75,9 @@ def get_dataset(config, device):
     multi_dir = config['dataset']['multi_dir']
     multi_file = config['dataset']['multi_file']
 
-    dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
     dfs = []
     if multi_dir:
+        dirs = [d for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))]
         for d in tqdm(dirs, desc="Directories", ncols=100, colour="green"):
             sub_dir = os.path.join(data_dir, d)
             files = [f for f in os.listdir(sub_dir) if os.path.isfile(os.path.join(sub_dir, f))]
@@ -88,6 +88,17 @@ def get_dataset(config, device):
                     print('\n' + csv)
                 df = df.astype(npdtype)
                 dfs.append(df)
+    else:
+        files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+        for f in tqdm(files, desc=f"Dir {data_dir}", ncols=100, colour="blue"):
+            csv = os.path.join(data_dir, f)
+            df = pd.read_csv(csv)
+            # TEMPORARY: used for current bluerov dataset that have those entries for some reason
+            df = df.drop(['Time', 'header.seq', 'header.stamp.secs', 'header.stamp.nsecs', 'child_frame_id'], axis=1)
+            if 'x' not in df.columns:
+                print('\n' + csv)
+            df = df.astype(npdtype)
+            dfs.append(df)
     dataset = ListDataset(dfs, steps=config['steps'], history=config['history'], rot=config['dataset']['rot'])
     return dataset
 
@@ -123,14 +134,22 @@ def main():
 
     learn(ds, model, loss_fn, optim, writer, epochs, device)
 
-    dummy_state, dummy_action = torch.zeros((1, h*(18-3))).to(device), torch.zeros((1, h*6)).to(device)
+    samples = 1
+
+    dummy_state = torch.zeros((samples, h*(18-3))).to(device)
+    dummy_action = torch.zeros((samples, h*6)).to(device)
     dummy_inputs = (dummy_state, dummy_action)
     input_names = ["x", "u"]
     output_names = ["vel"]
+    dynamic_axes = {
+        "x": {0: "kx"},
+        "u": {0: "ku"},
+        "vel": {0: "kv"}
+    }
 
     stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-    dir = os.path.join(args.save_dir, stamp)
-    
+    dir = os.path.join(args.save_dir, config['model_name'], stamp)
+
     if not os.path.exists(dir):
         os.makedirs(dir)
 
@@ -140,7 +159,8 @@ def main():
         tf=args.tf,
         dummy_input=dummy_inputs,
         input_names=input_names,
-        output_names=output_names)
+        output_names=output_names,
+        dynamic_axes=dynamic_axes)
 
 
 
