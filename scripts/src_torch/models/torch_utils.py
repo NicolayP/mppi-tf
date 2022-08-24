@@ -627,7 +627,7 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
     return l.item(), batch*len(X)
 
 
-def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_names=[]):
+def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_names=[], dynamic_axes={}):
     torch_filename = os.path.join(dir, f"{model.name}.pth")
     onnx_filename = os.path.join(dir, f"{model.name}.onnx")
     tf_filename = os.path.join(dir, f"{model.name}.pb")
@@ -639,8 +639,10 @@ def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_nam
             onnx_filename,
             verbose=True,
             input_names=input_names,
-            output_names=output_names
+            output_names=output_names,
+            dynamic_axes=dynamic_axes
         )
+
         onnx_model = onnx.load(onnx_filename)
         onnx.checker.check_model(onnx_model)
         print(onnx.helper.printable_graph(onnx_model.graph))

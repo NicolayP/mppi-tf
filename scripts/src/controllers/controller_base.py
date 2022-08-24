@@ -1,5 +1,4 @@
 import tensorflow as tf
-from cpprb import ReplayBuffer
 
 import numpy as np
 import scipy.signal
@@ -141,7 +140,7 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
-    def save(self, x, u, xNext):
+    def save(self, model_input, u, xNext):
         '''
             Saves the transitions to the replay buffer.
             If log is True, saves controller info to tensorboard.
@@ -153,7 +152,7 @@ class ControllerBase(tf.Module):
                 - xNext: the next state. Shape [sDim, 1]
         '''
         if self._log:
-            pred = self.predict(x, u, self._actionSeq, xNext)
+            pred = self.predict(model_input, u, self._actionSeq, xNext)
             self._observer.advance()
 
     def state_error(self, stateGt, statePred):

@@ -33,17 +33,23 @@ class LaggedModelController(ControllerBase):
         if self._log:
             self._observer.save_graph(self._next_fct, self._graphMode)
 
-    def predict(self, model_input, actionSeq, xNext):
+    def predict(self, model_input, u, actionSeq, xNext):
         laggedX, laggedU = model_input
+
+        laggedU = tf.concat([laggedU, u[None, ...]], axis=0)
+
         laggedX = tf.expand_dims(laggedX, axis=0) # shape [1, history, sDim, 1]
         laggedU = tf.expand_dims(laggedU, axis=0) # shape [1, history, aDim, 1]
-        nextState = self._model.predict(laggedX, laggedU)
-        error = self.state_error(xNext, nextState)
-        dist = self._cost.dist(laggedX[0, -1])
 
-        self._observer.write_predict("predicted/next_state", nextState)
+        nextState = self._model.predict(laggedX, laggedU)
+
+        # Quat to rot
+        error = self.state_error(xNext, nextState[0])
+        dist = self._cost.dist(laggedX[0, -1:])
+
+        #self._observer.write_predict("predicted/next_state", nextState[0])
         self._observer.write_predict("predicted/predicted_error", error)
-        self._observer.write_predict("predicted/dist_to_goal", dist)
+        self._observer.write_predict("predicted/dist_to_goal", dist[0])
         
         return nextState
 
