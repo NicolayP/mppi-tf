@@ -29,3 +29,6 @@ train_configs/topologies/*
 *learnerTests*
 scripts/src/models/bluerov2
 tensorboard/*
+
+scripts/bluerov_hist/*
+torch-training/*
