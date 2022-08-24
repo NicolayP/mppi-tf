@@ -6,7 +6,7 @@ class ToSE3Mat(tf.Module):
         self.pad = tf.constant([[[0., 0., 0., 1.]]], dtype=dtype)
 
     def forward(self, x):
-        k = x.shape[0]
+        k = tf.shape(x)[0]
         p = tf.expand_dims(x[:, :3], axis=-1)
         r = tf.reshape(x[:, 3:3+9], (-1, 3, 3))
         noHomo = tf.concat([r, p], axis=-1)
@@ -28,7 +28,7 @@ class SE3int(tf.Module):
         return M @ self.exp(tau)
 
     def exp(self, tau):
-        k = tau.shape[0]
+        k = tf.shape(tau)[0]
         rho_vec = tau[:, :3]
         theta_vec = tau[:, 3:]
 

@@ -2,7 +2,7 @@
 import tensorflow as tf
 import numpy as np
 
-from ..misc.utile import assert_shape, push_to_tensor, dtype
+from ..misc.utile import assert_shape, push_to_tensor, dtype, npdtype
 from .controller_base import ControllerBase
 from ..observer.observer_base import ObserverLagged
 
@@ -47,13 +47,41 @@ class LaggedModelController(ControllerBase):
         
         return nextState
 
+    def trace(self):
+        '''
+            Runs the controller "a blanc" to build the tensorflow
+            computational graph. After that it resets the controller
+            internal variables for a fresh start.
+
+            inputs:
+            -------
+                None.
+
+            outputs:
+            --------
+                None.
+        '''
+        fake_input = (
+            tf.zeros((self._h, self._sDim, 1), dtype=dtype),
+            tf.zeros((self._h-1, self._aDim, 1), dtype=dtype)
+        )
+        
+        fake_sequence = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
+
+
+        _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
+                           fake_input,
+                           fake_sequence,
+                           self._normalizeCost)
+        if not self._graphMode:
+            warnings.warn("Not using graph mode, no trace to generate.")
+
     def build_model(self, scope, k, model_input, noises, actionSeq):
         '''
             model_input: (laggedState, laggedAction) pair
                 laggedState, shape: [history, sDim, 1]
                 laggedAction, shape: [history-1, aDim, 1]
         '''
-        print(model_input)
         laggedState, laggedAction = model_input
         with tf.name_scope("setup") as setup:
             laggedState = tf.broadcast_to(
@@ -109,10 +137,4 @@ class LaggedModelController(ControllerBase):
         '''
         tmp = tf.expand_dims(tf.add(action, noise, name=""), axis=1)
         act = tf.concat([laggedAction, tmp], axis=1) # shape [k, history, adim, 1]
-        print("-"*10)
-        print(laggedAction)
-        print("-"*10)
-        print(tmp)
-        print("-"*10)
-        print(act)
         return act

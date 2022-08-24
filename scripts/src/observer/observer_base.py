@@ -231,14 +231,97 @@ class ObserverLagged(ObserverBase):
         self._h = h
 
     def save_graph(self, function, graphMode=True):
+        #return
         state = (
             tf.zeros((self._h, self._sDim, 1), dtype=dtype), 
             tf.zeros((self._h-1, self._aDim, 1), dtype=dtype))
         seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
         with self._writer.as_default():
             if graphMode:
-                graph = function.get_concrete_function(1, state, seq).graph
+                graph = function.get_concrete_function(tf.Variable(1, dtype=tf.int32), state, seq).graph
             else:
-                graph = tf.function(function).get_concrete_function(1, state, seq).graph
+                graph = tf.function(function).get_concrete_function(tf.Variable(1, dtype=tf.int32), state, seq).graph
             # visualize
-            summary_ops_v2.graph(graph.as_graph_def())       
+            summary_ops_v2.graph(graph.as_graph_def())
+
+    def write_control(self, name, tensor):
+        if not self._log:
+            return
+
+        with self._writer.as_default():
+            if name == "update":
+                tf.summary.scalar("Controller/update",
+                                tensor,
+                                step=self.step)
+
+            elif name == "next":
+                action = tensor[0]
+                for i in range(self._aDim):
+                    tf.summary.scalar("input/{}".format(i),
+                                    action[i, 0],
+                                    step=self.step)
+
+            elif name == "sample_costs":
+                self.best_id = tf.squeeze(tf.argmin(tensor, axis=0))
+                tf.summary.histogram("Cost/All/All_cost",
+                                    tensor,
+                                    step=self.step)
+                tf.summary.scalar("Cost/All/Average_cost",
+                                tf.math.reduce_mean(tensor),
+                                step=self.step)
+                tf.summary.scalar("Cost/All/Best_cost",
+                                tf.squeeze(tensor[self.best_id, :]),
+                                step=self.step)
+
+            elif name == "state_cost":
+                tf.summary.histogram("Cost/State/Cost",
+                                tensor,
+                                step=self.step)
+                tf.summary.scalar("Cost/State/Average_cost",
+                                tf.math.reduce_mean(tensor),
+                                step=self.step)
+                tf.summary.scalar("Cost/State/Best_cost",
+                                tf.squeeze(tensor[self.best_id, :]),
+                                step=self.step)
+
+            elif name == "action_cos":
+                tf.summary.histogram("Cost/Action/Cost",
+                                tensor,
+                                step=self.step)
+                tf.summary.scalar("Cost/Action/Average_cost",
+                                tf.math.reduce_mean(tensor),
+                                step=self.step)
+                tf.summary.scalar("Cost/Action/Best_cost",
+                                tf.squeeze(tensor[self.best_id, :]),
+                                step=self.step)
+
+            elif name == "weights":
+                tf.summary.histogram("Controller/Weights",
+                                    tensor,
+                                    step=self.step)
+
+            elif name == "nabla":
+                tf.summary.scalar("Controller/Nabla_percent",
+                                tf.squeeze(tensor/tf.cast(self._k,
+                                                            dtype=dtype)),
+                                step=self.step)
+
+            elif name == "arg":
+                tf.summary.histogram("Controller/exponenetial_argument",
+                                tensor,
+                                step=self.step)
+
+            elif name == "weighted_noise":
+                tf.summary.histogram("Controller/Weighted_noises",
+                                    tensor,
+                                    step=self.step)
+
+            elif name == "state":
+                for i in self._poseId:
+                    tf.summary.scalar("State/position_{}".format(i),
+                                      tf.squeeze(tensor[0][-1, i, :]),
+                                      step=self.step)
+                for i in self._velId:
+                    tf.summary.scalar("State/velocity_{}".format(i),
+                                      tf.squeeze(tensor[0][-1, i, :]),
+                                      step=self.step)

@@ -628,18 +628,10 @@ class Predictor(tf.Module):
         self.onnx = onnx
 
     def forward(self, x, u):
-        k = x.shape[0]
+        k = tf.shape(x)[0]
         x_red = x[:, :, 3:]
-        x_flat = tf.cast(
-            tf.reshape(x_red, (k, -1)),
-            dtype=tf.float32,
-            name="casting_input_state"
-        )
-        u_flat = tf.cast(
-            tf.reshape(u, (k, -1)),
-            dtype=tf.float32,
-            name="casting_input_action"
-        )
+        x_flat = tf.reshape(x_red, (k, self.h*15))
+        u_flat = tf.reshape(u, (k, self.h*6))
 
         if self.onnx:
             pred = self.internal(x=x_flat, u=u_flat)['vel']
@@ -672,10 +664,5 @@ class LaggedNNAUVSpeed(ModelBase):
     def build_step_graph(self, scope, state, action):
         state = tf.squeeze(state, axis=-1)
         action = tf.squeeze(action, axis=-1)
-        print("*"*10)
-        print(state)
-        print("*"*10)
-        print(action)
-        print("*"*10)
         foo = self.pred.forward(state, action)
         return foo[..., None]

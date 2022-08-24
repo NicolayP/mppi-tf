@@ -1,6 +1,6 @@
 import numpy as np
 
-from .costs.static_cost import StaticCost
+from .costs.static_cost import StaticCost, StaticRotCost
 from .costs.elipse_cost import ElipseCost, ElipseCost3D
 
 
@@ -10,6 +10,13 @@ def static(task_dic, lam, gamma, upsilon, sigma):
     Q = np.array(task_dic['Q'])
     diag = task_dic["diag"]
     return StaticCost(lam, gamma, upsilon, sigma, goal, Q, diag)
+
+def static_rot(task_dic, lam, gamma, upsilon, sigma):
+    goal = np.expand_dims(np.array(task_dic['goal']), -1)
+    Q = np.array(task_dic['Q'])
+    diag = task_dic["diag"]
+    rep = task_dic['rep']
+    return StaticRotCost(lam, gamma, upsilon, sigma, goal, Q, diag, rep)
 
 
 def elipse(task_dic, lam, gamma, upsilon, sigma):
@@ -46,12 +53,14 @@ def get_cost(task, lam, gamma, upsilon, sigma):
 
     switcher = {
         "static": static,
+        "static_rot": static_rot,
         "elipse": elipse,
         "elipse3d": elipse3d,
         "waypoints": waypoints
     }
 
     cost_type = task['type']
+
     getter = switcher.get(cost_type, lambda: "invalid cost type, check\
                 spelling, supporter are: static, elipse, elipse3d")
     return getter(task, lam, gamma, upsilon, sigma)
