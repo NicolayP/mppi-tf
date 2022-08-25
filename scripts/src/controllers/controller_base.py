@@ -188,7 +188,7 @@ class ControllerBase(tf.Module):
         start = t.perf_counter()
 
         # tf.profiler.experimental.start(self._observer.get_logdir())
-        next = self._next_fct(self._k,
+        next, trajs, weights = self._next_fct(self._k,
                               model_input,
                               self._actionSeq,
                               self._normalizeCost)
@@ -214,7 +214,7 @@ class ControllerBase(tf.Module):
 
         self._timingDict['total'] += end-start
         self._timingDict['calls'] += 1
-        return np.squeeze(next.numpy())
+        return np.squeeze(next.numpy()), np.squeeze(trajs.numpy()), np.squeeze(weights.numpy())
 
     def _next(self, k, model_input, actionSeq, normalizeCost=False, profile=False):
         '''
@@ -248,11 +248,12 @@ class ControllerBase(tf.Module):
             tf.profiler.experimental.start(self._observer.get_logdir())
 
         with tf.name_scope("Controller") as cont:
-            action = self.build_graph(cont, k, model_input, actionSeq,
-                                    normalize=normalizeCost)
+            action, trajs, weights = self.build_graph(
+                cont, k, model_input, actionSeq,
+                normalize=normalizeCost)
         if profile:
             tf.profiler.experimental.stop()
-        return action
+        return action, trajs, weights
 
     def build_graph(self, scope, k, model_input, actionSeq, normalize=False):
         '''
@@ -291,9 +292,9 @@ class ControllerBase(tf.Module):
             with tf.name_scope("random") as rand:
                 noises = self.build_noise(rand, k)
             with tf.name_scope("Rollout") as roll:
-                cost = self.build_model(roll, k, model_input, noises, actionSeq)
+                cost, trajs = self.build_model(roll, k, model_input, noises, actionSeq)
             with tf.name_scope("Update") as up:
-                update = self.update(up, cost, noises, normalize=normalize)
+                update, weights = self.update(up, cost, noises, normalize=normalize)
             with tf.name_scope("Next") as n:
                 next = self.get_next(n, update, 1)
             with tf.name_scope("shift_and_init") as si:
@@ -302,7 +303,7 @@ class ControllerBase(tf.Module):
 
         self._observer.write_control("state", model_input)
         self._observer.write_control("next", next)
-        return next
+        return next, trajs, weights
 
     def build_model(self, scope, k, model_input, noises, actionsSeq):
         raise NotImplementedError
@@ -355,7 +356,7 @@ class ControllerBase(tf.Module):
         self._observer.write_control("weighted_noise", weighted_noises)
         # self._observer.write_control("update", update)
 
-        return update
+        return update, weights
 
     def beta(self, scope, cost):
         # shapes: in [k, 1, 1]; out [1, 1]

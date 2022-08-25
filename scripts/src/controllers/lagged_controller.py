@@ -102,6 +102,7 @@ class LaggedModelController(ControllerBase):
             ) # shape [k, history-1, aDim, 1]
 
             cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
+            trajs = laggedState[:, :-1, ...]
         with tf.name_scope("Rollout") as r:
             for i in range(self._tau):
                 with tf.name_scope(f"Rollout_{i}"):
@@ -115,6 +116,7 @@ class LaggedModelController(ControllerBase):
                             laggedState,
                             toApply
                         ) # shape [k, sDim, 1]
+                        trajs = tf.concat([trajs, nextState[:, None, ...]], axis=1)
                     with tf.name_scope(f"Cost_{i}") as c:
                         tmp = self._cost.build_step_cost_graph(c, nextState, action, noise)
                         cost = self._cost.add_cost(c, cost, tmp)
@@ -128,7 +130,7 @@ class LaggedModelController(ControllerBase):
             samplesCost = self._cost.add_cost(rc, fCost, cost)
         
         self._observer.write_control("samples_cost", samplesCost)
-        return samplesCost
+        return samplesCost, trajs
 
     def prepare_to_apply(self, scope, action, noise, laggedAction):
         '''
