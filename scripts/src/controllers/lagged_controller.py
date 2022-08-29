@@ -67,10 +67,16 @@ class LaggedModelController(ControllerBase):
             --------
                 None.
         '''
-        fake_input = (
-            tf.zeros((self._h, self._sDim, 1), dtype=dtype),
-            tf.zeros((self._h-1, self._aDim, 1), dtype=dtype)
-        )
+        if self._h > 1:
+            fake_input = (
+                tf.zeros((self._h, self._sDim, 1), dtype=dtype),
+                tf.zeros((self._h-1, self._aDim, 1), dtype=dtype)
+            )
+        else:
+            fake_input = (
+                tf.zeros((self._h, self._sDim, 1), dtype=dtype),
+                None
+            )
         
         fake_sequence = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
 
@@ -95,11 +101,13 @@ class LaggedModelController(ControllerBase):
                 [k, self._h, self._sDim, 1],
                 name="Broacast_inital_state"
             ) # shape [k, history, sDim, 1]
-            laggedAction = tf.broadcast_to(
-                laggedAction[None, ...], # shape [1, history-1, aDim, 1]
-                [k, self._h-1, self._aDim, 1],
-                name="Broadcast_inital_aciton"
-            ) # shape [k, history-1, aDim, 1]
+
+            if laggedAction is not None:
+                laggedAction = tf.broadcast_to(
+                    laggedAction[None, ...], # shape [1, history-1, aDim, 1]
+                    [k, self._h-1, self._aDim, 1],
+                    name="Broadcast_inital_aciton"
+                ) # shape [k, history-1, aDim, 1]
 
             cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
             trajs = laggedState[:, :-1, ...]
@@ -122,8 +130,9 @@ class LaggedModelController(ControllerBase):
                         cost = self._cost.add_cost(c, cost, tmp)
                 with tf.name_scope("State_update"):
                     laggedState = push_to_tensor(laggedState, nextState)
-                    laggedAction = push_to_tensor(laggedAction, toApply[:, -1])
-        
+                    if laggedAction is not None:
+                        laggedAction = push_to_tensor(laggedAction, toApply[:, -1])
+
         with tf.name_scope("Terminal_cost") as tc:
             fCost = self._cost.build_final_step_cost_graph(tc, nextState)
         with tf.name_scope("Rollout_cost") as rc:
@@ -144,5 +153,8 @@ class LaggedModelController(ControllerBase):
                 laggedInput: shape [k, history, aDim, 1]
         '''
         tmp = tf.expand_dims(tf.add(action, noise, name=""), axis=1)
-        act = tf.concat([laggedAction, tmp], axis=1) # shape [k, history, adim, 1]
+        if laggedAction is not None:
+            act = tf.concat([laggedAction, tmp], axis=1) # shape [k, history, adim, 1]
+        else:
+            act = tmp
         return act
