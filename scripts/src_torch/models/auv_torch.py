@@ -465,7 +465,8 @@ class StatePredictorHistory(torch.nn.Module):
         tau = v*self.dt
         M = self.toMat(x_last)
         M = self.int(M, tau)
-        return self.flat(M, v_next)
+        nextState = self.flat(M, v_next)
+        return nextState
 
     @property
     def history(self):

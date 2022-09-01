@@ -1,5 +1,6 @@
 import tensorflow as tf
-from ..misc.utile import assert_shape, dtype
+import numpy as np
+from ..misc.utile import assert_shape, dtype, plot_traj, traj_to_euler
 
 class ToSE3Mat(tf.Module):
     def __init__(self):
@@ -23,6 +24,7 @@ class SE3int(tf.Module):
         self.skew = Skew()
         self.so3int = SO3int(self.skew)
         self.pad = tf.constant([[[0., 0., 0., 1.]]], dtype=dtype)
+        self.eps = 1e-10
 
     def forward(self, M, tau):
         return M @ self.exp(tau)
@@ -44,12 +46,14 @@ class SE3int(tf.Module):
         return homo
 
     def v(self, theta_vec):
-        theta = tf.linalg.norm(theta_vec)
+        theta = tf.linalg.norm(theta_vec, axis=-1)
+        mask = tf.cast(theta > self.eps, dtype=dtype)
         skewT = self.skew.forward(theta_vec)
         a = tf.eye(3, dtype=dtype)
-        b = (1-tf.cos(theta))/tf.pow(theta, 2) * skewT
-        c = (theta - tf.sin(theta))/tf.pow(theta, 3) * tf.pow(skewT, 2)
-        return a + b + c
+        b = ((1-tf.cos(theta))/tf.pow(theta, 2))[:, None, None] * skewT
+        c = ((theta - tf.sin(theta))/tf.pow(theta, 3))[:, None, None] * tf.pow(skewT, 2)
+        res = a + tf.math.multiply_no_nan((b + c), mask[:, None, None])
+        return res
 
 
 class SO3int(tf.Module):
@@ -63,8 +67,8 @@ class SO3int(tf.Module):
         return R @ self.exp(tau)
 
     def exp(self, tau):
-        theta = tf.linalg.norm(tau, axis=1)
-        u = tau/theta[:, None]
+        theta = tf.linalg.norm(tau, axis=-1) # [k,]
+        u = tf.math.l2_normalize(tau, axis=-1) #[k, 3]
         skewU = self.skew.forward(u)
         a = tf.eye(3, dtype=dtype)
         b = tf.sin(theta)[:, None, None]*skewU
@@ -119,3 +123,37 @@ def load_onnx_model(dir):
 def push_to_tensor(tensor, x):
     tmp = tf.expand_dims(x, axis=1) # shape [k, 1, dim, 1]
     return tf.concat([tensor[:, 1:], tmp], axis=1)
+
+
+def rollout(model, init, seq, h, horizon):
+    state = init
+    pred = []
+    for i in range(h, horizon+h):
+        nextState = model.build_step_graph("foo", state, seq[:, i-h:i])
+        pred.append(nextState)
+        state = push_to_tensor(state, nextState)
+    traj = tf.concat(pred, axis=0)
+    return traj
+
+
+def rand_rollout(models, histories, plotStateCols, plotActionCols, horizon, dir):
+    trajs = {}
+    seq = 5. * tf.random.normal(
+        shape=(1, horizon+10, 6, 1),
+        mean=0.,
+        stddev=1.,
+        dtype=dtype,
+        seed=1
+    )
+    for model, h in zip(models, histories):
+        init = np.zeros((1, h, 18, 1))
+        rot = np.eye(3)
+        init[:, :, 3:3+9, :] = np.reshape(rot, (9, 1))
+        init = init.astype(np.float32)
+        init = tf.convert_to_tensor(init, dtype=dtype)
+        pred = rollout(model, init, seq, h, horizon)
+        pred = np.squeeze(pred.numpy(), axis=-1)
+        trajs[model.name + "_rand"] = traj_to_euler(pred, rep="rot")
+
+    plot_traj(trajs, seq, histories, plotStateCols, plotActionCols, horizon, dir)
+

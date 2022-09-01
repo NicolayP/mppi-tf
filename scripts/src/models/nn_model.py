@@ -644,7 +644,8 @@ class Predictor(tf.Module):
         tau = v*self.dt
         M = self.toMat.forward(x_last)
         M = self.int.forward(M, tau)
-        return self.flat.forward(M, v_next)
+        nextState = self.flat.forward(M, v_next)
+        return nextState
 
 
 class LaggedNNAUVSpeed(ModelBase):

@@ -1,5 +1,7 @@
 import torch
+from torch.nn.functional import normalize
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 import pandas as pd
 import random
 
@@ -61,6 +63,16 @@ class ListDataset(torch.utils.data.Dataset):
         u = u[:self.h+self.s-1]
         y = s[self.h:self.h+self.s]
         return x, u, y
+
+    def getTrajs(self):
+        traj_list = []
+        action_seq_list = []
+        for data in self.data_list:
+            traj = data[self.x_labels]
+            traj_list.append(traj)
+            action_seq = data[self.u_labels]
+            action_seq_list.append(action_seq)
+        return traj_list, action_seq_list
 
 
 class Dataset(torch.utils.data.Dataset):
@@ -291,6 +303,10 @@ class SE3int(torch.nn.Module):
         pad = torch.Tensor([[[0., 0., 0., 1.]]])
         self.register_buffer('pad_const', pad)
     
+        a = torch.eye(3)
+        self.eps = 1e-10
+        self.register_buffer("a", a)
+
     def forward(self, M, tau):
         '''
             Applies the perturbation Tau on M (in SE(3)) using the exponential mapping and the right plus operator.
@@ -303,7 +319,8 @@ class SE3int(torch.nn.Module):
             -------
                 - M (+) Exp(Tau)
         '''
-        return M @ self.exp(tau)
+        exp = self.exp(tau)
+        return M @ exp
 
     def exp(self, tau):
         '''
@@ -327,7 +344,7 @@ class SE3int(torch.nn.Module):
 
         r = self.so3int.exp(theta_vec)
         p = self.v(theta_vec) @ rho_vec.unsqueeze(dim=-1)
-        
+
         noHomo = torch.concat([r, p], dim=-1)
         homo = torch.concat([noHomo, self.pad_const.broadcast_to((k, 1, 4))], dim=-2)
         if batch:
@@ -344,12 +361,22 @@ class SE3int(torch.nn.Module):
                 - theta_vec. Rotation vector \theta * u. Where theta is the
                 rotation angle around the unit vector u. Shape [k, 3] or [3]
         '''
-        theta = torch.linalg.norm(theta_vec)
-        skewT = self.skew(theta_vec)
-        a = torch.eye(3)
-        b = (1-torch.cos(theta))/torch.pow(theta, 2) * skewT
-        c = (theta - torch.sin(theta))/torch.pow(theta, 3) * torch.pow(skewT, 2)
-        return a + b + c
+        k = theta_vec.shape[0]
+        theta = torch.linalg.norm(theta_vec, dim=-1) # [k,]
+        non_zero_theta = theta[theta > self.eps] # [k - zeros, ]
+        non_zero_vec = theta_vec[theta > self.eps] # [k - zeros, 3]
+        non_zero_tmp = torch.zeros((non_zero_theta.shape[0], 3, 3))
+
+        if non_zero_theta.shape[0] > 0:
+            skewT = self.skew(non_zero_vec) # [k - zeros, 3, 3]
+            b = ((1-torch.cos(non_zero_theta))/torch.pow(non_zero_theta, 2))[:, None, None] * skewT
+            c = ((non_zero_theta - torch.sin(non_zero_theta))/torch.pow(non_zero_theta, 3))[:, None, None] * torch.pow(skewT, 2)
+            non_zero_tmp = b + c
+
+        result = torch.zeros((k, 3, 3))
+        result[theta > self.eps] = non_zero_tmp
+        result = result + self.a[None, ...]
+        return result
 
 
 class SO3int(torch.nn.Module):
@@ -359,6 +386,9 @@ class SO3int(torch.nn.Module):
             self.skew = Skew()
         else:
             self.skew = skew
+
+        a = torch.eye(3)
+        self.register_buffer('a', a)
 
     def forward(self, R, tau):
         '''
@@ -393,14 +423,14 @@ class SO3int(torch.nn.Module):
             tau = tau.unsqueeze(dim=0)
 
         theta = torch.linalg.norm(tau, dim=1)
-        u = tau/theta[:, None]
+        u = normalize(tau, dim=-1)
+        #u = tau/theta[:, None]
 
         skewU = self.skew(u)
-        a = torch.eye(3)
         b = torch.sin(theta)[:, None, None]*skewU
         c = (1-torch.cos(theta))[:, None, None]*torch.pow(skewU, 2)
 
-        res = a + b + c
+        res = self.a + b + c
         if batch:
             return res
         else:
@@ -673,59 +703,123 @@ def test(dataLoaders, model, loss, writer=None, step=None, device="cpu"):
     pass
 
 
-def val(dataLoader, models, metric, device="cpu", plot=False, plotCols=None, horizon=50, filename="foo.png"):
-    w = 1
+def val(dataLoader, models, metric, histories=None, device="cpu",
+        plotStateCols=None, plotActionCols=None, horizon=50, dir=".",
+        plot=True):
     gtTrajs, actionSeqs = dataLoader.dataset.getTrajs()
-    gtTrajs = torch.from_numpy(gtTrajs).to(device)
-    actionSeqs = torch.from_numpy(actionSeqs).to(device)
-
-    tau = actionSeqs.shape[1]
-    if tau > horizon:
-        tau = horizon
     errs = {}
-    trajs = {}
-
-    samples = gtTrajs.shape[0]
-    samples = 10
-
-    with torch.no_grad():
-        for m in models:
-            h = m.history
-            initState = gtTrajs[:, :h]
-            pred = []
-            state = initState
-            for i in range(h, tau):
-                nextState = m(state, actionSeqs[:, i-h:i])
-                pred.append(nextState.unsqueeze(dim=1))
-                state = push_to_tensor(state, nextState)
-            pred = torch.concat(pred, dim=1)
-            err = metric(pred, gtTrajs[:, h:tau])
-        
-            errs[m.name] = [err]
-            trajs[m.name] = pred
-
-        headers = ["name", "l2"]
-        
-        print(tabulate([[k,] + v for k, v in errs.items()], headers=headers))
-
+    for j, (traj, seq) in enumerate(zip(gtTrajs, actionSeqs)):
+        trajs = {}
+        traj = torch.from_numpy(traj.to_numpy()).to(device)
+        seq = torch.from_numpy(seq.to_numpy()).to(device)
+        for model, h in zip(models, histories):
+            init = traj[0:h][None, ...]
+            pred = rollout(model, init, seq, h, device, horizon)
+            trajs[model.name + f"_traj_{j}"] = pred.cpu()
+            print(pred.shape)
+            errs[model.name + f"_traj_{j}"] = [metric(pred, traj[h:horizon+h]).cpu().numpy()]
+        trajs["gt"] = traj.cpu().numpy()
         if plot:
-            maxN = len(plotCols)
-            for j in tqdm(range(samples)):
-                fig = plt.figure(figsize=(60, 60))            
-                for i, name in enumerate(plotCols):
-                    plt.subplot(maxN, 1, i+1)
-                    plt.ylabel(f'{name} [normed]')
-                
-                    plt.plot(gtTrajs[j, :tau, plotCols[name]], label='gt', marker='.', zorder=-10)
-                
-                    for m in models:
-                        plt.scatter(np.arange(m.history, tau), trajs[m.name][j, :, plotCols[name]],
-                                    marker='X', edgecolors='k', label=m.name, s=64)
-                    
-                fig.legend()
-                plt.tight_layout()
-                foo = os.path.split(filename)
-                name = os.path.join(foo[0], f"traj-{j}-"+foo[1])
+            plot_traj(trajs, seq.cpu(), histories, plotStateCols, plotActionCols, horizon, dir)
+    headers = ["name", "l2"]
+    print(tabulate([[k,] + v for k, v in errs.items()], headers=headers))
+
+
+def rollout(model, init, seq, h=1, device="cpu", horizon=50):
+    state = init
+    with torch.no_grad():
+        pred = []
+        for i in range(h, horizon+h):
+            nextState = model(state, seq[:, i-h:i])
+            pred.append(nextState)
+            state = push_to_tensor(state, nextState)
+        traj = torch.concat(pred, dim=0)
+        return traj
+
+
+def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCols=None, horizon=50, dir="."):
+    '''
+        Plot trajectories and action sequence.
+        inputs:
+        -------
+            - trajs: dict with model name as key and trajectories entry. If key is "gt" then it is assumed to be
+                the ground truth trajectory.
+            - seq: Action Sequence associated to the generated trajectoires. If not None, plots the 
+                action seqence.
+            - h: list of history used for the different models, ignored when model entry is "gt".
+            - plotStateCols: Dict containing the state axis name as key and index as entry
+            - plotAcitonCols: Dict containing the action axis name as key and index as entry.
+            - horizon: The horizon of the trajectory to plot.
+            - dir: The saving directory for the generated images.
+    '''
+    maxS = len(plotStateCols)
+    maxA = len(plotActionCols)
+    fig_state = plt.figure(figsize=(50, 50))
+    for k, h in zip(trajs, histories):
+        t = trajs[k]
+        for i, name in enumerate(plotStateCols):
+            m, n = np.unravel_index(i, (2, 6))
+            idx = 1*m + 2*n + 1
+            plt.subplot(6, 2, idx)
+            plt.ylabel(f'{name}')
+            if k == "gt":
+                plt.plot(t[:horizon], marker='.', zorder=-10)
+            else:
+                plt.scatter(
+                    np.arange(h, horizon+h), t[:, plotStateCols[name]],
+                    marker='X', edgecolors='k', s=64
+                )
+        #plt.tight_layout()
+        if dir is not None:
+            name = os.path.join(dir, f"{k}.png")
+            plt.savefig(name)
+            plt.close()
+
+        if seq is not None:
+            fig_act = plt.figure(figsize=(30, 30))
+            for i, name in enumerate(plotActionCols):
+                plt.subplot(maxA, 1, i+1)
+                plt.ylabel(f'{name}')
+                plt.plot(seq[0, :horizon+h, plotActionCols[name]])
+
+            #plt.tight_layout()
+            if dir is not None:
+                name = os.path.join(dir, f"{k}-actions.png")
                 plt.savefig(name)
                 plt.close()
-    pass
+        
+        plt.show()
+
+
+def rand_roll(models, histories, plotStateCols, plotActionCols, horizon, dir, device):
+    trajs = {}
+    seq = 5. * torch.normal(mean=torch.zeros(1, horizon+10, 6),
+                       std=torch.ones(1, horizon+10, 6)).to(device)
+    for model, h in zip(models, histories):
+        init = np.zeros((1, h, 18))
+        rot = np.eye(3)
+        init[:, :, 3:3+9] = np.reshape(rot, (9,))
+        init = init.astype(np.float32)
+        init = torch.from_numpy(init).to(device)
+        pred = rollout(model, init, seq, h, device, horizon)
+        trajs[model.name + "_rand"] = traj_to_euler(pred.cpu().numpy(), rep="rot")
+        print(pred.isnan().any())
+
+    plot_traj(trajs, seq.cpu(), histories, plotStateCols, plotActionCols, horizon, dir)
+
+
+def traj_to_euler(traj, rep="rot"):
+    if rep == "rot":
+        rot = traj[:, 3:3+9].reshape((-1, 3, 3))
+        r = R.from_matrix(rot)
+    elif rep == "quat":
+        quat = traj[:, 3:3+4]
+        r = R.from_quat(quat)
+    else:
+        raise NotImplementedError
+    pos = traj[:, :3]
+    euler = r.as_euler('XYZ', degrees=True)
+    vel = traj[:, -6:]
+
+    traj = np.concatenate([pos, euler, vel], axis=-1)
+    return traj
