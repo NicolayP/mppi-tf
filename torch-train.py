@@ -1,30 +1,33 @@
 # General program to train a model using torch.
 import argparse
 
-
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="train-network-torch",
         description="General program to train a network using torch."
     )
+
     parser.add_argument(
         'params', metavar='p', type=str,
         help='Yaml file containing the configuration for training.'
     )
+
     parser.add_argument(
         '-t', '--tf', action=argparse.BooleanOptionalAction,
         help='save the model as a tensorflow model (using onnx)'
     )
+
     parser.add_argument(
         '--save_dir', type=str, default="torch-training",
         help="saving directory for the model in it's different formats"
     )
+
     parser.add_argument(
         '-g', '--gpu', action=argparse.BooleanOptionalAction,
         help='Wether to train on gpu device or cpu')
 
     parser.add_argument(
-        '-l', '--log', type=str,
+        '-l', '--log', type=str, default='.',
         help='Log directory for the training.'
     )
 
@@ -40,9 +43,9 @@ import pandas as pd
 from torch.utils.tensorboard import SummaryWriter
 import warnings
 import os
-from scripts.src_torch.models.auv_torch import VelPred
-from scripts.src_torch.models.torch_utils import ListDataset, learn, save_model
-from scripts.src.misc.utile import parse_config, npdtype
+from scripts.src_torch.models.auv_torch import VelPred, StatePredictorHistory
+from scripts.src_torch.models.torch_utils import ListDataset, learn, rand_roll, save_model, val
+from scripts.src.misc.utile import parse_config, npdtype, dtype
 from tqdm import tqdm
 from datetime import datetime
 
@@ -121,6 +124,15 @@ def main():
     h = config['history']
     steps = config['steps']
 
+    stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
+    dir = os.path.join(args.save_dir, config['model_name'], stamp)
+    dir_rand = os.path.join(dir, "rand")
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+    if not os.path.exists(dir_rand):
+        os.makedirs(dir_rand)
+
     ds = (
         torch.utils.data.DataLoader(
             dataset,
@@ -130,7 +142,8 @@ def main():
 
     writer = None
     if args.log is not None:
-        writer = SummaryWriter(args.log)
+        path = os.path.join(dir, args.log)
+        writer = SummaryWriter(path)
 
     learn(ds, model, loss_fn, optim, writer, epochs, device)
 
@@ -146,12 +159,44 @@ def main():
         "u": {0: "ku"},
         "vel": {0: "kv"}
     }
+    
+    state_model = StatePredictorHistory(model, 0.1, h).to(device)
 
-    stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-    dir = os.path.join(args.save_dir, config['model_name'], stamp)
+    plotStateCols={
+        "x":0 , "y": 1, "z": 2,
+        "r00": 3, "r01": 4, "r02": 5,
+        "r10": 6, "r11": 7, "r12": 8,
+        "r20": 9, "r21": 10, "r22": 11,
+        "u": 12, "v": 13, "w": 14,
+        "p": 15, "q": 16, "r": 17
+    }
+    plotActionCols={
+        "Fx": 0, "Fy": 1, "Fz": 2,
+        "Tx": 3, "Ty": 4, "Tz": 5
+    }
 
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    rand_roll(
+        models=[state_model],
+        histories=[h],
+        plotStateCols=plotStateCols,
+        plotActionCols=plotActionCols,    
+        horizon=50,
+        dir=dir_rand,
+        device=device
+    )
+
+    val(
+        ds[0],
+        models=[state_model],
+        metric=loss_fn,
+        device=device,
+        histories=[h],
+        horizon=50,
+        plot=True,
+        plotStateCols=plotStateCols,
+        plotActionCols=plotActionCols,
+        dir=dir
+    )
 
     save_model(
         model,
@@ -162,6 +207,7 @@ def main():
         output_names=output_names,
         dynamic_axes=dynamic_axes)
 
+    return
 
 
 if __name__ == "__main__":
