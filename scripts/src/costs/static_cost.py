@@ -109,7 +109,6 @@ class StaticQuatCost(CostBase):
     def set_goal(self, goal):
         if not assert_shape(goal, (13, 1)):
             raise AssertionError("Goal tensor shape error, expected: [{}, 1], got {}".format(self.q_shape[0], goal.shape))
-        goal = self.to_vec(goal)
         self.goal.assign(goal)
 
     def get_goal(self):
@@ -242,7 +241,6 @@ class StaticRotCost(CostBase):
                                          name="right"),
                         transpose_a=True,
                         name="left")
-
         return stateCost
 
     def draw_goal(self):
@@ -254,8 +252,9 @@ class StaticRotCost(CostBase):
         goal = tf.squeeze(self.goal, axis=-1)
         rot = tf.reshape(state[:, 3:3+9], (-1, 3, 3))
         goal_rot = tf.reshape(goal[3:3+9], (3, 3))
+
         rot_angle = tf.linalg.matmul(goal_rot, rot, transpose_b=True)
-        theta = tf.math.acos(tf.linalg.trace(rot_angle) - 1. / 2.)
+        theta = tf.math.acos((tf.linalg.trace(rot_angle) - 1.) / 2.)
 
         pos = state[:, :3]
         goal_pos = goal[:3]

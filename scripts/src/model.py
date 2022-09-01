@@ -52,7 +52,7 @@ def pm(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
                           limMin=limMin,
                           name=name)
 
-def auv(modelDict, samples, dt, stateDim, actionDim, name, paramFile=None):
+def auv(modelDict, samples, dt, stateDim, actionDim, limMax, limMin, name, paramFile=None):
     return AUVModel(modelDict=modelDict,
                     inertialFrameId=modelDict['frame_id'],
                     actionDim=actionDim,

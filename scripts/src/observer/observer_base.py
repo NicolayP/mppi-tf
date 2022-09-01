@@ -231,10 +231,16 @@ class ObserverLagged(ObserverBase):
         self._h = h
 
     def save_graph(self, function, graphMode=True):
-        #return
-        state = (
-            tf.zeros((self._h, self._sDim, 1), dtype=dtype), 
-            tf.zeros((self._h-1, self._aDim, 1), dtype=dtype))
+        if self._h > 1:
+            state = (
+                tf.zeros((self._h, self._sDim, 1), dtype=dtype), 
+                tf.zeros((self._h-1, self._aDim, 1), dtype=dtype)
+            )
+        else:
+            state = (
+                tf.zeros((self._h, self._sDim, 1), dtype=dtype), 
+                None
+            )
         seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
         with self._writer.as_default():
             if graphMode:

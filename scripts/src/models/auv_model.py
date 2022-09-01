@@ -282,6 +282,8 @@ class AUVModel(ModelBase):
         return inertial
 
     def build_step_graph(self, scope, state, action):
+        state = tf.squeeze(state, axis=1)
+        action = tf.squeeze(action, axis=1)
         return self.step(scope, state, action, rk=self._rk)
 
     def step(self, scope, state, action, rk=1):
@@ -571,62 +573,3 @@ class AUVModel(ModelBase):
             [0.], [0.], [0.],
             [0.], [0.], [0.]
         ])
-
-def main():
-    params = dict()
-    params["mass"] = 1862.87
-    params["volume"] = 1.8121303501945525
-    params["density"] = 1028
-    params["height"] = 1.6
-    params["length"] = 2.5
-    params["width"] = 1.5
-    params["cog"] = [0, 0, 0]
-    params["cob"] = [0, 0, 0.3]
-    params["Ma"] = [[779.79, -6.8773, -103.32,  8.5426, -165.54, -7.8033],
-                    [-6.8773, 1222, 51.29, 409.44, -5.8488, 62.726],
-                    [-103.32, 51.29, 3659.9, 6.1112, -386.42, 10.774],
-                    [8.5426, 409.44, 6.1112, 534.9, -10.027, 21.019],
-                    [-165.54, -5.8488, -386.42, -10.027,  842.69, -1.1162],
-                    [-7.8033, 62.726, 10.775, 21.019, -1.1162, 224.32]]
-    params["linear_damping"] = [-70., -70., -700., -300., -300., -100.]
-    params["quad_damping"] = [-740., -990., -1800., -670., -770., -520.]
-    inertial = dict()
-    inertial["ixx"] = 525.39
-    inertial["iyy"] = 794.2
-    inertial["izz"] = 691.23
-    inertial["ixy"] = 1.44
-    inertial["ixz"] = 33.41
-    inertial["iyz"] = 2.6
-    params["inertial"] = inertial
-    params["rk"] = 2
-    params["linear_damping_forward_speed"] = [0., 0., 0., 0., 0., 0.]
-    model = AUVModel({}, k=tf.Variable(2), parameters=params)
-    model.print_info()
-    x = tf.expand_dims(
-         tf.constant([[6., 7., 8.,
-                       0.5, 0., 0., 0.5,
-                       9., 10., 11.,
-                       12., 13., 14.,],
-                      [6., 7., 8.,
-                       0., 0.5, 0., 0.5,
-                       9., 10., 11.,
-                       12., 13., 14.,],
-                      ], dtype=dtype),
-         axis=-1)
-
-    u = tf.expand_dims(
-         tf.constant([[0., 1., 2.,
-                       3., 4., 5.],
-                      [1., 2., 3.,
-                       4., 5., 6.,],
-                      ], dtype=dtype),
-         axis=-1)
-    
-    #model.print_info()
-    print("*"*5, " Step ", "*"*5)
-    print(tf.squeeze(model.build_step_graph("Foo", x, u)).numpy())
-
-
-if __name__ == "__main__":
-
-    main()

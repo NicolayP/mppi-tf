@@ -152,7 +152,7 @@ class ControllerBase(tf.Module):
                 - xNext: the next state. Shape [sDim, 1]
         '''
         if self._log:
-            pred = self.predict(model_input, u, self._actionSeq, xNext)
+            #pred = self.predict(model_input, u, self._actionSeq, xNext)
             self._observer.advance()
 
     def state_error(self, stateGt, statePred):

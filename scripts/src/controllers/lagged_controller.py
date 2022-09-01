@@ -111,6 +111,7 @@ class LaggedModelController(ControllerBase):
 
             cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
             trajs = laggedState[:, :-1, ...]
+
         with tf.name_scope("Rollout") as r:
             for i in range(self._tau):
                 with tf.name_scope(f"Rollout_{i}"):
