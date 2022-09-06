@@ -51,7 +51,7 @@ class SE3int(tf.Module):
         skewT = self.skew.forward(theta_vec)
         a = tf.eye(3, dtype=dtype)
         b = ((1-tf.cos(theta))/tf.pow(theta, 2))[:, None, None] * skewT
-        c = ((theta - tf.sin(theta))/tf.pow(theta, 3))[:, None, None] * tf.pow(skewT, 2)
+        c = ((theta - tf.sin(theta))/tf.pow(theta, 3))[:, None, None] * (skewT @ skewT)
         res = a + tf.math.multiply_no_nan((b + c), mask[:, None, None])
         return res
 
@@ -72,7 +72,7 @@ class SO3int(tf.Module):
         skewU = self.skew.forward(u)
         a = tf.eye(3, dtype=dtype)
         b = tf.sin(theta)[:, None, None]*skewU
-        c = (1-tf.cos(theta))[:, None, None]*tf.pow(skewU, 2)
+        c = (1-tf.cos(theta))[:, None, None]*(skewU @ skewU)
         return a + b + c
 
 

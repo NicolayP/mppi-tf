@@ -254,7 +254,7 @@ class StaticRotCost(CostBase):
         goal_rot = tf.reshape(goal[3:3+9], (3, 3))
 
         rot_angle = tf.linalg.matmul(goal_rot, rot, transpose_b=True)
-        theta = tf.math.acos((tf.linalg.trace(rot_angle) - 1.) / 2.)
+        theta = tf.math.acos(tf.clip_by_value(((tf.linalg.trace(rot_angle) - 1.) / 2.), -1, 1))
 
         pos = state[:, :3]
         goal_pos = goal[:3]
@@ -263,6 +263,6 @@ class StaticRotCost(CostBase):
         vel = state[:, -6:]
         goal_vel = goal[-6:]
         vel_dist = tf.subtract(vel, goal_vel)        
-        return tf.concat([pos_dist, theta[..., None], vel_dist], axis=1)[..., None]
-
+        diff = tf.concat([pos_dist, theta[..., None], vel_dist], axis=1)[..., None]
+        return diff
 

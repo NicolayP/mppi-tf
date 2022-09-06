@@ -13,7 +13,7 @@ def static(task_dic, lam, gamma, upsilon, sigma):
 
 
 def static_rot(task_dic, lam, gamma, upsilon, sigma):
-    goal = np.expand_dims(np.array(task_dic['goal']), -1)
+    goal = np.expand_dims(np.array(task_dic['goal']), axis=-1)
     Q = np.array(task_dic['Q'])
     diag = task_dic["diag"]
     rep = task_dic['rep']
