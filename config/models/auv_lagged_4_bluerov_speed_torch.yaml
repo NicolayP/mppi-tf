@@ -1,0 +1,13 @@
+---
+type: "auv_nn_speed_torch"
+trainedFile: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/torch-training/bluerov2-h4/2022.08.30-20:47:11/nn-velocity_84x128x128x128x128x128x6.pb"
+trainedFileTorch: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/torch-training/bluerov2-h4/2022.08.30-20:47:11/nn-velocity_84x128x128x128x128x128x6.pth"
+limMax: 1000.
+limMin: 1000.
+steps: 1
+history: 4
+rot: "rot"
+
+topology: [128, 128, 128, 128, 128]
+sDim: 18
+aDim: 6

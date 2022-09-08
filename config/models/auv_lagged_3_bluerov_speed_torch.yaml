@@ -1,0 +1,8 @@
+---
+type: "auv_nn_speed_torch"
+trainedFile: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/torch-training/bluerov2/2022.08.28-21:04:30/nn-velocity_63x128x128x128x128x128x6.pb"
+limMax: 1000.
+limMin: 1000.
+steps: 1
+history: 3
+rot: "rot"
