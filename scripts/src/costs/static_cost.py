@@ -265,4 +265,3 @@ class StaticRotCost(CostBase):
         vel_dist = tf.subtract(vel, goal_vel)        
         diff = tf.concat([pos_dist, theta[..., None], vel_dist], axis=1)[..., None]
         return diff
-

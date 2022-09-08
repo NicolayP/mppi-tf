@@ -152,7 +152,7 @@ class ControllerBase(tf.Module):
                 - xNext: the next state. Shape [sDim, 1]
         '''
         if self._log:
-            #pred = self.predict(model_input, u, self._actionSeq, xNext)
+            pred = self.predict(model_input, u, self._actionSeq, xNext)
             self._observer.advance()
 
     def state_error(self, stateGt, statePred):
@@ -188,10 +188,11 @@ class ControllerBase(tf.Module):
         start = t.perf_counter()
 
         # tf.profiler.experimental.start(self._observer.get_logdir())
-        next, trajs, weights = self._next_fct(self._k,
+        next, trajs, weights, seq = self._next_fct(self._k,
                               model_input,
                               self._actionSeq,
                               self._normalizeCost)
+        self._actionSeq = seq
         # tf.profiler.experimental.stop()
 
         # FIRST GUESS window_length = 5, we don't want to filter out to much
@@ -248,12 +249,12 @@ class ControllerBase(tf.Module):
             tf.profiler.experimental.start(self._observer.get_logdir())
 
         with tf.name_scope("Controller") as cont:
-            action, trajs, weights = self.build_graph(
+            action, trajs, weights, actionSeq = self.build_graph(
                 cont, k, model_input, actionSeq,
                 normalize=normalizeCost)
         if profile:
             tf.profiler.experimental.stop()
-        return action, trajs, weights
+        return action, trajs, weights, actionSeq
 
     def build_graph(self, scope, k, model_input, actionSeq, normalize=False):
         '''
@@ -303,7 +304,7 @@ class ControllerBase(tf.Module):
 
         self._observer.write_control("state", model_input)
         self._observer.write_control("next", next)
-        return next, trajs, weights
+        return next, trajs, weights, actionSeq
 
     def build_model(self, scope, k, model_input, noises, actionsSeq):
         raise NotImplementedError

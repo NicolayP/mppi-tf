@@ -47,9 +47,9 @@ class LaggedModelController(ControllerBase):
         error = self.state_error(xNext, nextState[0])
         dist = self._cost.dist(laggedX[0, -1:])
 
-        #self._observer.write_predict("predicted/next_state", nextState[0])
-        self._observer.write_predict("predicted/predicted_error", error)
-        self._observer.write_predict("predicted/dist_to_goal", dist[0])
+        self._observer.write_predict("predicted/next_state", nextState[0])
+        self._observer.write_predict("predicted/error", error)
+        #self._observer.write_predict("predicted/dist_to_goal", dist[0])
         
         return nextState
 
@@ -110,7 +110,7 @@ class LaggedModelController(ControllerBase):
                 ) # shape [k, history-1, aDim, 1]
 
             cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
-            trajs = laggedState[:, :-1, ...]
+            trajs = laggedState[:, -1:, ...]
 
         with tf.name_scope("Rollout") as r:
             for i in range(self._tau):
@@ -138,7 +138,7 @@ class LaggedModelController(ControllerBase):
             fCost = self._cost.build_final_step_cost_graph(tc, nextState)
         with tf.name_scope("Rollout_cost") as rc:
             samplesCost = self._cost.add_cost(rc, fCost, cost)
-        
+
         self._observer.write_control("samples_cost", samplesCost)
         return samplesCost, trajs
 

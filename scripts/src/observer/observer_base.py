@@ -29,10 +29,14 @@ class ObserverBase(tf.Module):
         self._writer = None
         self._k = k
         self._log = log
-        self._stateName = ["x", "y", "z",
-                            "qw", "qx", "qy", "qz",
-                            "u", "v", "w",
-                            "p", "q", "r"]
+        self._stateName = [
+            "x", "y", "z",
+            "r00", "r01", "r02",
+            "r10", "r11", "r12",
+            "r20", "r21", "r22",
+            "u", "v", "w",
+            "p", "q", "r"
+        ]
         self._poseId = [0, 1, 2, 3, 4, 5, 6]
         self._velId = [7, 8, 9, 10, 11, 12]
         self._tau = tau
@@ -204,7 +208,7 @@ class ObserverBase(tf.Module):
                                 tf.squeeze(tensor),
                                 step=self.step)
 
-            elif name == "predicted/dist":
+            elif name == "predicted/dist_to_goal":
                 for i in range(self._sDim):
                     tf.summary.scalar("Predicted/goal_distance_{}".format(self._stateName[i]),
                                     tf.squeeze(tensor[i, :]),
