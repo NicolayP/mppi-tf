@@ -13,6 +13,8 @@ import os
 import onnx
 from onnx_tf.backend import prepare
 
+import lietorch as lie
+
 class ListDataset(torch.utils.data.Dataset):
     def __init__(self, data_list, steps=1, history=1, rot='rot'):
         self.data_list = data_list
@@ -617,18 +619,11 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
     torch.autograd.set_detect_anomaly(True)
     size = len(dataloader.dataset)
     model.train()
-    t = tqdm(
-        enumerate(dataloader),
-        desc=f"Epoch: {epoch}",
-        ncols=150,
-        colour="red",
-        leave=False
-    )
+    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False)
     for batch, data in t:
 
         X, U, Y = data
         X, U, Y = X.to(device), U.to(device), Y.to(device)
-        
         X = X[:, :, 3:] # remove all x, y and z.
         h = X.shape[1]
         w = Y.shape[1]
@@ -637,14 +632,8 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
         y = Y.flatten(1)[:, -6:]
 
         opti.zero_grad()
-        #print("*"*5, " Prediction ", "*"*5)
-        #print(pred)
         l = loss(pred, y)
         l.backward()
-        #for name, param in model.named_parameters():
-        #    if param.requires_grad:
-        #        print("*"*5, f" Param {name} ", "*"*5)
-        #        print(param.grad)
         opti.step()
 
         if writer is not None:
@@ -653,6 +642,32 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
                     writer.add_histogram("train/" + name, param, epoch*size + batch)
             for dim in range(6):
                 lossDim = loss(pred[:, dim], y[:, dim])
+                writer.add_scalar("loss/"+ str(dim), lossDim, epoch*size + batch)
+    return l.item(), batch*len(X)
+
+
+def train_lie(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", verbose=True):
+    torch.autograd.set_detect_anomaly(True)
+    size = len(dataloader.dataset)
+    vel_loss = loss.l2
+    model.train()
+    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False)
+    for batch, data in t:
+        X, U, Y = data
+        X, U, Y = X.to(device), U.to(device), Y.to(device)
+        Y_M = (lie.SE3.InitFromVec(Y[:, :, :7]), Y[:, :, 7:])
+
+        pred = model(X, U)
+        opti.zero_grad()
+        l = loss(pred, Y_M)
+        opti.step()
+
+        if writer is not None:
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    writer.add_histogram("train/" + name, param, epoch*size + batch)
+            for dim in range(6):
+                lossDim = vel_loss(pred[1][:, dim], Y_M[1][:, dim])
                 writer.add_scalar("loss/"+ str(dim), lossDim, epoch*size + batch)
     return l.item(), batch*len(X)
 
@@ -681,20 +696,25 @@ def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_nam
         tf_rep.export_graph(tf_filename)
 
 
-def learn(dataLoaders, model, loss, opti, writer=None, maxEpochs=1, device="cpu"):
+def learn(dataLoaders, model, loss, opti, writer=None, maxEpochs=1, device="cpu", encoding="lie"):
+    if encoding == "lie":
+        train_fct = train_lie
+    else:
+        train_fct = train
     dls = dataLoaders
     size = len(dls[0].dataset)
     l = np.nan
     current = 0
     t = tqdm(range(maxEpochs), desc="Training", ncols=150, colour="blue", postfix={"loss": f"Loss: {l:>7f} [{current:>5d}/{size:>5d}]"})
     for e in t:
-        l, current = train(dataloader=dls[0],
-              model=model,
-              loss=loss,
-              opti=opti,
-              writer=writer,
-              epoch=e,
-              device=device)
+        l, current = train_fct(
+            dataloader=dls[0],
+            model=model,
+            loss=loss,
+            opti=opti,
+            writer=writer,
+            epoch=e,
+            device=device)
         t.set_postfix({"loss": f"Loss: {l:>7f} [{current:>5d}/{size:>5d}]"})
     print("Done!\n")
 
@@ -707,6 +727,7 @@ def val(dataLoader, models, metric, histories=None, device="cpu",
         plotStateCols=None, plotActionCols=None, horizon=50, dir=".",
         plot=True):
     gtTrajs, actionSeqs = dataLoader.dataset.getTrajs()
+    histories.append(1)
     errs = {}
     for j, (traj, seq) in enumerate(zip(gtTrajs, actionSeqs)):
         trajs = {}
@@ -714,13 +735,16 @@ def val(dataLoader, models, metric, histories=None, device="cpu",
         seq = torch.from_numpy(seq.to_numpy()).to(device)
         for model, h in zip(models, histories):
             init = traj[0:h][None, ...]
-            pred = rollout(model, init, seq, h, device, horizon)
-            trajs[model.name + f"_traj_{j}"] = pred.cpu()
-            print(pred.shape)
+            pred = rollout(model, init, seq[None, ...], h, device, horizon)
+            trajs[model.name + f"_traj_{j}"] = traj_to_euler(pred.cpu().numpy(), rep="quat")
             errs[model.name + f"_traj_{j}"] = [metric(pred, traj[h:horizon+h]).cpu().numpy()]
-        trajs["gt"] = traj.cpu().numpy()
+        trajs["gt"] = traj_to_euler(traj.cpu().numpy(), rep="quat")
+        
+        print("GT: ", traj.shape)
+
+        print(trajs.keys())
         if plot:
-            plot_traj(trajs, seq.cpu(), histories, plotStateCols, plotActionCols, horizon, dir)
+            plot_traj(trajs, seq[None, ...].cpu(), histories, plotStateCols, plotActionCols, horizon, dir, f"traj_{j}")
     headers = ["name", "l2"]
     print(tabulate([[k,] + v for k, v in errs.items()], headers=headers))
 
@@ -729,7 +753,9 @@ def rollout(model, init, seq, h=1, device="cpu", horizon=50):
     state = init
     with torch.no_grad():
         pred = []
+        print("Init vel: ", init[:, :, -6:])
         for i in range(h, horizon+h):
+            print("State vel: ", state[:, :, -6:])
             nextState = model(state, seq[:, i-h:i])
             pred.append(nextState)
             state = push_to_tensor(state, nextState)
@@ -737,7 +763,7 @@ def rollout(model, init, seq, h=1, device="cpu", horizon=50):
         return traj
 
 
-def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCols=None, horizon=50, dir="."):
+def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCols=None, horizon=50, dir=".", file_name="foo"):
     '''
         Plot trajectories and action sequence.
         inputs:
@@ -763,48 +789,50 @@ def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCol
             plt.subplot(6, 2, idx)
             plt.ylabel(f'{name}')
             if k == "gt":
-                plt.plot(t[:horizon], marker='.', zorder=-10)
+                plt.plot(t[:horizon, i], marker='.', zorder=-10)
             else:
                 plt.scatter(
                     np.arange(h, horizon+h), t[:, plotStateCols[name]],
                     marker='X', edgecolors='k', s=64
                 )
+    #plt.tight_layout()
+    if dir is not None:
+        name = os.path.join(dir, f"{file_name}.png")
+        plt.savefig(name)
+        plt.close()
+
+    if seq is not None:
+        fig_act = plt.figure(figsize=(30, 30))
+        for i, name in enumerate(plotActionCols):
+            plt.subplot(maxA, 1, i+1)
+            plt.ylabel(f'{name}')
+            plt.plot(seq[0, :horizon+h, plotActionCols[name]])
+
         #plt.tight_layout()
         if dir is not None:
-            name = os.path.join(dir, f"{k}.png")
+            name = os.path.join(dir, f"{file_name}-actions.png")
             plt.savefig(name)
             plt.close()
-
-        if seq is not None:
-            fig_act = plt.figure(figsize=(30, 30))
-            for i, name in enumerate(plotActionCols):
-                plt.subplot(maxA, 1, i+1)
-                plt.ylabel(f'{name}')
-                plt.plot(seq[0, :horizon+h, plotActionCols[name]])
-
-            #plt.tight_layout()
-            if dir is not None:
-                name = os.path.join(dir, f"{k}-actions.png")
-                plt.savefig(name)
-                plt.close()
-        
-        plt.show()
+    
+    plt.show()
 
 
 def rand_roll(models, histories, plotStateCols, plotActionCols, horizon, dir, device):
     trajs = {}
-    seq = 5. * torch.normal(mean=torch.zeros(1, horizon+10, 6),
-                       std=torch.ones(1, horizon+10, 6)).to(device)
+    seq = 5. * torch.normal(
+        mean=torch.zeros(1, horizon+10, 6),
+        std=torch.ones(1, horizon+10, 6)).to(device)
+
     for model, h in zip(models, histories):
-        init = np.zeros((1, h, 18))
-        rot = np.eye(3)
-        init[:, :, 3:3+9] = np.reshape(rot, (9,))
+        init = np.zeros((1, h, 13))
+        init[:, :, 6] = 1.
+        #rot = np.eye(3)
+        #init[:, :, 3:3+9] = np.reshape(rot, (9,))
         init = init.astype(np.float32)
         init = torch.from_numpy(init).to(device)
         pred = rollout(model, init, seq, h, device, horizon)
-        trajs[model.name + "_rand"] = traj_to_euler(pred.cpu().numpy(), rep="rot")
+        trajs[model.name + "_rand"] = traj_to_euler(pred.cpu().numpy(), rep="quat")
         print(pred.isnan().any())
-
     plot_traj(trajs, seq.cpu(), histories, plotStateCols, plotActionCols, horizon, dir)
 
 

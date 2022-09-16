@@ -36,7 +36,10 @@ class LaggedModelController(ControllerBase):
     def predict(self, model_input, u, actionSeq, xNext):
         laggedX, laggedU = model_input
 
-        laggedU = tf.concat([laggedU, u[None, ...]], axis=0)
+        if laggedU is not None:
+            laggedU = tf.concat([laggedU, u[None, ...]], axis=0)
+        else:
+            laggedU = u[None, ...]
 
         laggedX = tf.expand_dims(laggedX, axis=0) # shape [1, history, sDim, 1]
         laggedU = tf.expand_dims(laggedU, axis=0) # shape [1, history, aDim, 1]

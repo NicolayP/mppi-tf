@@ -13,7 +13,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        '-t', '--tf', action=argparse.BooleanOptionalAction,
+        '-t', '--tf', action='store_true',
         help='save the model as a tensorflow model (using onnx)'
     )
 
@@ -23,7 +23,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        '-g', '--gpu', action=argparse.BooleanOptionalAction,
+        '-g', '--gpu', action='store_true',
         help='Wether to train on gpu device or cpu')
 
     parser.add_argument(
@@ -44,6 +44,8 @@ from torch.utils.tensorboard import SummaryWriter
 import warnings
 import os
 from scripts.src_torch.models.auv_torch import VelPred, StatePredictorHistory
+from scripts.src_torch.models.auv_lie_torch import LieAUVNN, LieAUVStep, GeodesicLoss, LieAUVWrapper
+
 from scripts.src_torch.models.torch_utils import ListDataset, learn, rand_roll, save_model, val
 from scripts.src.misc.utile import parse_config, npdtype, dtype
 from tqdm import tqdm
@@ -51,12 +53,15 @@ from datetime import datetime
 
 def get_model(config, device):
     type = config['model']['type']
-    sDim = config['model']['sDim']
-    aDim = config['model']['aDim']
     h = config['history']
-    t = config['model']['topology']
+
     if type == 'velPred':
+        sDim = config['model']['sDim']
+        aDim = config['model']['aDim']
+        t = config['model']['topology']    
         return VelPred(in_size=h*(sDim-3+aDim), topology=t).to(device)
+    if type == "liePred":
+        return LieAUVNN(h=h).to(device)
 
 def get_optimizer(model, config):
     type = config['optimizer']['type']
@@ -67,7 +72,10 @@ def get_optimizer(model, config):
 
 def get_loss(config, device):
     type = config['loss']['type']
-    return torch.nn.MSELoss().to(device)
+    if type == "l2":
+        return torch.nn.MSELoss().to(device)
+    elif type == "geodesic":
+        return GeodesicLoss().to(device)
 
 def get_train_params(config, device):
     return config['training_params']
@@ -102,7 +110,10 @@ def get_dataset(config, device):
                 print('\n' + csv)
             df = df.astype(npdtype)
             dfs.append(df)
-    dataset = ListDataset(dfs, steps=config['steps'], history=config['history'], rot=config['dataset']['rot'])
+    if type == "ListDataset":
+        dataset = ListDataset(dfs, steps=config['steps'], history=config['history'], rot=config['dataset']['rot'])
+    elif type == "ListDatasetLie":
+        dataset = ListDataset(dfs, steps=config['steps'], history=config['history'], rot="quat")
     return dataset
 
 def main():
@@ -144,71 +155,61 @@ def main():
     if args.log is not None:
         path = os.path.join(dir, args.log)
         writer = SummaryWriter(path)
-
     learn(ds, model, loss_fn, optim, writer, epochs, device)
 
     samples = 1
 
-    dummy_state = torch.zeros((samples, h*(18-3))).to(device)
-    dummy_action = torch.zeros((samples, h*6)).to(device)
+    dummy_state = torch.zeros((samples, h, 13)).to(device)
+    dummy_action = torch.zeros((samples, h, 6)).to(device)
     dummy_inputs = (dummy_state, dummy_action)
     input_names = ["x", "u"]
-    output_names = ["vel"]
+    output_names = ["x_next"]
     dynamic_axes = {
         "x": {0: "kx"},
         "u": {0: "ku"},
-        "vel": {0: "kv"}
+        "x_next": {0: "kv"}
     }
-    
-    state_model = StatePredictorHistory(model, 0.1, h).to(device)
+
+    state_model = LieAUVWrapper(model.step_nn).to(device)
 
     plotStateCols={
         "x":0 , "y": 1, "z": 2,
-        "r00": 3, "r01": 4, "r02": 5,
-        "r10": 6, "r11": 7, "r12": 8,
-        "r20": 9, "r21": 10, "r22": 11,
-        "u": 12, "v": 13, "w": 14,
-        "p": 15, "q": 16, "r": 17
+        "qx": 3, "qy": 4, "qz": 5, "qw": 6,
+        "u": 7, "v": 8, "w": 9,
+        "p": 10, "q": 11, "r": 12
     }
+
+    plotStateCols={
+        "x":0 , "y": 1, "z": 2,
+        "roll": 3, "pitch": 4, "yaw": 5,
+        "u": 6, "v": 7, "w": 8,
+        "p": 9, "q": 10, "r": 11
+    }
+
     plotActionCols={
         "Fx": 0, "Fy": 1, "Fz": 2,
         "Tx": 3, "Ty": 4, "Tz": 5
     }
 
-    rand_roll(
-        models=[state_model],
-        histories=[h],
-        plotStateCols=plotStateCols,
-        plotActionCols=plotActionCols,    
-        horizon=50,
-        dir=dir_rand,
-        device=device
-    )
+    #rand_roll(
+    #    models=[state_model], histories=[h],
+    #    plotStateCols=plotStateCols, plotActionCols=plotActionCols,
+    #    horizon=50, dir=dir_rand, device=device
+    #)
 
     val(
-        ds[0],
-        models=[state_model],
-        metric=loss_fn,
-        device=device,
-        histories=[h],
-        horizon=50,
-        plot=True,
-        plotStateCols=plotStateCols,
-        plotActionCols=plotActionCols,
-        dir=dir
+        ds[0], models=[state_model], metric=torch.nn.MSELoss().to(device), device=device,
+        histories=[h], horizon=5, plot=True,
+        plotStateCols=plotStateCols, plotActionCols=plotActionCols, dir=dir
     )
 
     save_model(
-        model,
-        dir=dir,
-        tf=args.tf,
-        dummy_input=dummy_inputs,
-        input_names=input_names,
-        output_names=output_names,
-        dynamic_axes=dynamic_axes)
+        model.step_nn, dir=dir, tf=args.tf,
+        dummy_input=dummy_inputs, input_names=input_names,
+        output_names=output_names, dynamic_axes=dynamic_axes
+    )
 
     return
-
 
 if __name__ == "__main__":
     main()
