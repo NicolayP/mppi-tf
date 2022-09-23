@@ -739,10 +739,6 @@ def val(dataLoader, models, metric, histories=None, device="cpu",
             trajs[model.name + f"_traj_{j}"] = traj_to_euler(pred.cpu().numpy(), rep="quat")
             errs[model.name + f"_traj_{j}"] = [metric(pred, traj[h:horizon+h]).cpu().numpy()]
         trajs["gt"] = traj_to_euler(traj.cpu().numpy(), rep="quat")
-        
-        print("GT: ", traj.shape)
-
-        print(trajs.keys())
         if plot:
             plot_traj(trajs, seq[None, ...].cpu(), histories, plotStateCols, plotActionCols, horizon, dir, f"traj_{j}")
     headers = ["name", "l2"]
@@ -753,9 +749,7 @@ def rollout(model, init, seq, h=1, device="cpu", horizon=50):
     state = init
     with torch.no_grad():
         pred = []
-        print("Init vel: ", init[:, :, -6:])
         for i in range(h, horizon+h):
-            print("State vel: ", state[:, :, -6:])
             nextState = model(state, seq[:, i-h:i])
             pred.append(nextState)
             state = push_to_tensor(state, nextState)

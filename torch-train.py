@@ -191,23 +191,23 @@ def main():
         "Tx": 3, "Ty": 4, "Tz": 5
     }
 
-    #rand_roll(
-    #    models=[state_model], histories=[h],
-    #    plotStateCols=plotStateCols, plotActionCols=plotActionCols,
-    #    horizon=50, dir=dir_rand, device=device
-    #)
+    rand_roll(
+        models=[state_model], histories=[h],
+        plotStateCols=plotStateCols, plotActionCols=plotActionCols,
+        horizon=50, dir=dir_rand, device=device
+    )
 
     val(
         ds[0], models=[state_model], metric=torch.nn.MSELoss().to(device), device=device,
-        histories=[h], horizon=5, plot=True,
+        histories=[h], horizon=50, plot=True,
         plotStateCols=plotStateCols, plotActionCols=plotActionCols, dir=dir
     )
 
-    save_model(
-        model.step_nn, dir=dir, tf=args.tf,
-        dummy_input=dummy_inputs, input_names=input_names,
-        output_names=output_names, dynamic_axes=dynamic_axes
-    )
+    #save_model(
+    #    model.step_nn, dir=dir, tf=args.tf,
+    #    dummy_input=dummy_inputs, input_names=input_names,
+    #    output_names=output_names, dynamic_axes=dynamic_axes
+    #)
 
     return
 
