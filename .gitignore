@@ -32,3 +32,4 @@ tensorboard/*
 
 scripts/bluerov_hist/*
 torch-training/*
+data_train/*
