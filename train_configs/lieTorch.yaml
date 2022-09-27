@@ -7,7 +7,7 @@ dataset:
   multi_file: True
 
 steps: 15
-history: 4
+history: 1
 state: [
   'qx', 'qy', 'qz', 'qw',
   'u', 'v', 'w',
@@ -28,11 +28,11 @@ loss:
 
 optimizer:
   type: "adam"
-  lr: 1.e-4
+  lr: 1.e-5
 
 training_params:
   batch_size: 8192
   shuffle: True
   num_workers: 8
 
-epochs: 1
+epochs: 100

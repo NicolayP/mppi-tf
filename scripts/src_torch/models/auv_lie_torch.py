@@ -113,6 +113,11 @@ class LieAUVWrapper(torch.nn.Module):
                     shape [k, h, 13]
                 - u. The action applied to the AUV.
                     shape [k, h, 6]
+            
+            outputs:
+            --------
+                - x_next. The next state of the AUV in quaterion format.
+                    shape [k, 13]
         '''
         M = lie.SE3.InitFromVec(x[:, :, :7])
         v = x[:, :, 7:]

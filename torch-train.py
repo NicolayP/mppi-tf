@@ -204,11 +204,10 @@ def main():
     )
 
     #save_model(
-    #    model.step_nn, dir=dir, tf=args.tf,
+    #    state_model, dir=dir, tf=args.tf,
     #    dummy_input=dummy_inputs, input_names=input_names,
     #    output_names=output_names, dynamic_axes=dynamic_axes
     #)
-
     return
 
 if __name__ == "__main__":
