@@ -160,5 +160,32 @@ class TestCost(tf.test.TestCase):
         a_c = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c)
 
+
+class TestFooCost(tf.test.TestCase):
+    def setUp(self):
+        Sigma=np.array([[1., 0., 0.],
+                        [0., 1., 0.],
+                        [0., 0., 1.]], dtype=npdtype)
+        self.fooCost = FooCost(1., 1., 1., Sigma)
+
+    def test_state_cost_k1(self):
+        state = np.zeros(shape=(1, 13, 1))
+        gt = np.zeros(shape=(1, 1))
+        state_cost = self.fooCost.state_cost("foo", state)
+        self.assertAllClose(gt, state_cost)
+    
+    def test_state_cost_k10(self):
+        state = np.zeros(shape=(10, 13, 1))
+        gt = np.zeros(shape=(10, 1))
+        state_cost = self.fooCost.state_cost("foo", state)
+        self.assertAllClose(gt, state_cost)
+
+    def test_dist_cost(self):
+        state = np.zeros(shape=(1, 13, 1))
+        gt = np.zeros(shape=(1, 1))
+        dist = self.fooCost.dist(state)
+        self.assertAllClose(gt, dist)
+
+
 if __name__ == "__main__":
     tf.test.main()

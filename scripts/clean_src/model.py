@@ -4,12 +4,15 @@ from utile import dtype, append_to_tensor
 class ModelDtype(tf.Module):
     def __init__(self, x, u, h=1):
         super(ModelDtype, self).__init__(name="ModelDtype")
-        self._x = tf.convert_to_tensor(x, dtype=dtype) #shape = [k, h, sDim, 1]
-        self._u = tf.convert_to_tensor(u, dtype=dtype) #shape = [k, h, aDim, 1]
+        self.reset(x, u)
         self._h = h
 
     def __call__(self):
         return (self._x[:, -self._h:], self._u[:, -self._h:])
+
+    def reset(self, x, u):
+        self._x = tf.convert_to_tensor(x, dtype=dtype) #shape = [k, h, sDim, 1]
+        self._u = tf.convert_to_tensor(u, dtype=dtype) #shape = [k, h, aDim, 1]
 
     def add(self, x=None, u=None):
         if x is not None:

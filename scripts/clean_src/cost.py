@@ -185,7 +185,7 @@ class FooCost(CostBase):
         )
     
     def state_cost(self, scope, state):
-        return tf.linalg.norm(state)
+        return tf.linalg.norm(state, axis=1)
 
-    def dis(self, state):
-        return tf.linalg.norm(state)
+    def dist(self, state):
+        return tf.linalg.norm(state, axis=1)

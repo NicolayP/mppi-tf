@@ -11,7 +11,7 @@ gpu_devices = tf.config.experimental.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
-class MPPIBase(tf.module):
+class MPPIBase(tf.Module):
     def __init__(
         self, model, cost, data,
         k=1, tau=1, lam=1., upsilon=1.,
@@ -129,7 +129,7 @@ class MPPIBase(tf.module):
             with tf.name_scope("rollout") as r:
                 costs, trajs = self.rollout(r, k=k, x=x, noises=noises, seq=seq)
             with tf.name_scope("update") as u:
-                update, weights = self.update(u, costs=costs, noises=noises, seq=seq norm=norm)
+                update, weights = self.update(u, costs=costs, noises=noises, seq=seq, norm=norm)
             with tf.name_scope("next") as n:
                 next = update[:1]
             with tf.name_scope("shift") as s:
