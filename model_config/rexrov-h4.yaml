@@ -1,0 +1,9 @@
+---
+type: "velPred"
+steps: 1
+history: 4
+topology: [128, 128, 128, 128, 128]
+sDim: 18
+rot: "rot"
+aDim: 6
+weights: '/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/torch-training/rexrov2-h3/2022.10.04-21:27:22/ckpt'

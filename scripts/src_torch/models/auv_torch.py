@@ -1,16 +1,20 @@
 import yaml
 import torch
 import numpy as np
-from .torch_utils import SE3enc, SE3integ, ToSE3Mat, SE3int, FlattenSE3
+from .torch_utils import SE3enc, SE3integ, ToSE3Mat, SE3int, FlattenSE3, dtype
 from torch.nn.utils.parametrizations import spectral_norm
 
 class AUVFossen(torch.nn.Module):
+    '''
+        Constructor of AUV model using fossen equation,
+        can be initalized using either a dict or a file containing
+        the dict entries (yaml)
+    '''
     def __init__(self, dict={}, file=None):
         super(AUVFossen, self).__init__()
         self.name = "AUV Fossen"
         self.dt = 0.1
 
-        self.init_param(dict, file)
         # masks/pads
         self.register_buffer("z", torch.tensor([0., 0., 1.]))
         self.register_buffer("gravity", torch.tensor(9.81))
@@ -23,79 +27,94 @@ class AUVFossen(torch.nn.Module):
         self.register_buffer("A", torch.tensor([[[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]]]))
         self.register_buffer("B", torch.tensor([[[0., 0., -1.], [0., 0., 0.], [1., 0., 0.]]]))
         self.register_buffer("C", torch.tensor([[[0., 1., 0.], [-1., 0., 0.], [0., 0., 0.]]]))
+        self.init_param(dict, file)
 
-    def init_param(self, dict, file=None):
+    def init_param(self, param, file=None):
         
         if file is not None:
             with open(file, "r") as stream:
-                dict = yaml.safe_load(stream)
+                param = yaml.safe_load(stream)
 
-        if "mass" in dict:
-            mass = dict["mass"][0]
-            grads = dict["mass"][1]
+        if "mass" in param:
+            mass = param["mass"]
+            grads = False
         else:
             mass = 100.
             grads = True
 
         self.mass = torch.nn.Parameter(
-            torch.tensor(mass),
+            torch.tensor(mass, dtype=dtype),
             requires_grad=grads)
 
-        if "volume" in dict:
-            volume = dict["volume"][0]
-            grads = dict["volume"][1]
+        if "volume" in param:
+            volume = param["volume"]
+            grads = False
         else:
             volume = 1.
             grads = True
 
         self.volume = torch.nn.Parameter(
-            torch.tensor(volume),
+            torch.tensor(volume, dtype=dtype),
             requires_grad=grads)
 
-        if "cog" in dict:
-            cog = dict["cog"][0]
-            grads = dict["cog"][1]
+        if "cog" in param:
+            cog = param["cog"]
+            grads = False
         else:
             cog = [0., 0., 0.]
             grads = True
 
         self.cog = torch.nn.Parameter(
-            torch.tensor([cog]),
+            torch.tensor([cog], dtype=dtype),
             requires_grad=grads)
 
-        if "cob" in dict:
-            cob = dict["cob"][0]
-            grads = dict["cob"][1]
+        if "cob" in param:
+            cob = param["cob"]
+            grads = False
         else:
             cob = [0., 0., 0.2]
             grads = True
 
         self.cob = torch.nn.Parameter(
-            torch.tensor([cob]),
+            torch.tensor([cob], dtype=dtype),
             requires_grad=grads)
 
-        if "mtot" in dict:
-            mtot = dict["mtot"][0]
-            grads = dict["mtot"][1]
+        if "Ma" in param:
+            ma = np.array(param["Ma"])
+            grads = False
         else:
-            mtot = np.array([[100., 0., 0., 0., 0., 0.],
+            ma = np.array([[100., 0., 0., 0., 0., 0.],
                              [0., 100., 0., 0., 0., 0.],
                              [0., 0., 100., 0., 0., 0.],
                              [0., 0., 0., 100., 0., 0.],
                              [0., 0., 0., 0., 100., 0.],
                              [0., 0., 0., 0., 0., 100.]]) + 1e-7
             grads = True
+        
+        inertial = dict(ixx=0, iyy=0, izz=0, ixy=0, ixz=0, iyz=0)
+        if "inertial" in param:
+            inertialArg = param["inertial"]
+            for key in inertial:
+                if key not in inertialArg:
+                    raise AssertionError('Invalid moments of inertia')
+        
+        inertial = self.get_inertial(inertialArg)
+
+        massEye = self.mass * torch.eye(3, dtype=dtype)
+        massLower = (self.mass * self.skew_sym(self.cog[..., None]))[0]
+        self.rbMass = self.rigid_body_mass(massEye, massLower, inertial)
+        mtot = self.total_mass(self.rbMass, ma)
 
         self.mTot = torch.nn.Parameter(
             torch.unsqueeze(
-                torch.tensor(mtot),
+                torch.tensor(mtot, dtype=dtype),
                 dim=0),
             requires_grad=grads)
             
 
-        if "linear_damping" in dict:
-            linDamp = dict["linear_damping"][0]
-            grads = dict["linear_damping"][1]
+        if "linear_damping" in param:
+            linDamp = param["linear_damping"]
+            grads = False
         else:
             linDamp = [-70., -70., -700., -300., -300., -100.]
             grads = True
@@ -103,14 +122,14 @@ class AUVFossen(torch.nn.Module):
         self.linDamp = torch.nn.Parameter(
             torch.unsqueeze(
                 torch.diag_embed(
-                    torch.tensor(linDamp),
+                    torch.tensor(linDamp, dtype=dtype),
                     ),
             dim=0),
             requires_grad=grads)
 
-        if "linear_damping_forward" in dict:
-            linDampFow = dict["linear_damping_forward"][0]
-            grads = dict["linear_damping_forward"][1]
+        if "linear_damping_forward" in param:
+            linDampFow = param["linear_damping_forward"]
+            grads = False
         else:
             linDampFow = [0., 0., 0., 0., 0., 0.]
             grads = True
@@ -118,13 +137,13 @@ class AUVFossen(torch.nn.Module):
         self.linDampFow = torch.nn.Parameter(
             torch.unsqueeze(
                 torch.diag_embed(
-                    torch.tensor(linDampFow)),
+                    torch.tensor(linDampFow, dtype=dtype)),
                 dim=0),
             requires_grad=grads)
             
-        if "quad_damping" in dict:
-            quadDam = dict["quad_damping"][0]
-            grads = dict["quad_damping"][1]
+        if "quad_damping" in param:
+            quadDam = param["quad_damping"]
+            grads = False
         else:
             quadDam = [-740., -990., -1800., -670., -770., -520.]
             grads = True
@@ -132,10 +151,35 @@ class AUVFossen(torch.nn.Module):
         self.quadDamp = torch.nn.Parameter(
             torch.unsqueeze(
                 torch.diag_embed(
-                    torch.tensor(quadDam)),
+                    torch.tensor(quadDam, dtype=dtype)),
                 dim=0),
             requires_grad=grads)
-            
+
+    def get_inertial(self, param):
+        # buid the inertial matrix
+        ixx = param['ixx']
+        ixy = param['ixy']
+        ixz = param['ixz']
+        iyy = param['iyy']
+        iyz = param['iyz']
+        izz = param['izz']
+
+        row0 = torch.Tensor([[ixx, ixy, ixz]])
+        row1 = torch.Tensor([[ixy, iyy, iyz]])
+        row2 = torch.Tensor([[ixz, iyz, izz]])
+
+        inertial = torch.concat([row0, row1, row2], dim=0)
+
+        return inertial
+
+    def rigid_body_mass(self, massEye, massLower, inertial):
+        upper = torch.concat([massEye, -massLower], dim=1)
+        lower = torch.concat([massLower, inertial], dim=1)
+        return torch.concat([upper, lower], dim=0)
+
+    def total_mass(self, rbMass, addedMass):
+        return rbMass + addedMass
+
     def forward(self, x, u, rk=2):
         # Rk2 integration.
         self.k = x.shape[0]
@@ -146,11 +190,10 @@ class AUVFossen(torch.nn.Module):
         elif rk == 2:
             k2 = self.dot(x + k1*self.dt, u)
             tmp = (self.dt/2.)*(k1 + k2)
-
         return self.norm_quat(x+tmp)
 
     def dot(self, x, u):
-        p, v = torch.split(x, [7, 6], dim=-1)
+        p, v = x[:, 0:7], x[:, 7:]
         rotBtoI, tBtoI = self.body2inertial(p)
         jac = self.jacobian(rotBtoI, tBtoI)
         pDot = torch.bmm(jac, torch.unsqueeze(v, dim=-1))
@@ -166,10 +209,11 @@ class AUVFossen(torch.nn.Module):
 
     def body2inertial(self, pose):
         quat = torch.unsqueeze(pose[:, 3:7], dim=-1)
+        w = quat[:, 3]
         x = quat[:, 0]
         y = quat[:, 1]
         z = quat[:, 2]
-        w = quat[:, 3]
+
         r1 = torch.unsqueeze(
                 torch.concat([1 - 2 * (y**2 + z**2),
                               2 * (x * y - z * w),
@@ -223,6 +267,11 @@ class AUVFossen(torch.nn.Module):
         uExt = torch.unsqueeze(u, dim=-1)
         rhs = uExt - Cv - Dv - g
         acc = torch.linalg.solve(self.mTot, rhs)
+        
+        #print("*"*5, " C ", "*"*5)
+        #print(self.coriolis(v))
+        #print("*"*5, " g ", "*"*5)
+        #print(self.restoring(rotBtoI))
         return acc
 
     def restoring(self, rotBtoI):
@@ -243,12 +292,15 @@ class AUVFossen(torch.nn.Module):
         vExt = torch.unsqueeze(v, dim=-1)
         D = - self.linDamp - (vExt * self.linDampFow)
         tmp = - torch.mul(self.quadDamp, torch.abs(torch.diag_embed(v)))
-
         return D + tmp
 
     def coriolis(self, v):
+
         k = v.shape[0]
         vExt = torch.unsqueeze(v, dim=-1)
+        #print(vExt.dtype)
+        #print(self.mTot.dtype)
+
         skewCori = torch.matmul(self.mTot[:, 0:3, 0:3].clone(), vExt[:, 0:3]) + \
                    torch.matmul(self.mTot[:, 0:3, 3:6].clone(), vExt[:, 3:6])
         s12 = - self.skew_sym(skewCori)
@@ -296,6 +348,25 @@ class AUVFossen(torch.nn.Module):
     @property
     def multi(self):
         return False
+
+
+class AUVFossenWrapper(torch.nn.Module):
+    def __init__(self, fossenModel):
+        super(AUVFossenWrapper, self).__init__()
+        self.fossen = fossenModel
+        self.sDim = 13
+        self.name = fossenModel.name
+    
+    def forward(self, x, u):
+        '''
+            Input is of shape [k, 1, 13] and [k, 1, 6]
+            Output [k, 1, 13]
+        '''
+        x_next = self.fossen(
+            torch.squeeze(x, dim=1),
+            torch.squeeze(u, dim=1)
+        )
+        return x_next
 
 
 class AUVNN(torch.nn.Module):
@@ -446,6 +517,7 @@ class StatePredictorHistory(torch.nn.Module):
         self.dt = dt
         self.name = f"Predictor_{self.internal.name}"
         self.h = h
+        self.sDim = 18
 
     def forward(self, x, u):
         '''

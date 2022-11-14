@@ -1,0 +1,43 @@
+---
+model_name: "rexrov2-h3"
+dataset:
+  type: "ListDataset"
+  dir: "/home/pierre/workspace/uuv_ws/src/mppi_ros/scripts/mppi_tf/data_train/rexrov2/22.08.2022-serv/"
+  multi_dir: False
+  multi_file: True
+  rot: 'rot'
+
+steps: 1
+history: 3
+state: [
+  'r00', 'r01', 'r02',
+  'r10', 'r11', 'r12',
+  'r20', 'r21', 'r22',
+  'u', 'v', 'w',
+  'p', 'q', 'r'
+]
+action: [
+  'Fx', 'Fy', 'Fz',
+  'Tx', 'Ty', 'Tz'
+]
+
+model:
+  type: "velPred"
+  topology: [128, 128, 128, 128, 128]
+  sDim: 18
+  aDim: 6
+
+loss:
+  type: "l2"
+
+
+optimizer:
+  type: "adam"
+  lr: 1.e-4
+
+training_params:
+  batch_size: 8192
+  shuffle: True
+  num_workers: 8
+
+epochs: 100

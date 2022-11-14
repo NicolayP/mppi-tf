@@ -146,6 +146,8 @@ def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCol
     maxS = len(plotStateCols)
     maxA = len(plotActionCols)
     fig_state = plt.figure(figsize=(50, 50))
+    if "gt" in trajs:
+        histories.append(1)
     for k, h in zip(trajs, histories):
         t = trajs[k]
         for i, name in enumerate(plotStateCols):
@@ -154,10 +156,10 @@ def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCol
             plt.subplot(6, 2, idx)
             plt.ylabel(f'{name}')
             if k == "gt":
-                plt.plot(t[:horizon], marker='.', zorder=-10)
+                plt.plot(t[:horizon, plotStateCols[name]], marker='.', zorder=-10)
             else:
                 plt.scatter(
-                    np.arange(h, horizon+h), t[:, plotStateCols[name]],
+                    np.arange(0, horizon+h), t[:, plotStateCols[name]],
                     marker='X', edgecolors='k', s=64, label=k
                 )
     plt.legend()

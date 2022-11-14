@@ -44,7 +44,7 @@ from torch.utils.tensorboard import SummaryWriter
 import warnings
 import os
 from scripts.src_torch.models.auv_torch import VelPred, StatePredictorHistory
-from scripts.src_torch.models.auv_lie_torch import LieAUVNN, LieAUVStep, GeodesicLoss, LieAUVWrapper
+#from scripts.src_torch.models.auv_lie_torch import LieAUVNN, LieAUVStep, GeodesicLoss, LieAUVWrapper
 
 from scripts.src_torch.models.torch_utils import ListDataset, learn, rand_roll, save_model, val
 from scripts.src.misc.utile import parse_config, npdtype, dtype
@@ -83,6 +83,7 @@ def get_train_params(config, device):
 def get_dataset(config, device):
     type = config['dataset']['type']
     data_dir = config['dataset']['dir']
+    dir_name = os.path.basename(data_dir)
     multi_dir = config['dataset']['multi_dir']
     multi_file = config['dataset']['multi_file']
 
@@ -101,11 +102,11 @@ def get_dataset(config, device):
                 dfs.append(df)
     else:
         files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
-        for f in tqdm(files, desc=f"Dir {data_dir}", ncols=100, colour="blue"):
+        for f in tqdm(files, desc=f"Dir {dir_name}", ncols=100, colour="blue"):
             csv = os.path.join(data_dir, f)
             df = pd.read_csv(csv)
             # TEMPORARY: used for current bluerov dataset that have those entries for some reason
-            df = df.drop(['Time', 'header.seq', 'header.stamp.secs', 'header.stamp.nsecs', 'child_frame_id'], axis=1)
+            #df = df.drop(['Time', 'header.seq', 'header.stamp.secs', 'header.stamp.nsecs', 'child_frame_id'], axis=1)
             if 'x' not in df.columns:
                 print('\n' + csv)
             df = df.astype(npdtype)
@@ -138,11 +139,16 @@ def main():
     stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
     dir = os.path.join(args.save_dir, config['model_name'], stamp)
     dir_rand = os.path.join(dir, "rand")
+    ckpt_dir = os.path.join(dir, "ckpt")
+
     if not os.path.exists(dir):
         os.makedirs(dir)
 
     if not os.path.exists(dir_rand):
         os.makedirs(dir_rand)
+
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
 
     ds = (
         torch.utils.data.DataLoader(
@@ -155,7 +161,7 @@ def main():
     if args.log is not None:
         path = os.path.join(dir, args.log)
         writer = SummaryWriter(path)
-    learn(ds, model, loss_fn, optim, writer, epochs, device)
+    learn(ds, model, loss_fn, optim, writer, epochs, device, "foo", ckpt_dir)
 
     samples = 1
 
@@ -170,7 +176,9 @@ def main():
         "x_next": {0: "kv"}
     }
 
-    state_model = LieAUVWrapper(model.step_nn).to(device)
+    #state_model = LieAUVWrapper(model.step_nn).to(device)
+
+    state_model = StatePredictorHistory(model, dt=0.1, h=h).to(device)
 
     plotStateCols={
         "x":0 , "y": 1, "z": 2,
@@ -203,11 +211,18 @@ def main():
         plotStateCols=plotStateCols, plotActionCols=plotActionCols, dir=dir
     )
 
-    save_model(
-        model.step_nn, dir=dir, tf=args.tf,
-        dummy_input=dummy_inputs, input_names=input_names,
-        output_names=output_names, dynamic_axes=dynamic_axes
-    )
+    #save_model(
+    #    model, dir=dir, tf=args.tf,
+    #    dummy_input=dummy_inputs, input_names=input_names,
+    #    output_names=output_names, dynamic_axes=dynamic_axes
+    #)
+
+    # Lie Part
+    #save_model(
+    #    model.step_nn, dir=dir, tf=args.tf,
+    #    dummy_input=dummy_inputs, input_names=input_names,
+    #    output_names=output_names, dynamic_axes=dynamic_axes
+    #)
 
     return
 

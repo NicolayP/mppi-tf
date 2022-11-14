@@ -250,6 +250,7 @@ class AUVModel(ModelBase):
         #print('System inertia matrix:\n{}'.format(self._rbMass))
         #print('Added-mass:\n{}'.format(self._addedMass))
         #print('Inertial:\n{}'.format(self._inertial))
+        print('Volume: {}'.format(self._volume))
         print('M:\n{}'.format(self._mTot))
         print('Linear damping:\n{}'.format(self._linearDamping))
         print('Quad. damping:\n{}'.format(self._quadDamping))
@@ -499,11 +500,10 @@ class AUVModel(ModelBase):
                                            tf.expand_dims(vel[:, 0],
                                                           axis=-1),
                                            self._linearDampingForwardSpeed)
-            tmp = -1*tf.linalg.matmul(tf.expand_dims(self._quadDamping,
-                                                     axis=0),
-                                      tf.abs(
-                                        tf.linalg.diag(
-                                          tf.squeeze(vel, axis=-1))))
+            a = tf.abs(tf.linalg.diag(tf.squeeze(vel, axis=-1)))
+            b = tf.expand_dims(self._quadDamping, axis=0)
+            tmp = - tf.linalg.matmul(a, b)
+            
             D = tf.add(D, tmp)
             return D
 
@@ -519,6 +519,7 @@ class AUVModel(ModelBase):
             ------
                 - $ C(\nu)\nu $ the coriolis matrix. Shape [k, 6, 6]
         '''
+
         with tf.name_scope(scope) as scope:
 
             OPad = tf.zeros(shape=(self._k, 3, 3), dtype=dtype)
@@ -554,10 +555,14 @@ class AUVModel(ModelBase):
             C = self.coriolis_matrix("Coriolis", vel)
             Cv = tf.matmul(C, vel)
             g = self.restoring_forces("Restoring")
-
             rhs = tensGenForce - Cv - Dv - g
             lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
             acc = tf.matmul(lhs, rhs)
+
+            #print("*"*5, " C ", "*"*5)
+            #print(C)
+            #print("*"*5, " g ", "*"*5)
+            #print(g)
             return acc
 
     def save_params(self, path, step):

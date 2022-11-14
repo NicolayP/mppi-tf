@@ -33,3 +33,6 @@ tensorboard/*
 scripts/bluerov_hist/*
 torch-training/*
 data_train/*
+
+comparaison*
+rnn-auv-log*
