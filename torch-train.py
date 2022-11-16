@@ -44,9 +44,10 @@ from torch.utils.tensorboard import SummaryWriter
 import warnings
 import os
 from scripts.src_torch.models.auv_torch import VelPred, StatePredictorHistory
-#from scripts.src_torch.models.auv_lie_torch import LieAUVNN, LieAUVStep, GeodesicLoss, LieAUVWrapper
 
 from scripts.src_torch.models.torch_utils import ListDataset, learn, rand_roll, save_model, val
+
+# TODO: SEPARATE FROM TF IMPLEMENTATION
 from scripts.src.misc.utile import parse_config, npdtype, dtype
 from tqdm import tqdm
 from datetime import datetime
@@ -117,15 +118,38 @@ def get_dataset(config, device):
         dataset = ListDataset(dfs, steps=config['steps'], history=config['history'], rot="quat")
     return dataset
 
-def main():
+def get_device(gpu=False):
     use_cuda = False
-    if args.gpu:
+    if gpu:
         use_cuda = torch.cuda.is_available()
         if not use_cuda:
             warnings.warn("Asked for GPU but torch couldn't find a Cuda capable device")
+    return torch.device("cuda:0" if use_cuda else "cpu")
 
-    device = torch.device("cuda:0" if use_cuda else "cpu")
+def make_dirs(save_dir, model_name):
+    '''
+        Creates a set of directories where the training information
+        and validation will be logged.
 
+        inputs:
+        -------
+            - save_dir, string: the path to the saving directory.
+            - model_name, string: the name of the model being trained.
+    '''
+    stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
+    dir = os.path.join(save_dir, model_name, stamp)
+    dir_rand = os.path.join(dir, "rand")
+    dir_ckpt = os.path.join(dir, "ckpt")
+
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    if not os.path.exists(dir_rand):
+        os.makedirs(dir_rand)
+    if not os.path.exists(dir_ckpt):
+        os.makedirs(dir_ckpt)
+
+def main():
+    device = get_device(args.gpu)
     config = parse_config(args.params)
     model = get_model(config, device)
     optim = get_optimizer(model, config)
@@ -136,19 +160,8 @@ def main():
     h = config['history']
     steps = config['steps']
 
-    stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-    dir = os.path.join(args.save_dir, config['model_name'], stamp)
-    dir_rand = os.path.join(dir, "rand")
-    ckpt_dir = os.path.join(dir, "ckpt")
+    make_dirs(config['log_dir'], model.name)
 
-    if not os.path.exists(dir):
-        os.makedirs(dir)
-
-    if not os.path.exists(dir_rand):
-        os.makedirs(dir_rand)
-
-    if not os.path.exists(ckpt_dir):
-        os.makedirs(ckpt_dir)
 
     ds = (
         torch.utils.data.DataLoader(
