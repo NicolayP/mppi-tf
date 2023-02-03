@@ -1,5 +1,6 @@
 import tensorflow as tf
 from ..misc.utile import assert_shape, dtype
+import numpy as np
 
 # TODO: compute all constants without tensorflow. Out of the graph
 # computation.
@@ -26,6 +27,8 @@ class CostBase(tf.Module):
                 the new cost object.
         '''
         self._observer = None
+        self._obstacles = []
+        self.mask = tf.convert_to_tensor(np.array([[False]]), dtype=tf.bool)
 
         with tf.name_scope("Cost_setup"):
             self.lam = lam
@@ -71,8 +74,10 @@ class CostBase(tf.Module):
         with tf.name_scope("step_cost") as s:
             stateCost = self.state_cost(s, state)
             actionCost = self.action_cost(s, action, noise)
+            collisionCost = self.detect_collision(s, state)
             stepCost = tf.add(stateCost, actionCost,
                                name="add")
+            stepCost = tf.add(stepCost, collisionCost, name="add_collision")
 
         return stepCost
 
@@ -205,6 +210,63 @@ class CostBase(tf.Module):
 
     def set_observer(self, observer):
         self._observer = observer
+
+    def detect_collision(self, scope, state):
+        '''
+            Detects if there is a collision between the state vector
+            and the list of obstacles.
+
+            - input:
+            --------
+                - state: the current state of the system.
+                    shape: [k/1, sDim, 1]
+
+            - output:
+            ---------
+                - $$psi(state)$$
+
+        '''
+        k = tf.shape(state)[0]
+        mask = tf.broadcast_to(self.mask, (k, 1))
+        zeros_vec = tf.zeros(shape=mask.shape)
+        inf_vec = tf.ones(shape=mask.shape)
+        for obs in self._obstacles:
+            mask = tf.logical_or(obs.collide(state), mask)
+        return tf.where(mask, inf_vec, zeros_vec)
+
+class PrimitiveObstacles(tf.Module):
+    def __init__(self, p1, p2, radius):
+        self.p1, self.p2 = p1, p2
+        self.r = radius
+
+    def collide(self, state):
+        '''
+            Checks if "state" is within the obstacles. Returns
+            a bool vector whose entry is True if there is a collision
+            between state t and the obstacle. False otherwise
+
+            inputs:
+            -------
+                - state, tf.tensor, shape = [k, sDim, 1]
+            
+            outputs:
+            --------
+                - collision mask, tf.tensor. shape = [k, 1, 1]
+        '''
+        pos = state[:, :3]
+        k = tf.shape(state)[0]
+        # First check if state is inbetween the two points.
+        f1 = pos - self.p1
+        f2 = pos - self.p2
+        top = tf.reduce_sum(tf.multiply(self.e, f1), axis=1)
+        bot = tf.reduce_sum(tf.multiply(self.e, f2), axis=1)
+
+        e = tf.broadcast_to(self.e, (k, 3, 1))
+        cross = tf.linalg.cross(f1[..., 0], e[..., 0])
+        cross_norm = tf.linalg.norm(cross[..., None], axis=1)
+        d = cross_norm / tf.linalg.norm(e, axis=1)
+        mask = tf.logical_and(tf.logical_and(top >= 0., bot <= 0.), d <= self.r)
+        return mask
 
 class WayPointsCost(object):
     '''
