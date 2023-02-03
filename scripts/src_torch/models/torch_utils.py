@@ -445,7 +445,7 @@ class SE3inv(torch.nn.Module):
         t = M[:, 0:3, 3:]
         Rt = torch.transpose(R, dim0=-1, dim1=-2)
         M[:, 0:3, 0:3] = Rt
-        M[:, 0:3, 3:] = - Rt @ t
+        M[:, 0:3, 3:] = - Rt.clone() @ t.clone()
         return M
 
 
