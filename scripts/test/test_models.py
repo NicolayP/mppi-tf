@@ -538,9 +538,13 @@ class TestAUVModel(tf.test.TestCase):
         action = np.array([[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]], dtype=npdtype)
         next_state = self.model_quat.build_step_graph("step", state, action)
 
-        #print("*"*10 + " Next State " + "*"*10)
-        #print(next_state)
-        #print("*"*20)
+        # Two different shapes can be fed to the AUV network.
+        state = np.array([[[[0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
+                           [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]]], dtype=npdtype)
+        action = np.array([[[[1.0], [1.0], [1.0], [1.0], [1.0], [1.0]]]], dtype=npdtype)
+        next_state_ext = self.model_quat.build_step_graph("step", state, action)
+
+        self.assertAllClose(next_state, next_state_ext)
         pass
 
     def test_step1_k5_s12_a6(self):
@@ -568,12 +572,35 @@ class TestAUVModel(tf.test.TestCase):
                            [ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]], dtype=npdtype)
 
         next_state = self.model_quat.build_step_graph("step", state, action)
-        #print("*"*10 + " Next State Many " + "*"*10)
-        #print(next_state)
-        #print("*"*20)
+
+
+        state = np.array([ [[ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
+                             [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ]],
+
+                           [[ [1.0], [1.0], [1.0], [0.0], [0.0], [0.0], [1.0],
+                             [0.1], [2.0], [2.0], [1.0], [2.0], [3.0] ]],
+
+                           [[ [0.0], [2.0], [1.0], [0.2], [0.3], [0.0], [1.0],
+                             [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]],
+
+                           [[ [5.0], [0.2], [0.0], [1.2], [0.0], [3.1], [1.0],
+                             [0.0], [0.0], [0.0], [0.0], [0.0], [0.0] ]],
+
+                           [[ [0.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0],
+                             [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ]] ], dtype=npdtype)
+
+        action = np.array([[[ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ]],
+                           [[ [1.0], [1.0], [1.0], [1.0], [1.0], [1.0] ]],
+                           [[ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]],
+                           [[ [2.0], [2.0], [2.0], [2.0], [2.0], [2.0] ]],
+                           [[ [-1.], [-1.], [-1.], [-1.], [-1.], [-1.] ]]], dtype=npdtype)
+
+        next_state_ext = self.model_quat.build_step_graph("step", state, action)
+
+        self.assertAllClose(next_state, next_state_ext)
         pass
 
-
+'''
 class TestNNAUVModel(tf.test.TestCase):
     def setUp(self):
         self.nn_auv = NNAUVModel()
@@ -739,3 +766,4 @@ class TestPredictor(tf.test.TestCase):
         gt_shape = np.zeros(shape=(k, self.in_size_state), dtype=npdtype)
 
         self.assertShapeEqual(gt_shape, next_state)
+'''

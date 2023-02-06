@@ -3,6 +3,8 @@ import tensorflow as tf
 import tensorflow_graphics as tfg
 
 from ..src.costs.cost_base import CostBase
+from ..src.costs.cost_base import PrimitiveObstacles
+from ..src.costs.cost_base import CylinderObstacle
 from ..src.costs.static_cost import StaticCost
 from ..src.costs.elipse_cost import ElipseCost
 from ..src.costs.elipse_cost import ElipseCost3D
@@ -162,6 +164,54 @@ class TestCost(tf.test.TestCase):
 
         a_c = cost.action_cost("", action, noise)
         self.assertAllClose(exp_a_c, a_c)
+
+
+class TestPrimitiveCollision(tf.test.TestCase):
+    def setUp(self):
+        self.obstacle = PrimitiveObstacles()
+
+    def testPrimitiveCollision(self):
+        k, sDim = 5, 13
+        state = tf.zeros(shape=(k, sDim))
+        with self.assertRaises(NotImplementedError):
+            self.obstacle.collide(state)
+
+
+class TestCylinderCollision(tf.test.TestCase):
+    def setUp(self):
+        p1 = np.array([[0.], [0.], [0.]], dtype=npdtype)
+        p2 = np.array([[0.], [0.], [1.]], dtype=npdtype)
+        r = 1.
+        self.obst = CylinderObstacle(p1, p2, r)
+        pass
+
+    def testCollision_k1(self):
+        state = np.array([[
+            [0.], [0.], [-1.]
+        ]], dtype=npdtype)
+        gt_mask = np.array([[[False]]], dtype=np.bool)
+        mask = self.obst.collide(state)
+        self.assertAllEqual(gt_mask, mask)
+        pass
+
+    def testCollision_k5(self):
+        state = np.array([
+            [[0.], [0.], [-1.]],
+            [[-.5], [0.], [0.5]],
+            [[1.], [1.], [0.5]],
+            [[0.], [0.], [0.]],
+            [[0.], [0.], [2.]]
+        ], dtype=npdtype)
+        gt_mask = np.array([
+            [[False]],
+            [[True]],
+            [[False]],
+            [[True]],
+            [[False]]
+        ], dtype=np.bool)
+        mask = self.obst.collide(state)
+        self.assertAllEqual(gt_mask, mask)
+        pass
 
 
 class TestStaticCost(tf.test.TestCase):
@@ -418,6 +468,175 @@ class TestStaticCost(tf.test.TestCase):
         c = cost.build_step_cost_graph("", state, action, noise)
 
         self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c, c)
+
+
+class TestStaticWCollision(tf.test.TestCase):
+    def setUp(self):
+
+        goal=np.array([
+            [1.], [1.], [1.],
+            [0.], [0.], [0.], [1.],
+            [0.], [0.], [0.],
+            [0.], [0.], [0.]
+        ], dtype=npdtype)
+
+        Sigma=np.array([
+            [1., 0., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0., 0.],
+            [0., 0., 1., 0., 0., 0.],
+            [0., 0., 0., 1., 0., 0.],
+            [0., 0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 0., 1.]
+        ], dtype=npdtype)
+
+        Q=np.array([
+            [1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0., 0.],
+            [0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1., 0.],
+            [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 1.],
+        ], dtype=npdtype)
+        self.lam=np.array([1.], dtype=npdtype)
+        self.gamma = 1.
+        self.upsilon = 1.
+
+        self.cost = StaticCost(self.lam, self.gamma, self.upsilon, Sigma, goal, Q)
+
+        p11 = np.array([[0.], [0.], [0.]], dtype=npdtype)
+        p12 = np.array([[0.], [0.], [1.]], dtype=npdtype)
+        r = 1.
+        obs1 = CylinderObstacle(p11, p12, r)
+        self.cost.add_obstacle(obs1)
+        pass
+
+    def testStepStaticCostNoColl_k2(self):
+        state = np.array([[
+            [0.], [0.5], [2.],
+            [0.], [0.], [0.], [1.],
+            [1.], [2.], [3.],
+            [4.], [5.], [6.]
+        ],[
+            [0.], [2.], [0.],
+            [0.], [0.5], [0.5], [0.],
+            [4.], [5.], [6.],
+            [1.], [2.], [3.]
+        ]], dtype=npdtype)
+
+        action=np.array(
+            [[0.5], [2.], [0.25], [4.], [1.], [1.5]],
+        dtype=npdtype)
+
+        noise=np.array([
+            [[0.5], [1.], [2.], [3.], [4.], [5.]],
+            [[0.5], [2.], [0.25], [1.25], [2.5], [0.75]]
+        ], dtype=npdtype)
+        
+        exp_a_c = np.array([
+            [[0.5*(self.gamma*(23.5625 + 2.*26.25) + self.lam[0]*(1-1./self.upsilon)*(55.25) )]],
+            [[0.5*(self.gamma*(23.5625 + 2.*(12.9375)) + self.lam[0]*(1-1./self.upsilon)*(12.6875) )]]
+        ], dtype=npdtype)
+
+        exp_s_c = np.array([
+            [[93.25]],
+            [[95.5 ]]
+        ], dtype=npdtype)
+
+        exp_c_c = np.array([
+            [[0.]],
+            [[0.]]
+        ])
+
+        exp_c = exp_a_c + exp_s_c + exp_c_c
+
+        a_c = self.cost.action_cost("", action, noise)
+        c_c = self.cost.collision_cost("", state)
+        c = self.cost.build_step_cost_graph("", state, action, noise)
+
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c_c, c_c)
+        self.assertAllClose(exp_c, c)
+
+    def testStepStaticCostColl_k5(self):
+        state = np.array([[
+            [0.], [0.5], [2.],
+            [0.], [0.], [0.], [1.],
+            [1.], [2.], [3.],
+            [4.], [5.], [6.]
+        ],[
+            [0.], [2.], [0.],
+            [0.], [0.5], [0.5], [0.],
+            [4.], [5.], [6.],
+            [1.], [2.], [3.]
+        ],[
+            [0.], [0.5], [0.5],
+            [0.], [0.], [0.], [1.],
+            [1.], [2.], [3.],
+            [4.], [5.], [6.]
+        ],[
+            [0.], [-0.5], [0.5],
+            [0.], [0.], [0.], [1.],
+            [1.], [2.], [3.],
+            [4.], [5.], [6.]
+        ],[
+            [0.], [0.5], [0.3],
+            [0.], [0.], [0.], [1.],
+            [1.], [2.], [3.],
+            [4.], [5.], [6.]
+        ]], dtype=npdtype)
+
+        action=np.array(
+            [[0.5], [2.], [0.25], [4.], [1.], [1.5]],
+        dtype=npdtype)
+
+        noise=np.array([
+            [[0.5], [1.], [2.], [3.], [4.], [5.]],
+            [[0.5], [2.], [0.25], [1.25], [2.5], [0.75]],
+            [[0.5], [1.], [2.], [3.], [4.], [5.]],
+            [[0.5], [2.], [0.25], [1.25], [2.5], [0.75]],
+            [[0.5], [1.], [2.], [3.], [4.], [5.]],
+        ], dtype=npdtype)
+        
+        exp_a_c = np.array([
+            [[0.5*(self.gamma*(23.5625 + 2.*26.25) + self.lam[0]*(1-1./self.upsilon)*(55.25) )]],
+            [[0.5*(self.gamma*(23.5625 + 2.*(12.9375)) + self.lam[0]*(1-1./self.upsilon)*(12.6875) )]],
+            [[0.5*(self.gamma*(23.5625 + 2.*26.25) + self.lam[0]*(1-1./self.upsilon)*(55.25) )]],
+            [[0.5*(self.gamma*(23.5625 + 2.*(12.9375)) + self.lam[0]*(1-1./self.upsilon)*(12.6875) )]],
+            [[0.5*(self.gamma*(23.5625 + 2.*26.25) + self.lam[0]*(1-1./self.upsilon)*(55.25) )]],
+        ], dtype=npdtype)
+
+        exp_s_c = np.array([
+            [[93.25]],
+            [[95.5 ]],
+            [[92.5 ]],
+            [[94.5 ]],
+            [[92.74]]
+        ], dtype=npdtype)
+
+        exp_c_c = np.array([
+            [[0.]],
+            [[0.]],
+            [[np.inf]],
+            [[np.inf]],
+            [[np.inf]],
+        ])
+
+        exp_c = exp_a_c + exp_s_c + exp_c_c
+
+        a_c = self.cost.action_cost("", action, noise)
+        c_c = self.cost.collision_cost("", state)
+        c = self.cost.build_step_cost_graph("", state, action, noise)
+
+        self.assertAllClose(exp_a_c, a_c)
+        self.assertAllClose(exp_c_c, c_c)
         self.assertAllClose(exp_c, c)
 
 

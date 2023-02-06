@@ -6,7 +6,7 @@ from ..src.controllers.controller_base import ControllerBase
 from ..src.controllers.state_controller import StateModelController
 from ..src.controllers.lagged_controller import LaggedModelController
 from ..src.models.point_mass_model import PointMassModel
-from ..src.models.nn_model import NNAUVModelSpeed
+from ..src.models.auv_model import AUVModel
 from ..src.models.nn_model import LaggedNNAUVSpeed
 from ..src.costs.static_cost import StaticCost
 from ..src.misc.utile import dtype, npdtype
@@ -156,7 +156,38 @@ class TestStateController(tf.test.TestCase):
         self.sigma = np.eye(self.aDim, dtype=npdtype)
         self.Q = np.eye(self.sDim, dtype=npdtype)
 
-        self.model = NNAUVModelSpeed({}, stateDim=self.sDim, actionDim=self.aDim, k=self.k)
+        # self.model = NNAUVModelSpeed({}, stateDim=self.sDim, actionDim=self.aDim, k=self.k)
+
+        self.params = dict()
+        self.params["mass"] = 1000
+        self.params["volume"] = 1.5
+        self.params["density"] = 1000
+        self.params["height"] = 1.6
+        self.params["length"] = 2.5
+        self.params["width"] = 1.5
+        self.params["cog"] = [0, 0, 0]
+        self.params["cob"] = [0, 0, 0.5]
+        self.params["Ma"] = [[500., 0., 0., 0., 0., 0.],
+                             [0., 500., 0., 0., 0., 0.],
+                             [0., 0., 500., 0., 0., 0.],
+                             [0., 0., 0., 500., 0., 0.],
+                             [0., 0., 0., 0., 500., 0.],
+                             [0., 0., 0., 0., 0., 500.]]
+        self.params["linear_damping"] = [-70., -70., -700., -300., -300., -100.]
+        self.params["quad_damping"] = [-740., -990., -1800., -670., -770., -520.]
+        self.params["linear_damping_forward_speed"] = [1., 2., 3., 4., 5., 6.]
+        self.inertial = dict()
+        self.inertial["ixx"] = 650.0
+        self.inertial["iyy"] = 750.0
+        self.inertial["izz"] = 550.0
+        self.inertial["ixy"] = 1.0
+        self.inertial["ixz"] = 2.0
+        self.inertial["iyz"] = 3.0
+        self.params["inertial"] = self.inertial
+        self.params["rk"] = 2
+        self.model = AUVModel({}, actionDim=6, dt=0.1, parameters=self.params)
+
+
         self.cost = StaticCost(self.lam, self.gamma, self.upsilon, self.sigma, self.goal, self.Q)
         self.controller = StateModelController(
             model=self.model,
@@ -173,17 +204,28 @@ class TestStateController(tf.test.TestCase):
         dummy_input = tf.random.normal(shape=(self.sDim, 1), dtype=dtype)
         dummy_noise = tf.random.normal(shape=(self.k, self.tau, self.aDim, 1), dtype=dtype)
         dummy_seq = tf.random.normal(shape=(self.tau, self.aDim, 1), dtype=dtype)
-        costs = self.controller.build_model("test", self.k, dummy_input, dummy_noise, dummy_seq)
-        gt = np.zeros(shape=(self.k, 1, 1), dtype=npdtype)
-
-        self.assertShapeEqual(gt, costs)
+        self.controller._model.set_k(self.k)
+        costs, trajs = self.controller.build_model("test", self.k, dummy_input, dummy_noise, dummy_seq)
+        costs_gt = np.zeros(shape=(self.k, 1, 1), dtype=npdtype)
+        trajs_gt = np.zeros(shape=(self.k, self.tau+1, self.sDim, 1), dtype=npdtype)
+        self.assertShapeEqual(costs_gt, costs)
+        self.assertShapeEqual(trajs_gt, trajs)
 
     def testStateController(self):
         dummy_input = tf.random.normal(shape=(self.sDim, 1), dtype=dtype)
-        next_act = tf.constant(self.controller.next(dummy_input), dtype=dtype)
+        next_act, trajs, weights = self.controller.next(dummy_input)
 
-        gt_shape = np.zeros(shape=(self.aDim, ), dtype=npdtype)
-        self.assertShapeEqual(gt_shape, next_act)
+        next_act = tf.constant(next_act, dtype=dtype)
+        trajs = tf.constant(trajs, dtype=dtype)
+        weights = tf.constant(weights, dtype=dtype)
+
+        act_gt_shape = np.zeros(shape=(self.aDim, ), dtype=npdtype)
+        trajs_gt_shape = np.zeros(shape=(self.k, self.tau+1, self.sDim), dtype=npdtype)
+        weights_gt_shape = np.zeros(shape=(self.k, ), dtype=npdtype)
+
+        self.assertShapeEqual(act_gt_shape, next_act)
+        self.assertShapeEqual(trajs_gt_shape, trajs)
+        self.assertShapeEqual(weights_gt_shape, weights)
 
 
 class TestLaggedStateController(tf.test.TestCase):
