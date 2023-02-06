@@ -593,7 +593,7 @@ class VelPred(tf.Module):
     def __init__(self, in_size=21, topology=[64]):
         self.n = "nn-veloctiy"
         bias = False
-        layers = [tf.keras.Input(shape=(in_size,))]
+        layers = [tf.keras.layers.InputLayer(shape=(in_size,))]
         for i, s in enumerate(topology):
             if i == 0:
                 self.n += f"_{in_size}"

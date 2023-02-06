@@ -85,6 +85,7 @@ class StateModelController(ControllerBase):
                                     name="Broadcast_inital_state")
             nextState = tf.zeros(shape=tf.shape(state), dtype=dtype)
             cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
+            trajs = state[:, None]
 
         # PAY ATTENTION TO THE FOR LOOPS WITH @tf.function.
         for i in range(self._tau):
@@ -97,6 +98,7 @@ class StateModelController(ControllerBase):
                     nextState = self._model.build_step_graph(s,
                                                              state,
                                                              toApply)
+                    trajs = tf.concat([trajs, nextState[:, None]], axis=1)
                 with tf.name_scope("Cost_" + str(i)) as c:
                     tmp = self._cost.build_step_cost_graph(c, nextState,
                                                            action, noise)
@@ -110,5 +112,4 @@ class StateModelController(ControllerBase):
             sampleCosts = self._cost.add_cost(c, fCost, cost)
             
         self._observer.write_control("sample_costs", sampleCosts)
-
-        return sampleCosts
+        return sampleCosts, trajs

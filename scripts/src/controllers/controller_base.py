@@ -9,7 +9,7 @@ import time as t
 
 import warnings
 
-gpu_devices = tf.config.experimental.list_physical_devices('GPU')
+gpu_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
@@ -268,7 +268,11 @@ class ControllerBase(tf.Module):
 
             - input:
             --------
+                - scope: string, indicates the tensorflow scope.
                 - k: tf.Variable, dtype=int, the number of samples to use.
+                - model_input: 
+
+
                 - laggedState: tf.Placeholder, the current and previous states of the system.
                     Shape: [history, sDim, 1]
                 - laggedAction: tf.Placeholder, the previous actions applied on the system.

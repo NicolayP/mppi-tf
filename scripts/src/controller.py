@@ -74,6 +74,7 @@ def get_controller(
         "lagged_controller": lagged,
         "state_controller": state
     }
+
     controller_type = configDict['type']
     getter = switcher.get(controller_type, lambda: "invalid controller type, check\
         spelling, supported are: ")

@@ -2,9 +2,12 @@ import numpy as np
 
 from .costs.static_cost import StaticCost, StaticQuatCost, StaticRotCost
 from .costs.elipse_cost import ElipseCost, ElipseCost3D
+from .costs.cost_base import CylinderObstacle
 
 
-
+'''
+    Cost function section
+'''
 def static(task_dic, lam, gamma, upsilon, sigma):
     goal = np.expand_dims(np.array(task_dic['goal']), -1)
     Q = np.array(task_dic['Q'])
@@ -56,7 +59,19 @@ def waypoints(task_dict, lam, gamma, upsilon, sigma):
     dist = task_dict['dist']
     return WaypointCost(lam, gamma, upsilon, sigma, waypoins, dist)
 
+'''
+    Obstacle section
+'''
+def cylinder(obs_dict):
+    p1 = np.array(obs_dict["p1"])
+    p2 = np.array(obs_dict["p2"])
+    r = np.array(obs_dict["r"])
+    return CylinderObstacle(p1, p2, r)
 
+
+'''
+    Object instanciation
+'''
 def get_cost(task, lam, gamma, upsilon, sigma):
 
     switcher = {
@@ -72,4 +87,17 @@ def get_cost(task, lam, gamma, upsilon, sigma):
 
     getter = switcher.get(cost_type, lambda: "invalid cost type, check\
                 spelling, supporter are: static, elipse, elipse3d")
-    return getter(task, lam, gamma, upsilon, sigma)
+    cost = getter(task, lam, gamma, upsilon, sigma)
+
+    obs_switcher = {
+        "cylinder": cylinder
+    }
+
+
+    for obs in task['obs']:
+        obs_getter = obs_switcher.get(task["obs"][obs]["type"], lambda: "invalid obstacle type,\
+            supported are: cylinder")
+        new_obs = obs_getter(task["obs"][obs])
+        cost.add_obstacle(new_obs)
+    
+    return cost

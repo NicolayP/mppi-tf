@@ -283,8 +283,9 @@ class AUVModel(ModelBase):
         return inertial
 
     def build_step_graph(self, scope, state, action):
-        state = tf.squeeze(state, axis=1)
-        action = tf.squeeze(action, axis=1)
+        if len(state.shape) == 4:
+            state = tf.squeeze(state, axis=1)
+            action = tf.squeeze(action, axis=1)
         return self.step(scope, state, action, rk=self._rk)
 
     def step(self, scope, state, action, rk=1):

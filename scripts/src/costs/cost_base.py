@@ -28,7 +28,9 @@ class CostBase(tf.Module):
         '''
         self._observer = None
         self._obstacles = []
-        self.mask = tf.convert_to_tensor(np.array([[False]]), dtype=tf.bool)
+        self._mask = tf.convert_to_tensor(np.array([[False]]), dtype=tf.bool)
+        self._zero_vec = tf.convert_to_tensor(np.array([[0.]]), dtype=dtype)
+        self._inf_vec = tf.convert_to_tensor(np.array([[np.inf]]), dtype=dtype)
 
         with tf.name_scope("Cost_setup"):
             self.lam = lam
@@ -74,7 +76,8 @@ class CostBase(tf.Module):
         with tf.name_scope("step_cost") as s:
             stateCost = self.state_cost(s, state)
             actionCost = self.action_cost(s, action, noise)
-            collisionCost = self.detect_collision(s, state)
+            collisionCost = self.collision_cost(s, state)
+
             stepCost = tf.add(stateCost, actionCost,
                                name="add")
             stepCost = tf.add(stepCost, collisionCost, name="add_collision")
@@ -188,6 +191,36 @@ class CostBase(tf.Module):
         '''
         raise NotImplementedError
 
+    def collision_cost(self, scope, state):
+        '''
+            Detects if there is a collision between the state vector
+            and the list of obstacles.
+
+            - input:
+            --------
+                - state: the current state of the system.
+                    shape: [k/1, sDim, 1]
+
+            - output:
+            ---------
+                - $$psi(state)$$
+
+        '''
+        k = tf.shape(state)[0]
+        mask = tf.broadcast_to(self._mask, (k, 1, 1))
+        zeros_vec = tf.broadcast_to(self._zero_vec, (k, 1, 1))
+        inf_vec = tf.broadcast_to(self._inf_vec, (k, 1, 1))
+        for obs in self._obstacles:
+            mask = tf.logical_or(obs.collide(state), mask)
+        mask = tf.where(mask, inf_vec, zeros_vec)
+        return mask
+
+    def add_obstacle(self, obs):
+        self._obstacles.append(obs)
+
+    def get_obstacles(self):
+        return self._obstacles
+
     def draw_goal(self):
         '''
             generates a graph representing the goal.
@@ -211,32 +244,55 @@ class CostBase(tf.Module):
     def set_observer(self, observer):
         self._observer = observer
 
-    def detect_collision(self, scope, state):
-        '''
-            Detects if there is a collision between the state vector
-            and the list of obstacles.
-
-            - input:
-            --------
-                - state: the current state of the system.
-                    shape: [k/1, sDim, 1]
-
-            - output:
-            ---------
-                - $$psi(state)$$
-
-        '''
-        k = tf.shape(state)[0]
-        mask = tf.broadcast_to(self.mask, (k, 1))
-        zeros_vec = tf.zeros(shape=mask.shape)
-        inf_vec = tf.ones(shape=mask.shape)
-        for obs in self._obstacles:
-            mask = tf.logical_or(obs.collide(state), mask)
-        return tf.where(mask, inf_vec, zeros_vec)
 
 class PrimitiveObstacles(tf.Module):
+    def __init__(self, type):
+        self.type = type
+        pass
+
+    def collide(self, state):
+        '''
+            Checks if "state" is within the obstacles. Returns
+            a bool vector whose entry is True if there is a collision
+            between state t and the obstacle. False otherwise
+
+            inputs:
+            -------
+                - state, tf.tensor, shape = [k, sDim, 1]
+            
+            outputs:
+            --------
+                - collision mask, tf.tensor. shape = [k, 1, 1]
+        '''
+        raise NotImplementedError
+
+    def get_pose(self):
+        '''
+            Returns the pose of the obstacle.
+            
+            outputs:
+            --------
+                - p, tf.tensor, shape = [3, 1]
+                - q, tf.tensor, shape = [4, 1]
+        '''
+        raise NotImplementedError
+
+
+class CylinderObstacle(PrimitiveObstacles):
     def __init__(self, p1, p2, radius):
-        self.p1, self.p2 = p1, p2
+        '''
+            Constructor for cylinder object.
+            inputs:
+            ------- 
+                - p1: tensor, bottom point of the cylinder.
+                    shape = [3, 1]
+                - p2: tensor, top of the cylinder.
+                    shape = [3, 1]
+                - radius: cylindre radius in meters.
+        '''
+        super(CylinderObstacle, self).__init__("cylinder")
+        self.p1, self.p2 = tf.convert_to_tensor(p1, dtype=dtype), tf.convert_to_tensor(p2, dtype=dtype)
+        self.e = self.p2 - self.p1
         self.r = radius
 
     def collide(self, state):
@@ -266,7 +322,19 @@ class PrimitiveObstacles(tf.Module):
         cross_norm = tf.linalg.norm(cross[..., None], axis=1)
         d = cross_norm / tf.linalg.norm(e, axis=1)
         mask = tf.logical_and(tf.logical_and(top >= 0., bot <= 0.), d <= self.r)
-        return mask
+        return mask[..., None]
+
+    def get_pose(self):
+        pc = (self.p1  + (self.e/2)).numpy()
+        vec = self.e/tf.linalg.norm(self.e)
+        q = tf.concat([vec, [[0.]]], axis=0).numpy()
+        return pc, q
+
+    def get_param(self):
+        h = tf.linalg.norm(self.e)
+        return h, self.r
+
+
 
 class WayPointsCost(object):
     '''
@@ -278,7 +346,6 @@ class WayPointsCost(object):
         the trajectory and the two first points. Do a weighted average between the two. Revert to
         Static cost if only one waypoint left.
     '''
-
     def __init__(self, lam, gamma, upsilon, sigma, waypoints=None):
         CostBase.__init__(self, lam, gamma, upsilon, sigma, alpha=0.2)
         if waypoints is not None:

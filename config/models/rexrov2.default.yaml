@@ -33,3 +33,6 @@ density: 1028.0
 rk: 2
 limMax: 500
 limMin: -500
+steps: 1
+history: 1
+rot: "quat"

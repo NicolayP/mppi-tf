@@ -83,7 +83,7 @@ class StaticQuatCost(CostBase):
                 - gamma: decoupling parameter between action and noise.
                 - upsilon: covariance augmentation for noise generation.
                 - sigma: the noise covariance matrix. shape [aDim, aDim].
-                - goal: target goal (psition; speed). shape [sDim, 1].
+                - goal: target goal (position; speed). shape [sDim, 1].
                 - Q: weight matrix for the different part of the cost function. shape: [sDim, sDim]
         '''
 

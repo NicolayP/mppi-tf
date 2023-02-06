@@ -6,6 +6,7 @@ from ..misc.utile import assert_shape, push_to_tensor, dtype, npdtype
 from .controller_base import ControllerBase
 from ..observer.observer_base import ObserverLagged
 
+import warnings
 
 class LaggedModelController(ControllerBase):
     def __init__(
@@ -70,6 +71,10 @@ class LaggedModelController(ControllerBase):
             --------
                 None.
         '''
+        if not self._graphMode:
+            warnings.warn("Not using graph mode, no trace to generate.")
+            return
+
         if self._h > 1:
             fake_input = (
                 tf.zeros((self._h, self._sDim, 1), dtype=dtype),
@@ -88,8 +93,7 @@ class LaggedModelController(ControllerBase):
                            fake_input,
                            fake_sequence,
                            self._normalizeCost)
-        if not self._graphMode:
-            warnings.warn("Not using graph mode, no trace to generate.")
+
 
     def build_model(self, scope, k, model_input, noises, actionSeq):
         '''
@@ -156,7 +160,7 @@ class LaggedModelController(ControllerBase):
             -------
                 laggedInput: shape [k, history, aDim, 1]
         '''
-        tmp = tf.expand_dims(tf.add(action, noise, name=""), axis=1)
+        tmp = tf.expand_dims(tf.add(action, noise, name="act_exp"), axis=1)
         if laggedAction is not None:
             act = tf.concat([laggedAction, tmp], axis=1) # shape [k, history, adim, 1]
         else:
