@@ -306,6 +306,7 @@ class ControllerBase(tf.Module):
                 init = self.init_zeros(si, 1)
                 actionSeq = self.shift(si, update, init, 1)
 
+        self._observer.write_control("actionSeq", actionSeq)
         self._observer.write_control("state", model_input)
         self._observer.write_control("next", next)
         return next, trajs, weights, actionSeq
@@ -359,7 +360,7 @@ class ControllerBase(tf.Module):
         self._observer.write_control("nabla", nabla)
         self._observer.write_control("arg", arg)
         self._observer.write_control("weighted_noise", weighted_noises)
-        # self._observer.write_control("update", update)
+        self._observer.write_control("update", update)
 
         return update, weights
 

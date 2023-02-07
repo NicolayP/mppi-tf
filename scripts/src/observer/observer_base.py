@@ -110,9 +110,21 @@ class ObserverBase(tf.Module):
 
         with self._writer.as_default():
             if name == "update":
-                tf.summary.scalar("Controller/update",
-                                tensor,
-                                step=self.step)
+                print("Update: ", tensor.shape)
+                for i in range(self._aDim):
+                    mean = tf.math.reduce_mean(tensor[:, i])
+                    tf.summary.scalar("Controller/update_mean/{}".format(i),
+                        mean, step=self.step)
+                    tf.summary.histogram("Controller/update/{}".format(i),
+                        tensor[:, i], step=self.step)
+
+            elif name == "actionSeq":
+                for i in range(self._aDim):
+                    mean = tf.math.reduce_mean(tensor[:, i])
+                    tf.summary.scalar("action_seq_mean/{}".format(i),
+                        mean, step=self.step)
+                    tf.summary.histogram("action_seq/{}".format(i),
+                        tensor[:, i], step=self.step)
 
             elif name == "next":
                 action = tensor[0]
@@ -260,9 +272,20 @@ class ObserverLagged(ObserverBase):
 
         with self._writer.as_default():
             if name == "update":
-                tf.summary.scalar("Controller/update",
-                                tensor,
-                                step=self.step)
+                for i in range(self._aDim):
+                    mean = tf.math.reduce_mean(tensor[:, i])
+                    tf.summary.scalar("Controller/update_mean/{}".format(i),
+                        mean, step=self.step)
+                    tf.summary.histogram("Controller/update/{}".format(i),
+                        tensor[:, i], step=self.step)
+
+            elif name == "actionSeq":
+                for i in range(self._aDim):
+                    mean = tf.math.reduce_mean(tensor[:, i])
+                    tf.summary.scalar("action_seq_mean/{}".format(i),
+                        mean, step=self.step)
+                    tf.summary.histogram("action_seq/{}".format(i),
+                        tensor[:, i], step=self.step)
 
             elif name == "next":
                 action = tensor[0]
