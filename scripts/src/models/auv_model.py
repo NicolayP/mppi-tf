@@ -490,13 +490,9 @@ class AUVModel(ModelBase):
 
             output:
             -------
-                - $D(\nu)\nu$ the damping matrix. Shape [k, 6, 6]
+                - $D(\nu)$ the damping matrix. Shape [k, 6, 6]
         '''
         with tf.name_scope(scope) as scope:
-            foo = tf.multiply(
-                    tf.expand_dims(vel[:, 0],
-                                   axis=-1),
-                    self._linearDampingForwardSpeed)
             D = -1*self._linearDamping - tf.multiply(
                                            tf.expand_dims(vel[:, 0],
                                                           axis=-1),
