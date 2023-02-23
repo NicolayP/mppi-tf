@@ -93,11 +93,11 @@ def get_cost(task, lam, gamma, upsilon, sigma):
         "cylinder": cylinder
     }
 
-
-    for obs in task['obs']:
-        obs_getter = obs_switcher.get(task["obs"][obs]["type"], lambda: "invalid obstacle type,\
-            supported are: cylinder")
-        new_obs = obs_getter(task["obs"][obs])
-        cost.add_obstacle(new_obs)
+    if 'obs' in task.keys():
+        for obs in task['obs']:
+            obs_getter = obs_switcher.get(task["obs"][obs]["type"], lambda: "invalid obstacle type,\
+                supported are: cylinder")
+            new_obs = obs_getter(task["obs"][obs])
+            cost.add_obstacle(new_obs)
     
     return cost

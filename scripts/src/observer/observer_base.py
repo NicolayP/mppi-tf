@@ -41,6 +41,10 @@ class ObserverBase(tf.Module):
         self._velId = [7, 8, 9, 10, 11, 12]
         self._tau = tau
 
+        self._aName = ["Fx", "Fy", "Fz", "Tx", "Ty", "Tz"]
+        self._sName = ["x", "y", "z", "qx", "qy", "qz", "qw", "u", "v", "w", "p", "q", "r"]
+
+
         if log or debug:
             self.logdir = os.path.join(logPath, "controller")
             if not os.path.exists(self.logdir):
@@ -221,7 +225,7 @@ class ObserverBase(tf.Module):
                                 step=self.step)
 
             elif name == "predicted/dist_to_goal":
-                for i in range(self._sDim):
+                for i in range(tf.shape(tensor)[0]):
                     tf.summary.scalar("Predicted/goal_distance_{}".format(self._stateName[i]),
                                     tf.squeeze(tensor[i, :]),
                                     step=self.step)
@@ -272,25 +276,25 @@ class ObserverLagged(ObserverBase):
 
         with self._writer.as_default():
             if name == "update":
-                for i in range(self._aDim):
+                for i, n in enumerate(self._aName):
                     mean = tf.math.reduce_mean(tensor[:, i])
-                    tf.summary.scalar("Controller/update_mean/{}".format(i),
+                    tf.summary.scalar(f"Controller/update_mean/{n}",
                         mean, step=self.step)
-                    tf.summary.histogram("Controller/update/{}".format(i),
+                    tf.summary.histogram(f"Controller/update/{n}",
                         tensor[:, i], step=self.step)
 
             elif name == "actionSeq":
-                for i in range(self._aDim):
+                for i, n in enumerate(self._aName):
                     mean = tf.math.reduce_mean(tensor[:, i])
-                    tf.summary.scalar("action_seq_mean/{}".format(i),
+                    tf.summary.scalar(f"action_seq_mean/{n}",
                         mean, step=self.step)
-                    tf.summary.histogram("action_seq/{}".format(i),
+                    tf.summary.histogram(f"action_seq/{n}",
                         tensor[:, i], step=self.step)
 
             elif name == "next":
                 action = tensor[0]
-                for i in range(self._aDim):
-                    tf.summary.scalar("input/{}".format(i),
+                for i, n in enumerate(self._aName):
+                    tf.summary.scalar(f"input/{n}",
                                     action[i, 0],
                                     step=self.step)
 
@@ -317,7 +321,7 @@ class ObserverLagged(ObserverBase):
                                 tf.squeeze(tensor[self.best_id, :]),
                                 step=self.step)
 
-            elif name == "action_cos":
+            elif name == "action_cost":
                 tf.summary.histogram("Cost/Action/Cost",
                                 tensor,
                                 step=self.step)
@@ -351,10 +355,15 @@ class ObserverLagged(ObserverBase):
 
             elif name == "state":
                 for i in self._poseId:
-                    tf.summary.scalar("State/position_{}".format(i),
+                    n = self._sName[i]
+                    tf.summary.scalar(f"State/pose_{n}",
                                       tf.squeeze(tensor[0][-1, i, :]),
                                       step=self.step)
                 for i in self._velId:
-                    tf.summary.scalar("State/velocity_{}".format(i),
+                    n = self._sName[i]
+                    tf.summary.scalar(f"State/vel_{n}",
                                       tf.squeeze(tensor[0][-1, i, :]),
                                       step=self.step)
+            
+            elif name == "goal":
+                pass

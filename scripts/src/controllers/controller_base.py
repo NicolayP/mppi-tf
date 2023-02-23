@@ -472,8 +472,8 @@ class ControllerBase(tf.Module):
                 None.
         '''
         fake_input = self._model.fake_input()
-        
-        fake_sequence = np.zeros((self._tau, self._aDim, 1))
+        # Try with tf.zeros()
+        fake_sequence = tf.zeros((self._tau, self._aDim, 1), dtype=dtype, name="fake_sequence")
 
         _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
                            fake_input,

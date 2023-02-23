@@ -53,8 +53,8 @@ class LaggedModelController(ControllerBase):
 
         self._observer.write_predict("predicted/next_state", nextState[0])
         self._observer.write_predict("predicted/error", error)
-        #self._observer.write_predict("predicted/dist_to_goal", dist[0])
-        
+        self._observer.write_predict("predicted/dist_to_goal", dist[0])
+
         return nextState
 
     def trace(self):
@@ -93,7 +93,6 @@ class LaggedModelController(ControllerBase):
                            fake_input,
                            fake_sequence,
                            self._normalizeCost)
-
 
     def build_model(self, scope, k, model_input, noises, actionSeq):
         '''

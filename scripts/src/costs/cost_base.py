@@ -335,7 +335,6 @@ class CylinderObstacle(PrimitiveObstacles):
         return h, self.r
 
 
-
 class WayPointsCost(object):
     '''
         Cost function for reference tracking.
