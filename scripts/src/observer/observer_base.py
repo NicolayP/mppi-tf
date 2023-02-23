@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import tensorflow as tf
+import tensorflow_graphics as tfg
 from datetime import datetime
 import os
 from shutil import copyfile
@@ -7,6 +8,7 @@ from tensorflow.python.ops import summary_ops_v2
 import yaml
 
 from ..misc.utile import assert_shape, dtype
+
 
 class ObserverBase(tf.Module):
 
@@ -29,20 +31,13 @@ class ObserverBase(tf.Module):
         self._writer = None
         self._k = k
         self._log = log
-        self._stateName = [
-            "x", "y", "z",
-            "r00", "r01", "r02",
-            "r10", "r11", "r12",
-            "r20", "r21", "r22",
-            "u", "v", "w",
-            "p", "q", "r"
-        ]
-        self._poseId = [0, 1, 2, 3, 4, 5, 6]
-        self._velId = [7, 8, 9, 10, 11, 12]
+
+        self._poseId = [0, 1, 2, 3, 4, 5]
+        self._velId = [6, 7, 8, 9, 10, 11]
         self._tau = tau
 
         self._aName = ["Fx", "Fy", "Fz", "Tx", "Ty", "Tz"]
-        self._sName = ["x", "y", "z", "qx", "qy", "qz", "qw", "u", "v", "w", "p", "q", "r"]
+        self._sName = ["x", "y", "z", "roll", "pitch", "yaw", "u", "v", "w", "p", "q", "r"]
 
 
         if log or debug:
@@ -208,15 +203,17 @@ class ObserverBase(tf.Module):
 
         with self._writer.as_default():
             if name == "predicted/next_state":
-                for i in range(self._sDim):
-                    tf.summary.scalar("Predicted/Next_state_{}".format(self._stateName[i]),
-                                    tf.squeeze(tensor[i, :]),
+                tensor_euler = self.to_euler(tensor)
+                for i, n in enumerate(self._sName):
+                    tf.summary.scalar(f"Predicted/Next_state_{n}",
+                                    tf.squeeze(tensor_euler[i, :]),
                                     step=self.step)
 
             elif name == "predicted/state":
-                for i in range(self._sDim):
-                    tf.summary.scalar("Predicted/State_{}".format(self._stateName[i]),
-                                        tf.squeeze(tensor[i, :]),
+                tensor_euler = self.to_euler(tensor)
+                for i, n in enumerate(self._sName):
+                    tf.summary.scalar(f"Predicted/State_{n}",
+                                        tf.squeeze(tensor_euler[i, :]),
                                         step=self.step)
 
             elif name == "predicted/error":
@@ -226,7 +223,7 @@ class ObserverBase(tf.Module):
 
             elif name == "predicted/dist_to_goal":
                 for i in range(tf.shape(tensor)[0]):
-                    tf.summary.scalar("Predicted/goal_distance_{}".format(self._stateName[i]),
+                    tf.summary.scalar(f"Predicted/goal_distance_{i}",
                                     tf.squeeze(tensor[i, :]),
                                     step=self.step)
 
@@ -234,6 +231,9 @@ class ObserverBase(tf.Module):
                 tf.summary.histogram("Predicted/Sample_cost",
                                     tf.squeeze(tensor),
                                     step=self.step)
+
+    def to_euler(self, state):
+        raise NotImplementedError
 
 
 class ObserverLagged(ObserverBase):
@@ -298,7 +298,7 @@ class ObserverLagged(ObserverBase):
                                     action[i, 0],
                                     step=self.step)
 
-            elif name == "sample_costs":
+            elif name == "samples_cost":
                 self.best_id = tf.squeeze(tf.argmin(tensor, axis=0))
                 tf.summary.histogram("Cost/All/All_cost",
                                     tensor,
@@ -310,7 +310,7 @@ class ObserverLagged(ObserverBase):
                                 tf.squeeze(tensor[self.best_id, :]),
                                 step=self.step)
 
-            elif name == "state_cost":
+            elif name == "states_cost":
                 tf.summary.histogram("Cost/State/Cost",
                                 tensor,
                                 step=self.step)
@@ -321,7 +321,7 @@ class ObserverLagged(ObserverBase):
                                 tf.squeeze(tensor[self.best_id, :]),
                                 step=self.step)
 
-            elif name == "action_cost":
+            elif name == "actions_cost":
                 tf.summary.histogram("Cost/Action/Cost",
                                 tensor,
                                 step=self.step)
@@ -354,16 +354,53 @@ class ObserverLagged(ObserverBase):
                                     step=self.step)
 
             elif name == "state":
+                tensor_euler = self.to_euler(tensor[0])
+
                 for i in self._poseId:
                     n = self._sName[i]
                     tf.summary.scalar(f"State/pose_{n}",
-                                      tf.squeeze(tensor[0][-1, i, :]),
+                                      tf.squeeze(tensor_euler[-1, i, :]),
                                       step=self.step)
                 for i in self._velId:
                     n = self._sName[i]
                     tf.summary.scalar(f"State/vel_{n}",
-                                      tf.squeeze(tensor[0][-1, i, :]),
+                                      tf.squeeze(tensor_euler[-1, i, :]),
                                       step=self.step)
             
             elif name == "goal":
                 pass
+
+    def to_euler(self, state):
+        raise NotImplemented
+
+
+class ObserverLaggedQuat(ObserverLagged):
+    def __init__(
+        self,
+        logPath, log, debug,
+        k, tau, lam,
+        configDict, taskDict, modelDict,
+        h, aDim, sDim, modelName):
+        super().__init__(
+            logPath=logPath,
+            log=log,
+            debug=debug,
+            k=k, tau=tau, lam=lam,
+            configDict=configDict,
+            taskDict=taskDict,
+            modelDict=modelDict,
+            h=h,
+            aDim=aDim,
+            sDim=sDim,
+            modelName=modelName)
+
+    def to_euler(self, state):
+        position = state[..., 0:3, :]
+        quat = state[..., 3:7, :]
+        vel = state[..., 7:, :]
+
+        euler = tf.expand_dims(
+            tfg.geometry.transformation.euler.from_quaternion(quat[..., 0]),
+            axis=-1
+        )
+        return tf.concat([position, euler, vel], axis=-2)

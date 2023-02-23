@@ -4,7 +4,7 @@ import numpy as np
 
 from ..misc.utile import assert_shape, push_to_tensor, dtype, npdtype
 from .controller_base import ControllerBase
-from ..observer.observer_base import ObserverLagged
+from ..observer.observer_base import ObserverLaggedQuat
 
 import warnings
 
@@ -24,7 +24,7 @@ class LaggedModelController(ControllerBase):
             log=log, logPath=logPath, graphMode=graphMode, debug=debug
         )
         self._h = h
-        self._observer = ObserverLagged(
+        self._observer = ObserverLaggedQuat(
             logPath=logPath, log=log, debug=debug,
             k=k, tau=tau, lam=lam,
             configDict=configDict,
