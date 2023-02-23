@@ -2,9 +2,9 @@
     type: "static_quat"
     diag: true
     goal:
-      - 1.0 # x
-      - 2.0 # y
-      - -50.0 # z
+      - 5.0 # x
+      - 4.0 # y
+      - -20.0 # z
       - 1.0 # qw
       - 0.0 # qx
       - 0.0 # qy
