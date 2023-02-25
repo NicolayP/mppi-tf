@@ -405,15 +405,11 @@ class AUVModel(ModelBase):
 
         self._rotBtoI = tf.concat([r1, r2, r3], axis=1)
 
-        r1t = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
-
-        r2t = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
-
-        r3t = tf.expand_dims(tf.concat([z, w, -x], axis=-1), axis=1)
-
-        r4t = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
-
-        self._TBtoIquat = 0.5 * tf.concat([r1t, r2t, r3t, r4t], axis=1)
+        rwt = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
+        rxt = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
+        ryt = tf.expand_dims(tf.concat([z, w, -x], axis=-1), axis=1)
+        rzt = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
+        self._TBtoIquat = 0.5 * tf.concat([rxt, ryt, rzt, rwt], axis=1)
 
     def prepare_data(self, state):
         pose = state[:, 0:7]
