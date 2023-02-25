@@ -125,14 +125,30 @@ def push_to_tensor(tensor, x):
     return tf.concat([tensor[:, 1:], tmp], axis=1)
 
 
-def rollout(model, init, seq, h, horizon):
+def rollout(model, init, seq, h, horizon, dev=False):
     state = init
     pred = []
+    if dev:
+        Cvs = []
+        Dvs = []
+        gs = []
     for i in range(h, horizon+h):
-        nextState = model.build_step_graph("foo", state, seq[:, i-h:i])
+        if dev:
+            nextState, Cv, Dv, g = model.build_step_graph("foo", state, seq[:, i-h:i], dev)
+            Cvs.append(Cv)
+            Dvs.append(Dv)
+            gs.append(g)
+        else:
+            nextState = model.build_step_graph("foo", state, seq[:, i-h:i])
         pred.append(nextState)
         state = push_to_tensor(state, nextState)
     traj = tf.concat(pred, axis=0)
+
+    if dev:
+        Cvs = tf.concat(Cvs, axis=0)
+        Dvs = tf.concat(Dvs, axis=0)
+        gs = tf.concat(gs, axis=0)
+        return traj, Cvs, Dvs, gs
     return traj
 
 

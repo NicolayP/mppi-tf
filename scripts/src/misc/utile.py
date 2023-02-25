@@ -182,7 +182,45 @@ def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCol
             plt.savefig(name)
             plt.close()
         
-        plt.show()
+    plt.show()
+
+
+def plot_6d(trajs, ColNames=None, horizon=50, dir="."):
+    '''
+        Plot trajectories and action sequence.
+        inputs:
+        -------
+            - trajs: dict with model name as key and trajectories entry. If key is "gt" then it is assumed to be
+                the ground truth trajectory.
+            - seq: Action Sequence associated to the generated trajectoires. If not None, plots the 
+                action seqence.
+            - h: list of history used for the different models, ignored when model entry is "gt".
+            - plotStateCols: Dict containing the state axis name as key and index as entry
+            - plotAcitonCols: Dict containing the action axis name as key and index as entry.
+            - horizon: The horizon of the trajectory to plot.
+            - dir: The saving directory for the generated images.
+    '''
+    maxS = len(ColNames)
+    fig_state = plt.figure(figsize=(50, 50))
+    for k in trajs:
+        t = trajs[k]
+        for i, name in enumerate(ColNames):
+            m, n = np.unravel_index(i, (2, 3))
+            idx = 1*m + 2*n + 1
+            plt.subplot(3, 2, idx)
+            plt.ylabel(f'{name}')
+            plt.scatter(
+                np.arange(0, horizon), t[:, ColNames[name]],
+                marker='X', edgecolors='k', s=64, label=k
+            )
+    plt.legend()
+    #plt.tight_layout()
+    if dir is not None:
+        name = os.path.join(dir, f"{k}.png")
+        plt.savefig(name)
+        plt.close()
+        
+    plt.show()
 
 
 def traj_to_euler(traj, rep="rot"):

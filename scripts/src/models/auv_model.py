@@ -282,15 +282,22 @@ class AUVModel(ModelBase):
 
         return inertial
 
-    def build_step_graph(self, scope, state, action):
+    def build_step_graph(self, scope, state, action, dev=False):
         if len(state.shape) == 4:
             state = tf.squeeze(state, axis=1)
             action = tf.squeeze(action, axis=1)
+        if dev:
+            step, Cv, Dv, g = self.step(scope, state, action, rk=self._rk, dev=dev)
+            return step, Cv, Dv, g
         return self.step(scope, state, action, rk=self._rk)
 
-    def step(self, scope, state, action, rk=1):
+    def step(self, scope, state, action, rk=1, dev=False):
         # Forward and backward euler integration.
+        if dev:
+            rk =1
         with tf.name_scope(scope) as scope:
+            if dev:
+                k1, Cv, Dv, g = self.state_dot(state, action, dev)
             k1 = self.state_dot(state, action)
             if rk == 1:
                 tmp = k1*self._dt
@@ -309,9 +316,12 @@ class AUVModel(ModelBase):
             nextState = tf.add(state, tmp)
             nextState = self.normalize_quat(nextState)
 
+            if dev:
+                return nextState, Cv, Dv, g
+
             return nextState
 
-    def state_dot(self, state, action):
+    def state_dot(self, state, action, dev=False):
         '''
             Computes x_dot = f(x, u)
 
@@ -335,8 +345,11 @@ class AUVModel(ModelBase):
 
         poseDot = tf.matmul(self.get_jacobian(), speed)
         with tf.name_scope("acceleration") as acc:
+            if dev:
+                speedDot, Cv, Dv, g = self.acc(acc, speed, action, dev)
+                return self.get_state_dot(poseDot, speedDot), Cv, Dv, g
             speedDot = self.acc(acc, speed, action)
-        return self.get_state_dot(poseDot, speedDot)
+            return self.get_state_dot(poseDot, speedDot)
 
     def get_jacobian(self):
         '''
@@ -493,15 +506,15 @@ class AUVModel(ModelBase):
                 - $D(\nu)$ the damping matrix. Shape [k, 6, 6]
         '''
         with tf.name_scope(scope) as scope:
-            D = -1*self._linearDamping - tf.multiply(
+            D = - self._linearDamping - tf.multiply(
                                            tf.expand_dims(vel[:, 0],
                                                           axis=-1),
                                            self._linearDampingForwardSpeed)
-            a = tf.abs(tf.linalg.diag(tf.squeeze(vel, axis=-1)))
-            b = tf.expand_dims(self._quadDamping, axis=0)
+            a = tf.expand_dims(self._quadDamping, axis=0)
+            b = tf.abs(tf.linalg.diag(tf.squeeze(vel, axis=-1)))
             tmp = - tf.linalg.matmul(a, b)
-            
             D = tf.add(D, tmp)
+
             return D
 
     def coriolis_matrix(self, scope, vel=None):
@@ -541,7 +554,7 @@ class AUVModel(ModelBase):
 
             return C
 
-    def acc(self, scope, vel, genForce=None):
+    def acc(self, scope, vel, genForce=None, dev=False):
         with tf.name_scope(scope) as scope:
             tensGenForce = np.zeros(shape=(6, 1))
             if genForce is not None:
@@ -560,6 +573,8 @@ class AUVModel(ModelBase):
             #print(C)
             #print("*"*5, " g ", "*"*5)
             #print(g)
+            if dev:
+                return acc, Cv, Dv, g
             return acc
 
     def save_params(self, path, step):
