@@ -125,7 +125,7 @@ def push_to_tensor(tensor, x):
     return tf.concat([tensor[:, 1:], tmp], axis=1)
 
 
-def rollout(model, init, seq, h, horizon, dev=False):
+def rollout(model, init, seq, h, horizon, dev=False, debug=True):
     state = init
     pred = []
     if dev:

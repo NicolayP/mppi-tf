@@ -1,9 +1,10 @@
 from .models.nn_model import LaggedNNAUVSpeed, NNAUVModel, NNModel, NNAUVModelSpeed
 from .models.point_mass_model import PointMassModel
-from .models.auv_model import AUVModel
+from .models.auv_model import AUVModel, AUVModelDebug
 
 import numpy as np
 import tensorflow as tf
+
 
 def nn(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
     return NNModel(modelDict=modelDict,
@@ -14,6 +15,7 @@ def nn(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
                    name=name,
                    weightFile=paramFile)
 
+
 def auv_nn(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
     return NNAUVModel(modelDict=modelDict,
                       k=samples,
@@ -22,6 +24,7 @@ def auv_nn(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
                       mask=np.array(modelDict["mask"]),
                       weightFile=paramFile)
 
+
 def auv_nn_speed(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
     return NNAUVModelSpeed(modelDict=modelDict,
                            k=samples,
@@ -29,6 +32,7 @@ def auv_nn_speed(modelDict, samples, dt, state_dim, action_dim, name, paramFile=
                            actionDim=action_dim,
                            mask=np.array(modelDict["mask"]),
                            weightFile=paramFile)
+
 
 def auv_lagged_speed_torch(modelDict, samples, dt, state_dim, aciton_dim, name, limMax, limMin, paramFile=None):
     internal = tf.saved_model.load(modelDict['trainedFile']).signatures['serving_default']
@@ -42,6 +46,7 @@ def auv_lagged_speed_torch(modelDict, samples, dt, state_dim, aciton_dim, name, 
         velPred=internal
     )
 
+
 def pm(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
     return PointMassModel(modelDict=modelDict,
                           mass=modelDict["mass"],
@@ -52,8 +57,21 @@ def pm(modelDict, samples, dt, state_dim, action_dim, name, paramFile=None):
                           limMin=limMin,
                           name=name)
 
+
 def auv(modelDict, samples, dt, stateDim, actionDim, limMax, limMin, name, paramFile=None):
     return AUVModel(modelDict=modelDict,
+                    inertialFrameId=modelDict['frame_id'],
+                    actionDim=actionDim,
+                    limMax=limMax,
+                    limMin=limMin,
+                    name=name,
+                    k=samples,
+                    dt=dt,
+                    parameters=modelDict)
+
+
+def auv_debug(modelDict, samples, dt, stateDim, actionDim, limMax, limMin, name, paramFile=None):
+    return AUVModelDebug(modelDict=modelDict,
                     inertialFrameId=modelDict['frame_id'],
                     actionDim=actionDim,
                     limMax=limMax,
@@ -71,6 +89,7 @@ def get_model(model_dict, samples, dt, state_dim, action_dim,
         "point_mass": pm,
         "neural_net": nn,
         "auv": auv,
+        "auv_debug": auv_debug,
         "auv_nn": auv_nn,
         "auv_nn_speed": auv_nn_speed,
         "auv_nn_speed_torch": auv_lagged_speed_torch

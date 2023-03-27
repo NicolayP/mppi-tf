@@ -7,6 +7,7 @@ import numpy as np
 from .model_base import ModelBase
 from ..misc.utile import assert_shape, dtype, npdtype
 
+
 def skew_op(vec):
     S = np.zeros(shape=(3, 3))
 
@@ -78,13 +79,12 @@ def tf_skew_op_k(scope, batch):
         return S
 
 
+'''
+    AUV dynamical model based on the UUV_sim vehicle model
+    and implemented in tensorflow to be used with the MPPI
+    controller.
+'''
 class AUVModel(ModelBase):
-    '''
-        AUV dynamical model based on the UUV_sim vehicle model
-        and implemented in tensorflow to be used with the MPPI
-        controller.
-    '''
-
     def __init__(self, modelDict,
                  inertialFrameId='world',
                  actionDim=6,
@@ -112,7 +112,6 @@ class AUVModel(ModelBase):
                            inertialFrameId=inertialFrameId)
 
         assert inertialFrameId in ['world', 'world_ned']
-
         if "rk" in parameters:
             self._rk = parameters["rk"]
         else:
@@ -245,13 +244,14 @@ class AUVModel(ModelBase):
     def print_info(self):
         """Print the vehicle's parameters."""
         print("="*5, " Model Info ", "="*5)
-        #print('Body frame: {}'.format(self._bodyFrameId))
+        print('Body frame: {}'.format(self._bodyFrameId))
         print('Mass: {0:.3f} kg'.format(self._mass.numpy()))
-        #print('System inertia matrix:\n{}'.format(self._rbMass))
-        #print('Added-mass:\n{}'.format(self._addedMass))
-        #print('Inertial:\n{}'.format(self._inertial))
+        print('System inertia matrix:\n{}'.format(self._rbMass))
+        print('Added-mass:\n{}'.format(self._addedMass))
+        print('Inertial:\n{}'.format(self._inertial))
         print('Volume: {}'.format(self._volume))
         print('M:\n{}'.format(self._mTot))
+        print('M_inv:\n{}'.format(self._invMTot))
         print('Linear damping:\n{}'.format(self._linearDamping))
         print('Quad. damping:\n{}'.format(self._quadDamping))
         print('Center of gravity:\n{}'.format(self._cog))
@@ -291,6 +291,29 @@ class AUVModel(ModelBase):
             return step, Cv, Dv, g
         return self.step(scope, state, action, rk=self._rk)
 
+    def step_gt_vel(self, scope, state, vel):
+        '''
+            Performs integration given the ground truth velocity.
+
+            inputs:
+            -------
+                - scope: string, the tensorflow scope.
+                - state: tensor. The state of the vehicle. (pose, velocity)
+                    shape: [1, 13, 1]
+                - velocity: the next velocity expressed in body frame.
+                    shape: [1, 6, 1]
+        '''
+        with tf.name_scope(scope) as scope:
+            pose, speed = self.prepare_data(state)
+            rotBtoI, TBtoI = self.body2inertial_transform(pose)
+            poseDot = tf.matmul(self.get_jacobian(rotBtoI, TBtoI), speed)
+
+            next_pose = pose + poseDot*self._dt
+            next_speed = vel
+            next_state = tf.concat([next_pose, next_speed], axis=1)
+            next_state = self.normalize_quat(next_state)
+            return next_state
+
     def step(self, scope, state, action, rk=1, dev=False):
         # Forward and backward euler integration.
         if dev:
@@ -298,7 +321,8 @@ class AUVModel(ModelBase):
         with tf.name_scope(scope) as scope:
             if dev:
                 k1, Cv, Dv, g = self.state_dot(state, action, dev)
-            k1 = self.state_dot(state, action)
+            else:
+                k1 = self.state_dot(state, action)
             if rk == 1:
                 tmp = k1*self._dt
 
@@ -341,17 +365,17 @@ class AUVModel(ModelBase):
         '''
         # mostily used for rk integration methods.
         pose, speed = self.prepare_data(state)
-        self.body2inertial_transform(pose)
+        rotBtoI, TBtoIquat = self.body2inertial_transform(pose)
 
-        poseDot = tf.matmul(self.get_jacobian(), speed)
+        poseDot = tf.matmul(self.get_jacobian(rotBtoI, TBtoIquat), speed)
         with tf.name_scope("acceleration") as acc:
             if dev:
-                speedDot, Cv, Dv, g = self.acc(acc, speed, action, dev)
+                speedDot, Cv, Dv, g = self.acc(acc, speed, action, rotBtoI, TBtoIquat, dev)
                 return self.get_state_dot(poseDot, speedDot), Cv, Dv, g
-            speedDot = self.acc(acc, speed, action)
+            speedDot = self.acc(acc, speed, action, rotBtoI, TBtoIquat)
             return self.get_state_dot(poseDot, speedDot)
 
-    def get_jacobian(self):
+    def get_jacobian(self, rotBtoI, tBtoIquat):
         '''
         Returns J(nu) in $mathbb{R}^{7 cross 7}$
                      ---------------------------------------
@@ -362,9 +386,9 @@ class AUVModel(ModelBase):
         OPad3x3 = tf.zeros(shape=(self._k, 3, 3), dtype=dtype)
         OPad4x3 = tf.zeros(shape=(self._k, 4, 3), dtype=dtype)
 
-        jacR1 = tf.concat([self._rotBtoI, OPad3x3], axis=-1)
+        jacR1 = tf.concat([rotBtoI, OPad3x3], axis=-1)
 
-        jacR2 = tf.concat([OPad4x3, self._TBtoIquat], axis=-1)
+        jacR2 = tf.concat([OPad4x3, tBtoIquat], axis=-1)
         jac = tf.concat([jacR1, jacR2], axis=1)
 
         return jac
@@ -403,13 +427,15 @@ class AUVModel(ModelBase):
                                       axis=-1),
                             axis=1)
 
-        self._rotBtoI = tf.concat([r1, r2, r3], axis=1)
+        rotBtoI = tf.concat([r1, r2, r3], axis=1)
 
         rwt = tf.expand_dims(tf.concat([-x, -y, -z], axis=-1), axis=1)
         rxt = tf.expand_dims(tf.concat([w, -z, y], axis=-1), axis=1)
         ryt = tf.expand_dims(tf.concat([z, w, -x], axis=-1), axis=1)
         rzt = tf.expand_dims(tf.concat([-y, x, w], axis=-1), axis=1)
-        self._TBtoIquat = 0.5 * tf.concat([rxt, ryt, rzt, rwt], axis=1)
+        TBtoIquat = 0.5 * tf.concat([rxt, ryt, rzt, rwt], axis=1)
+
+        return rotBtoI, TBtoIquat
 
     def prepare_data(self, state):
         pose = state[:, 0:7]
@@ -461,7 +487,7 @@ class AUVModel(ModelBase):
         pose = tf.concat([pos, quat, vel], axis=1)
         return pose
 
-    def restoring_forces(self, scope):
+    def restoring_forces(self, scope, rotBtoI):
         with tf.name_scope(scope) as scope:
             cog = tf.expand_dims(self._cog, axis=0)
             cob = tf.expand_dims(self._cob, axis=0)
@@ -469,7 +495,7 @@ class AUVModel(ModelBase):
             fng = - self._mass*self._gravity*self._unitZ
             fnb = self._volume*self._density*self._gravity*self._unitZ
 
-            rotItoB = tf.transpose(self._rotBtoI, perm=[0, 2, 1])
+            rotItoB = tf.transpose(rotBtoI, perm=[0, 2, 1])
 
             fbg = tf.matmul(rotItoB, fng)
             fbb = tf.matmul(rotItoB, fnb)
@@ -550,7 +576,7 @@ class AUVModel(ModelBase):
 
             return C
 
-    def acc(self, scope, vel, genForce=None, dev=False):
+    def acc(self, scope, vel, genForce=None, rotBtoI=None, tBtoIqat=None, dev=False):
         with tf.name_scope(scope) as scope:
             tensGenForce = np.zeros(shape=(6, 1))
             if genForce is not None:
@@ -560,7 +586,7 @@ class AUVModel(ModelBase):
             Dv = tf.matmul(D, vel)
             C = self.coriolis_matrix("Coriolis", vel)
             Cv = tf.matmul(C, vel)
-            g = self.restoring_forces("Restoring")
+            g = self.restoring_forces("Restoring", rotBtoI)
             rhs = tensGenForce - Cv - Dv - g
             lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
             acc = tf.matmul(lhs, rhs)
@@ -572,6 +598,20 @@ class AUVModel(ModelBase):
             if dev:
                 return acc, Cv, Dv, g
             return acc
+
+    def get_forces(self, pose, vel, acc):
+        rotBtoI, tBtoIquat = self.body2inertial_transform(pose)
+        C = self.coriolis_matrix("Coriolis", vel)
+        Cv = tf.matmul(C, vel)
+
+        D = self.damping_matrix("Damping", vel)
+        Dv = tf.matmul(D, vel)
+
+        g = self.restoring_forces("Restoring", rotBtoI)
+        Ma = tf.matmul(self._mTot, acc)
+        force = Ma + Cv + Dv + g
+
+        return C, Cv, D, Dv, g, force
 
     def save_params(self, path, step):
         pass
@@ -586,3 +626,272 @@ class AUVModel(ModelBase):
             [0.], [0.], [0.],
             [0.], [0.], [0.]
         ])
+
+    def compare_gt_pred(self, state, gt_state, action=None, gt_acc=None):
+        pose_hat, vel_hat = self.prepare_data(state)
+        rotBtoI_hat, tBtoIquat_hat = self.body2inertial_transform(pose_hat)
+        C_hat = self.coriolis_matrix("Coriolis", vel_hat)
+        D_hat = self.damping_matrix("Damping", vel_hat)
+        g_hat = self.restoring_forces("Restoring", rotBtoI_hat)
+        Cv_hat = tf.matmul(C_hat, vel_hat)
+        Dv_hat = tf.matmul(D_hat, vel_hat)
+
+        pose, vel = self.prepare_data(gt_state)
+        rotBtoI, tBtoIquat = self.body2inertial_transform(pose)
+        C = self.coriolis_matrix("Coriolis", vel)
+        D = self.damping_matrix("Damping", vel)
+        g = self.restoring_forces("Restoring", rotBtoI)
+        Cv = tf.matmul(C, vel)
+        Dv = tf.matmul(D, vel)
+        
+        print("C hat:        ", C_hat)
+        print("C:            ", C)
+        print("C diff:       ", C_hat - C)
+
+        print("Cv hat:       ", Cv_hat)
+        print("Cv:           ", Cv)
+        print("Cv diff:      ", Cv_hat - Cv)
+
+        print("D hat:        ", D_hat)
+        print("D:            ", D)
+        print("D diff:       ", D_hat - D)
+
+        print("Dv hat:       ", Dv_hat)
+        print("Dv:           ", Dv)
+        print("Dv diff:      ", Dv_hat - Dv)
+
+        print("g hat:        ", g_hat)
+        print("g:            ", g)
+        print("g diff:       ", g_hat - g)
+        print("Sum hat:      ", Cv_hat + Dv_hat + g_hat)
+        print("Sum:          ", Cv + Dv + g)
+        if action is not None:
+            acc_hat = tf.matmul(self._invMTot, action - Cv_hat - Dv_hat - g_hat)
+            acc = tf.matmul(self._invMTot, action - Cv - Dv - g)
+            print("Ma_hat:       ", action - (Cv_hat + Dv_hat + g_hat))
+            print("Ma:           ", action - (Cv + Dv + g))
+            print("Acc_hat:      ", acc_hat)
+            print("Acc:          ", acc)
+
+            if gt_acc is not None:
+                print("Diff Acc_hat: ", gt_acc - acc_hat)
+                print("Diff Acc:     ", gt_acc - acc)
+
+
+class AUVModelDebug(AUVModel):
+    def __init__(self, modelDict,
+                 inertialFrameId='world',
+                 actionDim=6,
+                 limMax=tf.ones(shape=(1,), dtype=tf.float64),
+                 limMin=-tf.ones(shape=(1,), dtype=tf.float64),
+                 name="AUV",
+                 k=tf.Variable(1),
+                 dt=0.1,
+                 rk=2, # Deprecated
+                 parameters=dict()):
+
+        AUVModel.__init__(self, modelDict,
+                        actionDim=actionDim,
+                        limMax=limMax,
+                        limMin=limMin,
+                        name=name,
+                        k=k,
+                        dt=dt,
+                        inertialFrameId=inertialFrameId,
+                        parameters=parameters)
+        
+    def coriolis_matrix(self, scope, vel=None, dev=False):
+        with tf.name_scope(scope) as scope:
+            OPad = tf.zeros(shape=(self._k, 3, 3), dtype=dtype)
+
+            skewCoriAdded = tf.squeeze(tf.matmul(self._addedMass[0:3, 0:3],
+                                            vel[:, 0:3]) +
+                                tf.matmul(self._addedMass[0:3, 3:6],
+                                            vel[:, 3:6]),
+                                axis=-1)
+            S12_added = -tf_skew_op_k("Skew_coriolis_added", skewCoriAdded)
+
+            skewCoriRigid = tf.squeeze(tf.matmul(self._rbMass[0:3, 0:3],
+                                            vel[:, 0:3]) +
+                                tf.matmul(self._rbMass[0:3, 3:6],
+                                            vel[:, 3:6]),
+                                axis=-1)
+            S12_rigid = -tf_skew_op_k("Skew_coriolis_added", skewCoriRigid)
+
+            skewCoriDiagAdded = tf.squeeze(tf.matmul(self._addedMass[3:6, 0:3],
+                                                vel[:, 0:3]) +
+                                    tf.matmul(self._addedMass[3:6, 3:6],
+                                                vel[:, 3:6]),
+                                    axis=-1)
+            S22_added = -tf_skew_op_k("Skew_coriolis_diag", skewCoriDiagAdded)
+
+            skewCoriDiagRigid = tf.squeeze(tf.matmul(self._rbMass[3:6, 0:3],
+                                                vel[:, 0:3]) +
+                                    tf.matmul(self._rbMass[3:6, 3:6],
+                                                vel[:, 3:6]),
+                                    axis=-1)
+            S22_rigid = -tf_skew_op_k("Skew_coriolis_diag", skewCoriDiagRigid)
+
+            r1_added = tf.concat([OPad, S12_added], axis=-1)
+            r2_added = tf.concat([S12_added, S22_added], axis=-1)
+            C_added = tf.concat([r1_added, r2_added], axis=1)
+
+            r1_rigid = tf.concat([OPad, S12_rigid], axis=-1)
+            r2_rigid = tf.concat([S12_rigid, S22_rigid], axis=-1)
+            C_rigid = tf.concat([r1_rigid, r2_rigid], axis=1)
+
+            C = C_added + C_rigid
+
+            if dev:
+                return C, C_added, C_rigid
+
+            return C
+
+    def acc(self, scope, vel, genForce=None, rotBtoI=None, tBtoIqat=None, dev=False, debug=False):
+        with tf.name_scope(scope) as scope:
+            tensGenForce = np.zeros(shape=(6, 1))
+            if genForce is not None:
+                tensGenForce = genForce
+
+            D = self.damping_matrix("Damping", vel)
+            Dv = tf.matmul(D, vel)
+            if dev:
+                C, C_added, C_rigid = self.coriolis_matrix("Coriolis", vel, dev=dev)
+                Cv_added = tf.matmul(C_added, vel)
+                Cv_rigid = tf.matmul(C_rigid, vel)
+            else:
+                C = self.coriolis_matrix("Coriolis", vel, dev=dev)
+            Cv = tf.matmul(C, vel)
+            g = self.restoring_forces("Restoring", rotBtoI)
+            rhs = tensGenForce - Cv - Dv - g
+            lhs = tf.broadcast_to(self._invMTot, [self._k, 6, 6])
+            acc = tf.matmul(lhs, rhs)
+
+            added = tf.matmul(self._addedMass, acc)
+            if debug:
+                print("-"*8, "Debug model step", "-"*8)
+                print("| ", "vel:       ", vel)
+                print("| ", "acc:       ", acc)
+                print("| ", "added:     ", added)
+                print("| ", "Cv:        ", Cv)
+                print("| ", "Cv_added:  ", Cv_added)
+                print("| ", "Cv_rigid:  ", Cv_rigid)
+                print("| ", "Dv:        ", Dv)
+                print("| ", "restoring: ", g)
+                print("-"*32)
+                input()
+
+            if dev:
+                return acc, added, Cv, Cv_added, Cv_rigid, Dv, g
+            return acc
+
+    def step(self, scope, state, action, rk=1, dev=False):
+        # Forward and backward euler integration.
+        if dev:
+            rk =1
+        with tf.name_scope(scope) as scope:
+            if dev:
+                k1, Cv, Dv, g = self.state_dot(state, action, dev)
+            else:
+                k1 = self.state_dot(state, action)
+            if rk == 1:
+                tmp = k1*self._dt
+
+            elif rk == 2:
+                k2 = self.state_dot(tf.add(state, self._dt*k1), action)
+                tmp = self._dt/2. * tf.add(k1, k2)
+
+            elif rk == 4:
+                k2 = self.state_dot(tf.add(state, self._dt*k1/2.), action)
+                k3 = self.state_dot(tf.add(state, self._dt*k2/2.), action)
+                k4 = self.state_dot(tf.add(state, self._dt*k3), action)
+                tmp = 1./6. * tf.add(tf.add(k1, 2.*k2),
+                                     tf.add(2.*k3, k4*self._dt))*self._dt
+
+            nextState = tf.add(state, tmp)
+            nextState = self.normalize_quat(nextState)
+
+            if dev:
+                return nextState, Cv, Dv, g
+
+            return nextState
+
+    def state_dot(self, state, action, dev=False):
+        '''
+            Computes x_dot = f(x, u)
+
+                    nextState = tf.add(state, tmp)
+            - input:
+            --------
+                - state: The state of the system
+                    tf.Tensor shape [k, 13, 1].
+                - action: The action applied to the system.
+                    tf.Tensor shape [k, 6, 1].
+            
+            - output:
+            ---------
+                - state_dot: The first order derivate of the state
+                after applying action to state.
+                    tf.Tensor shape [k, 13, 1].
+        '''
+        # mostily used for rk integration methods.
+        pose, speed = self.prepare_data(state)
+        rotBtoI, TBtoIquat = self.body2inertial_transform(pose)
+
+        poseDot = tf.matmul(self.get_jacobian(rotBtoI, TBtoIquat), speed)
+        with tf.name_scope("acceleration") as acc:
+            if dev:
+                speedDot, added, Cv, Cv_added, Cv_rigid, Dv, g = self.acc(acc, speed, action, rotBtoI, TBtoIquat, dev)
+                return self.get_state_dot(poseDot, speedDot), Cv, Dv, g
+            speedDot = self.acc(acc, speed, action, rotBtoI, TBtoIquat)
+            return self.get_state_dot(poseDot, speedDot)
+
+    def compare_gt_pred(self, state, gt_state, action=None, gt_acc=None):
+        pose_hat, vel_hat = self.prepare_data(state)
+        rotBtoI_hat, tBtoIquat_hat = self.body2inertial_transform(pose_hat)
+        C_hat, C_hat_added, C_hat_rigid = self.coriolis_matrix("Coriolis", vel_hat, dev=True)
+        D_hat = self.damping_matrix("Damping", vel_hat)
+        g_hat = self.restoring_forces("Restoring", rotBtoI_hat)
+        Cv_hat = tf.matmul(C_hat, vel_hat)
+        Dv_hat = tf.matmul(D_hat, vel_hat)
+
+        pose, vel = self.prepare_data(gt_state)
+        rotBtoI, tBtoIquat = self.body2inertial_transform(pose)
+        C, C_added, C_rb = self.coriolis_matrix("Coriolis", vel, dev=True)
+        D = self.damping_matrix("Damping", vel)
+        g = self.restoring_forces("Restoring", rotBtoI)
+        Cv = tf.matmul(C, vel)
+        Dv = tf.matmul(D, vel)
+        
+        print("C hat:        ", C_hat)
+        print("C:            ", C)
+        print("C diff:       ", C_hat - C)
+
+        print("Cv hat:       ", Cv_hat)
+        print("Cv:           ", Cv)
+        print("Cv diff:      ", Cv_hat - Cv)
+
+        print("D hat:        ", D_hat)
+        print("D:            ", D)
+        print("D diff:       ", D_hat - D)
+
+        print("Dv hat:       ", Dv_hat)
+        print("Dv:           ", Dv)
+        print("Dv diff:      ", Dv_hat - Dv)
+
+        print("g hat:        ", g_hat)
+        print("g:            ", g)
+        print("g diff:       ", g_hat - g)
+        print("Sum hat:      ", Cv_hat + Dv_hat + g_hat)
+        print("Sum:          ", Cv + Dv + g)
+        if action is not None:
+            acc_hat = tf.matmul(self._invMTot, action - Cv_hat - Dv_hat - g_hat)
+            acc = tf.matmul(self._invMTot, action - Cv - Dv - g)
+            print("Ma_hat:       ", action - (Cv_hat + Dv_hat + g_hat))
+            print("Ma:           ", action - (Cv + Dv + g))
+            print("Acc_hat:      ", acc_hat)
+            print("Acc:          ", acc)
+
+            if gt_acc is not None:
+                print("Diff Acc_hat: ", gt_acc - acc_hat)
+                print("Diff Acc:     ", gt_acc - acc)
