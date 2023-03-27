@@ -1,6 +1,7 @@
 type: "auv"
-mass: 26.75
 model: bluerov2
+# --------- Rigid body ---------
+mass: 26.75
 inertial:
   ixx: 0.7301
   iyy: 0.7705
@@ -11,12 +12,13 @@ inertial:
 cog: [0, 0, 0]
 # CoB represented wrt ENU convention
 cob: [0, 0, 0.07]
-volume: 0.02675
+volume: 0.039234364
 length: 0.457
 height: 0.254
 width: 0.338
 base_link: base_link
 frame_id: 'world'
+# --------- Hydro ---------
 Ma:
 - [40, 0., 0., 0., 0., 0.]
 - [0., 40, 0., 0., 0., 0.]
@@ -38,6 +40,8 @@ quad_damping: [-151.8258922509379,
                -5.53922635e-1,
                -0.04076963]
 density: 1000.0
+
+# --------- intgration ---------
 rk: 2
 limMin: [-129.67232098,
          -129.67232098,
@@ -52,7 +56,7 @@ limMax: [129.67232098,
          40.3445581,
          22.0061226,
          31.17534035]
-
+# --------- representation ---------
 rot: "quat"
 steps: 1
 history: 1

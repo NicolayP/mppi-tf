@@ -1,0 +1,31 @@
+type: "auv"
+mass: 116.0
+model: falconVaarst
+inertial:
+  ixx: 9.30079
+  iyy: 14.91636
+  izz: 13.11394
+  ixy: 0.0
+  ixz: 0.0
+  iyz: 0.0
+cog: [0, 0, 0]
+# CoB represented wrt ENU convention
+cob: [0, 0, 0]
+volume: 0.116
+length: 0.457
+height: 0.254
+width: 0.338
+base_link: base_link
+frame_id: 'world'
+Ma:
+- [167.6, 0., 0., 0., 0., 0.]
+- [0., 477.2, 0., 0., 0., 0.]
+- [0., 0., 383.0, 0., 0., 0.]
+- [0., -22.8, 0., 11.59921, 0., 0.]
+- [-15.3, 0., 0., 0., 15.48364, 0.]
+- [0., 0., 0., 0., 0., 15.786059]
+# In the model, the damping coefficients are pre-multiplied by -1
+linear_damping: [-26.9, -35.8, -6.19, -3., -4.9, -3.5]
+quad_damping: [-241.3, -503.8, -119.1, -101.6, -59.9, -76.9]
+density: 1000.0
+rk: 2
