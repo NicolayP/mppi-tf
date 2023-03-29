@@ -356,9 +356,9 @@ class ControllerBase(tf.Module):
             #update = self.clip_act("clipping", rawUpdate)
             update = rawUpdate
 
-        self._observer.write_control("weights", weights)
-        self._observer.write_control("nabla", nabla)
+        self._observer.write_control("eta", nabla)
         self._observer.write_control("arg", arg)
+        self._observer.write_control("weights", weights)
         self._observer.write_control("weighted_noise", weighted_noises)
         self._observer.write_control("update", update)
 

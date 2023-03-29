@@ -6,6 +6,7 @@ import os
 from shutil import copyfile
 from tensorflow.python.ops import summary_ops_v2
 import yaml
+import math as m
 
 from ..misc.utile import assert_shape, dtype
 
@@ -35,9 +36,17 @@ class ObserverBase(tf.Module):
         self._poseId = [0, 1, 2, 3, 4, 5]
         self._velId = [6, 7, 8, 9, 10, 11]
         self._tau = tau
+        self._deg = True
 
-        self._aName = ["Fx", "Fy", "Fz", "Tx", "Ty", "Tz"]
-        self._sName = ["x", "y", "z", "roll", "pitch", "yaw", "u", "v", "w", "p", "q", "r"]
+        self._aName = ["Fx (N)", "Fy (N)", "Fz (N)", "Tx (Nm)", "Ty (Nm)", "Tz (Nm)"]
+        pos = "position/"
+        ori = "orientation/"
+        lin = "linear/"
+        ang = "angular/"
+        self._sName = ["{pos}x (m)", "{pos}y (m)", "{pos}z (m)", 
+                       "{ori}roll (deg)", "{ori} pitch (deg)", "{ori} yaw (deg)",
+                       "{lin}u (m/s)", "{lin}v (m/s)", "{lin}w (m/s)",
+                       "{ang}p (deg/s)", "{ang}q (deg/s)", "{ang}r (deg/s)"]
 
 
         if log or debug:
@@ -203,14 +212,14 @@ class ObserverBase(tf.Module):
 
         with self._writer.as_default():
             if name == "predicted/next_state":
-                tensor_euler = self.to_euler(tensor)
+                tensor_euler = self.to_euler(tensor, self._deg)
                 for i, n in enumerate(self._sName):
                     tf.summary.scalar(f"Predicted/Next_state_{n}",
                                     tf.squeeze(tensor_euler[i, :]),
                                     step=self.step)
 
             elif name == "predicted/state":
-                tensor_euler = self.to_euler(tensor)
+                tensor_euler = self.to_euler(tensor, self._deg)
                 for i, n in enumerate(self._sName):
                     tf.summary.scalar(f"Predicted/State_{n}",
                                         tf.squeeze(tensor_euler[i, :]),
@@ -232,7 +241,7 @@ class ObserverBase(tf.Module):
                                     tf.squeeze(tensor),
                                     step=self.step)
 
-    def to_euler(self, state):
+    def to_euler(self, state, deg):
         raise NotImplementedError
 
 
@@ -278,9 +287,9 @@ class ObserverLagged(ObserverBase):
             if name == "update":
                 for i, n in enumerate(self._aName):
                     mean = tf.math.reduce_mean(tensor[:, i])
-                    tf.summary.scalar(f"Controller/update_mean/{n}",
+                    tf.summary.scalar(f"update_mean/{n}",
                         mean, step=self.step)
-                    tf.summary.histogram(f"Controller/update/{n}",
+                    tf.summary.histogram(f"update/{n}",
                         tensor[:, i], step=self.step)
 
             elif name == "actionSeq":
@@ -294,7 +303,7 @@ class ObserverLagged(ObserverBase):
             elif name == "next":
                 action = tensor[0]
                 for i, n in enumerate(self._aName):
-                    tf.summary.scalar(f"input/{n}",
+                    tf.summary.scalar(f"Input/{n}",
                                     action[i, 0],
                                     step=self.step)
 
@@ -333,44 +342,47 @@ class ObserverLagged(ObserverBase):
                                 step=self.step)
 
             elif name == "weights":
-                tf.summary.histogram("Controller/Weights",
+                tf.summary.histogram("Weights",
                                     tensor,
                                     step=self.step)
 
-            elif name == "nabla":
-                tf.summary.scalar("Controller/Nabla_percent",
-                                tf.squeeze(tensor/tf.cast(self._k,
+            elif name == "eta":
+                tf.summary.scalar("eta_percent",
+                                100.*tf.squeeze(tensor/tf.cast(self._k,
                                                             dtype=dtype)),
                                 step=self.step)
 
             elif name == "arg":
-                tf.summary.histogram("Controller/exponenetial_argument",
+                tf.summary.histogram("exponenetial_arg",
                                 tensor,
                                 step=self.step)
 
             elif name == "weighted_noise":
-                tf.summary.histogram("Controller/Weighted_noises",
-                                    tensor,
-                                    step=self.step)
+                for i, n in enumerate(self._aName):
+                    mean = tf.math.reduce_mean(tensor[:, i])
+                    tf.summary.scalar(f"Weighted_noises_mean/{n}",
+                        mean, step=self.step)
+                    tf.summary.histogram(f"Weighted_noises/{n}",
+                        tensor[:, i], step=self.step)
 
             elif name == "state":
-                tensor_euler = self.to_euler(tensor[0])
+                tensor_euler = self.to_euler(tensor[0], self._deg)
 
                 for i in self._poseId:
                     n = self._sName[i]
-                    tf.summary.scalar(f"State/pose_{n}",
+                    tf.summary.scalar(f"State/pose/{n}",
                                       tf.squeeze(tensor_euler[-1, i, :]),
                                       step=self.step)
                 for i in self._velId:
                     n = self._sName[i]
-                    tf.summary.scalar(f"State/vel_{n}",
+                    tf.summary.scalar(f"State/vel/{n}",
                                       tf.squeeze(tensor_euler[-1, i, :]),
                                       step=self.step)
             
             elif name == "goal":
                 pass
 
-    def to_euler(self, state):
+    def to_euler(self, state, deg=False):
         raise NotImplemented
 
 
@@ -394,13 +406,16 @@ class ObserverLaggedQuat(ObserverLagged):
             sDim=sDim,
             modelName=modelName)
 
-    def to_euler(self, state):
+    def to_euler(self, state, deg=False):
         position = state[..., 0:3, :]
         quat = state[..., 3:7, :]
         vel = state[..., 7:, :]
 
+        # Not told in the documentation but mostl likely radients.
         euler = tf.expand_dims(
             tfg.geometry.transformation.euler.from_quaternion(quat[..., 0]),
             axis=-1
         )
+        if deg:
+            euler = (180./m.pi)*euler
         return tf.concat([position, euler, vel], axis=-2)

@@ -116,6 +116,8 @@ class LaggedModelController(ControllerBase):
                 ) # shape [k, history-1, aDim, 1]
 
             cost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
+            sCost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
+            aCost = tf.zeros(shape=(k, 1, 1), dtype=dtype)
             trajs = laggedState[:, -1:, ...]
 
         with tf.name_scope("Rollout") as r:
@@ -135,17 +137,32 @@ class LaggedModelController(ControllerBase):
                     with tf.name_scope(f"Cost_{i}") as c:
                         tmp = self._cost.build_step_cost_graph(c, nextState, action, noise)
                         cost = self._cost.add_cost(c, cost, tmp)
+
+                        # Logging purpuses only.
+                        sTmp = self._cost.get_state_cost()
+                        aTmp = self._cost.get_action_cost()
+                        sCost = self._cost.add_cost(c, sCost, sTmp)
+                        aCost = self._cost.add_cost(c, aCost, aTmp)
+
                 with tf.name_scope("State_update"):
                     laggedState = push_to_tensor(laggedState, nextState)
                     if laggedAction is not None:
                         laggedAction = push_to_tensor(laggedAction, toApply[:, -1])
+
 
         with tf.name_scope("Terminal_cost") as tc:
             fCost = self._cost.build_final_step_cost_graph(tc, nextState)
         with tf.name_scope("Rollout_cost") as rc:
             samplesCost = self._cost.add_cost(rc, fCost, cost)
 
+            # logging purpuses only.
+            statesCost = self._cost.add_cost(rc, fCost, sCost)
+        # logging purpuses only.
+        actionsCost = aCost
+
         self._observer.write_control("samples_cost", samplesCost)
+        self._observer.write_control("actions_cost", actionsCost)
+        self._observer.write_control("states_cost", statesCost)
         return samplesCost, trajs
 
     def prepare_to_apply(self, scope, action, noise, laggedAction):

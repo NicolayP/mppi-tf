@@ -74,15 +74,21 @@ class CostBase(tf.Module):
                 should be [k/1, {}, 1], got shape {}".format(self.sig_shape[0], noise.shape))
 
         with tf.name_scope("step_cost") as s:
-            stateCost = self.state_cost(s, state)
-            actionCost = self.action_cost(s, action, noise)
+            self._stateCost = self.state_cost(s, state)
+            self._actionCost = self.action_cost(s, action, noise)
             collisionCost = self.collision_cost(s, state)
 
-            stepCost = tf.add(stateCost, actionCost,
+            stepCost = tf.add(self._stateCost, self._actionCost,
                                name="add")
             stepCost = tf.add(stepCost, collisionCost, name="add_collision")
 
         return stepCost
+
+    def get_state_cost(self):
+        return self._stateCost
+
+    def get_action_cost(self):
+        return self._actionCost
 
     def add_cost(self, scope, currentCost, newCost):
         '''
