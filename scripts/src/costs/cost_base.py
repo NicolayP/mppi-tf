@@ -4,28 +4,28 @@ import numpy as np
 
 # TODO: compute all constants without tensorflow. Out of the graph
 # computation.
+'''
+    Cost base class for the mppi controller.
+    This is an abstract class and should be heritated by every
+    specific cost.
+'''
 class CostBase(tf.Module):
     '''
-        Cost base class for the mppi controller.
-        This is an abstract class and should be heritated by every
-        specific cost.
+        Abstract class for the cost function.
+        - input:
+        --------
+            - lam (lambda) the inverse temperature.
+            - gamma: decoupling parameter between action and noise.
+            - upsilon: covariance augmentation for noise generation.
+            - sigma: the noise covariance matrix. shape [aDim, aDim]
+            - TODO: add diag arg to feed sigma as the diag element if
+            prefered.
+
+        - output:
+        ---------
+            the new cost object.
     '''
     def __init__(self, lam, gamma, upsilon, sigma):
-        '''
-            Abstract class for the cost function.
-            - input:
-            --------
-                - lam (lambda) the inverse temperature.
-                - gamma: decoupling parameter between action and noise.
-                - upsilon: covariance augmentation for noise generation.
-                - sigma: the noise covariance matrix. shape [aDim, aDim]
-                - TODO: add diag arg to feed sigma as the diag element if
-                prefered.
-
-            - output:
-            ---------
-                the new cost object.
-        '''
         self._observer = None
         self._obstacles = []
         self._mask = tf.convert_to_tensor(np.array([[False]]), dtype=tf.bool)
@@ -45,26 +45,26 @@ class CostBase(tf.Module):
                                      needs to be a semi definit positive.")
             self.invSig = tf.linalg.inv(s)
 
-    def build_step_cost_graph(self, scope, state, action, noise):
-        '''
-            Computes the step cost of a sample.
-            - input:
-            --------
-                - scope: The tensorflow scope.
-                - state: the current state of the system.
-                    shape: [k/1, sDim, 1]
-                - action: the action applied to reach the current state.
-                    shape: [aDim, 1]
-                - noise: the noise applied to the sample.
-                    shape: [k/1, aDim, 1]
+    '''
+        Computes the step cost of a sample.
+        - input:
+        --------
+            - scope: The tensorflow scope.
+            - state: the current state of the system.
+                shape: [k/1, sDim, 1]
+            - action: the action applied to reach the current state.
+                shape: [aDim, 1]
+            - noise: the noise applied to the sample.
+                shape: [k/1, aDim, 1]
 
-            - output:
-            ---------
-                - dictionnary with entries:
-                    "cost" : the actual step cost.
-                    "state_cost": the state related cost $$ q(state) $$
-                    "action_cost": the action related cost.
-        '''
+        - output:
+        ---------
+            - dictionnary with entries:
+                "cost" : the actual step cost.
+                "state_cost": the state related cost $$ q(state) $$
+                "action_cost": the action related cost.
+    '''
+    def build_step_cost_graph(self, scope, state, action, noise):
         if not assert_shape(action, (self.sig_shape[0], 1)):
             raise AssertionError("Bad shape for the action tensor,\
                     should be [{}, 1], got shape {}".format(action.shape))
@@ -90,61 +90,61 @@ class CostBase(tf.Module):
     def get_action_cost(self):
         return self._actionCost
 
+    '''
+        Utility funtion to perform += on a dictionnary.
+        If similary keys are found in the two dictionnaries
+        the items are added, else: the items stayes unchanged
+
+        - input:
+        --------
+            - input_dict: the first dict.
+            - current_dict: the current state of the dict.
+
+        - output:
+        ---------
+            - current_dict += input_dict.
+
+    '''
     def add_cost(self, scope, currentCost, newCost):
-        '''
-            Utility funtion to perform += on a dictionnary. 
-            If similary keys are found in the two dictionnaries
-            the items are added, else: the items stayes unchanged
-
-            - input:
-            --------
-                - input_dict: the first dict.
-                - current_dict: the current state of the dict.
-
-            - output:
-            ---------
-                - current_dict += input_dict.
-
-        '''
         cost = tf.add(currentCost, newCost, name="tmp_cost")
         return cost
 
+    '''
+        terminal cost function
+
+        - input:
+        --------
+            - state: the current state of the system.
+                shape: [k/1, sDim, 1]
+
+        - output:
+        ---------
+            - $$psi(state)$$
+
+    '''
     def build_final_step_cost_graph(self, scope, state):
-        '''
-            terminal cost function
-
-            - input:
-            --------
-                - state: the current state of the system.
-                    shape: [k/1, sDim, 1]
-
-            - output:
-            ---------
-                - $$psi(state)$$
-
-        '''
         return self.state_cost(scope, state)
 
+    '''
+        action related cost part.
+
+        - input:
+        --------
+            - action: the action applied to reach the current state.
+                shape: [k/1, aDim, 1]
+            - noise: the noise applied to the sample.
+                shape: [k/1, aDim, 1]
+
+        - output:
+        ---------
+            - Dictionnary with entries:
+                "a_cost": pure action related cost
+                "mix_cost": cost mixing noise and action.
+                "n_cost": the noise related cost.
+                "control_cost": $ \gamma [a_cost + 2mix_cost] $
+                "action_cost": the overall action cost.
+    '''
     def action_cost(self, scope, action, noise):
-        '''
-            action related cost part.
-
-            - input: 
-            --------
-                - action: the action applied to reach the current state.
-                    shape: [k/1, aDim, 1]
-                - noise: the noise applied to the sample.
-                    shape: [k/1, aDim, 1]
-
-            - output:
-            ---------
-                - Dictionnary with entries:
-                    "a_cost": pure action related cost
-                    "mix_cost": cost mixing noise and action.
-                    "n_cost": the noise related cost.
-                    "control_cost": $ \gamma [a_cost + 2mix_cost] $
-                    "action_cost": the overall action cost.
-        '''
         rhsNcost = tf.linalg.matmul(self.invSig, noise,
                                       name="rhs_noise")
 
@@ -182,36 +182,37 @@ class CostBase(tf.Module):
 
         return actionCost
 
-    def state_cost(self, scope, state):
-        '''
-            Computes a step state cost. $q(x)$
+    '''
+        Computes a step state cost. $q(x)$
 
-            - input:
-            --------
-                - scope. tensorflow scope name.
-                - state. the current state tensor. Shape [k, sDim, 1]
-            
-            - output:
-            ---------
-                - the cost for the current state.
-        '''
+        - input:
+        --------
+            - scope. tensorflow scope name.
+            - state. the current state tensor. Shape [k, sDim, 1]
+
+        - output:
+        ---------
+            - the cost for the current state.
+    '''
+    def state_cost(self, scope, state):
         raise NotImplementedError
 
+    '''
+        Detects if there is a collision between the state vector
+        and the list of obstacles.
+
+        - input:
+        --------
+            - state: the current state of the system.
+                shape: [k/1, sDim, 1]
+
+        - output:
+        ---------
+            - $$psi(state)$$
+
+    '''
     def collision_cost(self, scope, state):
-        '''
-            Detects if there is a collision between the state vector
-            and the list of obstacles.
 
-            - input:
-            --------
-                - state: the current state of the system.
-                    shape: [k/1, sDim, 1]
-
-            - output:
-            ---------
-                - $$psi(state)$$
-
-        '''
         k = tf.shape(state)[0]
         mask = tf.broadcast_to(self._mask, (k, 1, 1))
         zeros_vec = tf.broadcast_to(self._zero_vec, (k, 1, 1))
@@ -227,24 +228,24 @@ class CostBase(tf.Module):
     def get_obstacles(self):
         return self._obstacles
 
+    '''
+        generates a graph representing the goal.
+    '''
     def draw_goal(self):
-        '''
-            generates a graph representing the goal.
-        '''
         raise NotImplementedError
 
-    def dist(self, state):
-        '''
-            computes a distance metric from the state to the goal.
-            
-            - input:
-            --------
-                - state: The state tensor. Shape [sDim, 1]
+    '''
+        computes a distance metric from the state to the goal.
 
-            - output:
-            ---------
-                - the "distance" from the state to the goal.
-        '''
+        - input:
+        --------
+            - state: The state tensor. Shape [sDim, 1]
+
+        - output:
+        ---------
+            - the "distance" from the state to the goal.
+    '''
+    def dist(self, state):
         raise NotImplementedError
 
     def set_observer(self, observer):
@@ -256,65 +257,65 @@ class PrimitiveObstacles(tf.Module):
         self.type = type
         pass
 
-    def collide(self, state):
-        '''
-            Checks if "state" is within the obstacles. Returns
-            a bool vector whose entry is True if there is a collision
-            between state t and the obstacle. False otherwise
+    '''
+        Checks if "state" is within the obstacles. Returns
+        a bool vector whose entry is True if there is a collision
+        between state t and the obstacle. False otherwise
 
-            inputs:
-            -------
-                - state, tf.tensor, shape = [k, sDim, 1]
-            
-            outputs:
-            --------
-                - collision mask, tf.tensor. shape = [k, 1, 1]
-        '''
+        inputs:
+        -------
+            - state, tf.tensor, shape = [k, sDim, 1]
+
+        outputs:
+        --------
+            - collision mask, tf.tensor. shape = [k, 1, 1]
+    '''
+    def collide(self, state):
         raise NotImplementedError
 
+    '''
+        Returns the pose of the obstacle.
+
+        outputs:
+        --------
+            - p, tf.tensor, shape = [3, 1]
+            - q, tf.tensor, shape = [4, 1]
+    '''
     def get_pose(self):
-        '''
-            Returns the pose of the obstacle.
-            
-            outputs:
-            --------
-                - p, tf.tensor, shape = [3, 1]
-                - q, tf.tensor, shape = [4, 1]
-        '''
         raise NotImplementedError
 
 
 class CylinderObstacle(PrimitiveObstacles):
+    '''
+        Constructor for cylinder object.
+        inputs:
+        -------
+            - p1: tensor, bottom point of the cylinder.
+                shape = [3, 1]
+            - p2: tensor, top of the cylinder.
+                shape = [3, 1]
+            - radius: cylindre radius in meters.
+    '''
     def __init__(self, p1, p2, radius):
-        '''
-            Constructor for cylinder object.
-            inputs:
-            ------- 
-                - p1: tensor, bottom point of the cylinder.
-                    shape = [3, 1]
-                - p2: tensor, top of the cylinder.
-                    shape = [3, 1]
-                - radius: cylindre radius in meters.
-        '''
         super(CylinderObstacle, self).__init__("cylinder")
         self.p1, self.p2 = tf.convert_to_tensor(p1, dtype=dtype), tf.convert_to_tensor(p2, dtype=dtype)
         self.e = self.p2 - self.p1
         self.r = radius
 
-    def collide(self, state):
-        '''
-            Checks if "state" is within the obstacles. Returns
-            a bool vector whose entry is True if there is a collision
-            between state t and the obstacle. False otherwise
+    '''
+        Checks if "state" is within the obstacles. Returns
+        a bool vector whose entry is True if there is a collision
+        between state t and the obstacle. False otherwise
 
-            inputs:
-            -------
-                - state, tf.tensor, shape = [k, sDim, 1]
-            
-            outputs:
-            --------
-                - collision mask, tf.tensor. shape = [k, 1, 1]
-        '''
+        inputs:
+        -------
+            - state, tf.tensor, shape = [k, sDim, 1]
+
+        outputs:
+        --------
+            - collision mask, tf.tensor. shape = [k, 1, 1]
+    '''
+    def collide(self, state):
         pos = state[:, :3]
         k = tf.shape(state)[0]
         # First check if state is inbetween the two points.
@@ -370,20 +371,20 @@ class WayPointsCost(object):
     def pop(self):
         self.waypoints.pop()
 
+    '''
+        Computes the state cost for the waypoints cost.
+
+        - input:
+        --------
+            - scope: the tensroflow scope.
+            - State: current state of the system, Shape: [k/1, goal_dim, 1]
+
+        - output:
+        ---------
+            dict with entry:
+                "state_cost"
+    '''
     def state_cost(self, scope, state, t):
-        '''
-            Computes the state cost for the waypoints cost.
-
-            - input:
-            --------
-                - scope: the tensroflow scope.
-                - State: current state of the system, Shape: [k/1, goal_dim, 1]
-
-            - output:
-            ---------
-                dict with entry:
-                    "state_cost"
-        '''
         return_dict = {}
 
         if not assert_shape(state, (-1, self.q_shape[0], 1)):
