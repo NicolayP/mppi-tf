@@ -296,6 +296,7 @@ class ControllerBase(tf.Module):
         with tf.name_scope(scope) as s:
             with tf.name_scope("random") as rand:
                 noises = self.build_noise(rand, k)
+                applied = tf.add(noises, actionSeq[None, ...])
             with tf.name_scope("Rollout") as roll:
                 cost, trajs = self.build_model(roll, k, model_input, noises, actionSeq)
             with tf.name_scope("Update") as up:
@@ -306,6 +307,8 @@ class ControllerBase(tf.Module):
                 init = self.init_zeros(si, 1)
                 actionSeq = self.shift(si, update, init, 1)
 
+        self._observer.write_control("noises", noises)
+        self._observer.write_control("applied", applied)
         self._observer.write_control("actionSeq", actionSeq)
         self._observer.write_control("state", model_input)
         self._observer.write_control("next", next)

@@ -43,10 +43,10 @@ class ObserverBase(tf.Module):
         ori = "orientation/"
         lin = "linear/"
         ang = "angular/"
-        self._sName = ["{pos}x (m)", "{pos}y (m)", "{pos}z (m)", 
-                       "{ori}roll (deg)", "{ori} pitch (deg)", "{ori} yaw (deg)",
-                       "{lin}u (m/s)", "{lin}v (m/s)", "{lin}w (m/s)",
-                       "{ang}p (deg/s)", "{ang}q (deg/s)", "{ang}r (deg/s)"]
+        self._sName = [f"{pos}x (m)", f"{pos}y (m)", f"{pos}z (m)", 
+                       f"{ori}roll (deg)", f"{ori} pitch (deg)", f"{ori} yaw (deg)",
+                       f"{lin}u (m/s)", f"{lin}v (m/s)", f"{lin}w (m/s)",
+                       f"{ang}p (rad/s)", f"{ang}q (rad/s)", f"{ang}r (rad/s)"]
 
 
         if log or debug:
@@ -381,6 +381,14 @@ class ObserverLagged(ObserverBase):
             
             elif name == "goal":
                 pass
+
+            elif name == "noises":
+                tf.summary.histogram("Noises", tensor, step=self.step)
+
+            elif name == "applied":
+                for i, n in enumerate(self._aName):
+                    tf.summary.histogram(f"Sample_Action/{n}",
+                        tensor[:, :, i], step=self.step)
 
     def to_euler(self, state, deg=False):
         raise NotImplemented
