@@ -148,7 +148,8 @@ class StaticQuatCost(CostBase):
         goal = tf.squeeze(self.goal, axis=-1)
         quat = state[:, 3:7]
         goal_quat = goal[3:7]
-        theta = 2*tf.math.acos(tf.tensordot(quat, goal_quat, 1))
+
+        theta = tf.math.acos(2*tf.math.pow(tf.tensordot(quat, goal_quat, 1), 2) - 1)
 
         pos = state[:, :3]
         goal_pos = goal[:3]
@@ -158,6 +159,13 @@ class StaticQuatCost(CostBase):
         goal_vel = goal[-6:]
         vel_dist = tf.subtract(vel, goal_vel)        
         return tf.concat([pos_dist, theta[..., None], vel_dist], axis=1)[..., None]
+
+    def split_state_cost(self, state):
+        diff = self.dist(state)
+        rhs = tf.linalg.matmul(self.Q, diff, name="right")
+        split_cost = tf.math.multiply(diff, rhs, name="split")
+        return split_cost
+
 
 
 class StaticRotCost(CostBase):
