@@ -341,6 +341,8 @@ class ControllerBase(tf.Module):
 
     def update(self, scope, cost, noises, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
+        if tf.reduce_any(tf.math.is_inf(cost)):
+            tf.print("Collision detected.")
         with tf.name_scope("Beta"):
             beta = self.beta(scope, cost)
         with tf.name_scope("Expodential_arg"):
@@ -350,10 +352,19 @@ class ControllerBase(tf.Module):
             exp = self.exp(scope, exp_arg)
         with tf.name_scope("Nabla"):
             nabla = self.nabla(scope, exp)
+
+        if nabla < 1e-10:
+            tf.print("Warning, small normalization constant! Might be unstable")
+
         with tf.name_scope("Weights"):
             weights = self.weights(scope, exp, nabla)
         with tf.name_scope("Weighted_Noise"):
             weighted_noises = self.weighted_noise(scope, weights, noises)
+
+        if tf.reduce_any(tf.math.is_nan(weighted_noises)):
+            tf.print("Nan in weighted noise. EXIT")
+            exit()
+
         with tf.name_scope("Sequence_update"):
             rawUpdate = tf.add(self._actionSeq, weighted_noises)
             #update = self.clip_act("clipping", rawUpdate)
