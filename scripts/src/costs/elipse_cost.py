@@ -99,6 +99,22 @@ class ElipseCost(CostBase):
 
 
 class ElipseCost3D(CostBase):
+    '''
+        3D eliptic cost function.
+        - input:
+        --------
+            - lam (lambda) the inverse temperature.
+            - gamma: decoupling parameter between action and noise.
+            - upsilon: covariance augmentation for noise generation.
+            - sigma: the noise covariance matrix. shape [a_dim, a_dim].
+            - a: the long axis of the elipse.
+            - b: the short axis of the elipse.
+            - center_x: the x value of the elipse center.
+            - center_y: the y value of the elipse center.
+            - speed: the target speed.
+            - m_state: multiplier for the state error.
+            - m_vel: multiplier for the vel error.
+    '''
     def __init__(self,
                  lam,
                  gamma,
@@ -112,22 +128,6 @@ class ElipseCost3D(CostBase):
                  v_speed,
                  mState,
                  mVel):
-        '''
-            3D eliptic cost function.
-            - input:
-            --------
-                - lam (lambda) the inverse temperature.
-                - gamma: decoupling parameter between action and noise.
-                - upsilon: covariance augmentation for noise generation.
-                - sigma: the noise covariance matrix. shape [a_dim, a_dim].
-                - a: the long axis of the elipse.
-                - b: the short axis of the elipse.
-                - center_x: the x value of the elipse center.
-                - center_y: the y value of the elipse center.
-                - speed: the target speed.
-                - m_state: multiplier for the state error.
-                - m_vel: multiplier for the vel error.
-        '''
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
         axis = np.concatenate([axis, np.array([[1.]])], axis=0)
         self.axis = tf.convert_to_tensor(axis, dtype=dtype)
@@ -141,7 +141,7 @@ class ElipseCost3D(CostBase):
                     )
         self.center = tf.convert_to_tensor(center, dtype=dtype)
 
-        self.mapping = tf.constant([
+        self.mapping_tg = tf.constant([
                                     [
                                      [-axis[0, 0]/axis[1, 0]],
                                      [axis[1, 0]/axis[0, 0]],
@@ -149,6 +149,16 @@ class ElipseCost3D(CostBase):
                                     ]
                                    ],
                                    dtype=dtype)
+
+        self.mapping_perp = tf.constant([
+                                    [
+                                     [axis[1, 0]/axis[0, 0]],
+                                     [axis[0, 0]/axis[1, 0]],
+                                     [0.]
+                                    ]
+                                   ],
+                                   dtype=dtype)
+
         self.prepare_consts()
         self.gv = tf.constant(speed, dtype=dtype)
 
@@ -160,86 +170,136 @@ class ElipseCost3D(CostBase):
     def prepare_consts(self):
         N = tf.concat([self.aVec, self.bVec, self.normal], axis=-1)
         self.R = tf.transpose(tf.linalg.inv(N))
+        # quaternion mapping points to the elipse plane.
         self.q = tfg.geometry.transformation.quaternion.from_rotation_matrix(self.R)
+        # translation to bring points to the elipse origin
         self.t = self.center
 
+    '''
+        State cost for eliptic cost. The function transforms the state
+        in the coordinate system made of the plane of the elipse and its normal.
+        It then computes a cost that is made of:
+            - distance to the elipse.
+            - orientation (either tg or perpendiculare) to the elispe
+            - speed.
+        - inputs:
+        ---------
+            - scope: string. Tensorflow scope.
+            - state: tensor. State of the vehicle.
+                shape [k/1, 13, 1]
+
+        - outputs:
+        ----------
+            - cost = alpha * position_cost + beta * orientation_cost + gamma * velocity_cost
+    '''
     def state_cost(self, scope, state):
         position = tf.squeeze(state[:, 0:3], axis=-1)
         quat = tf.squeeze(state[:, 3:7], axis=-1)
         # Express the point in the plane frame.
+        # Firsrt translate the point
+        position += self.t
         posPf = tfg.geometry.transformation.quaternion.rotate(position, self.q)
         posPf = tf.expand_dims(posPf, axis=-1)
         quatPf = tfg.geometry.transformation.quaternion.multiply(self.q, quat)
         posePf = tf.concat([posPf, tf.expand_dims(quatPf, axis=-1)], axis=1)
         positionCost = self.position_error(posPf)
-        orientationCost = self.orientation_error(posePf)
+        orientationCost = self.orientation_error_tg(posePf)
         velCost = self.velocity_error(state[:, 7:13])
 
         stateCost = self.mS*positionCost + self.mS*orientationCost + self.mV*velCost
         return stateCost
 
+    '''
+        Computes the distance between a set of points and the elipse.
+        It assumes that the elipse lives in a 2D plane (Z=0) and the
+        points are expressed in the plane frame.
+
+        - inputs:
+        ---------
+            - position: Tf tensor representing points position in the
+                plane frame. Shape [k, 3, 1]
+
+        - outputs:
+        ----------
+            - distance in euclidian norm between the point and the elipse.
+                Shape [k, 1, 1]
+    '''
     def position_error(self, position):
-        '''
-            Computes the distance between a set of points and the elipse.
-            It assumes that the elipse lives in a 2D plane (Z=0) and the
-            points are expressed in the plane frame.
-
-            - inputs:
-            ---------
-                - position: Tf tensor representing points position in the
-                    plane frame. Shape [k, 3, 1]
-
-            - outputs:
-            ----------
-                - distance in euclidian norm between the point and the elipse.
-                    Shape [k, 1, 1]
-        ''' 
         d = tf.pow(tf.divide(position, self.axis), 2)
         d = tf.reduce_sum(d, axis=1) # -> shape [k, 1, 1]
         d = tf.abs(d - 1.)
         return tf.expand_dims(d, axis=-1)
 
-    def orientation_error(self, pose):
-        '''
-            Computes the distance between the orientation and the desired
-            orientation. The desired orientation is defined by angle
-            between the agent and the elipse tangent.
+    '''
+        Computes the distance between the orientation and the desired
+        orientation. The desired orientation is defined by angle
+        between the agent and the elipse normal (directed towards the center).
 
-            - inputs:
-            ---------
-                - pose: Tf tensor representing the pose in the
-                    plane frame. Shape [k, 7, 1]
+        - inputs:
+        ---------
+            - pose: Tf tensor representing the pose in the
+                plane frame. Shape [k, 7, 1]
 
-            - outputs:
-            ----------
-                - orientation cost. Shape [k, 1, 1]
-        '''
+        - outputs:
+        ----------
+            - orientation cost. Shape [k, 1, 1]
+    '''
+    def orientation_error_perp(self, pose):
         position = pose[:, 0:3]
-        # Rotation from elipse frame to point
-        quaterion = tf.squeeze(pose[:, 3:7])
-        tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
-        tgVec = tf.squeeze(tf.multiply(tgVec, self.mapping), axis=-1)
-        tgVec = tf.linalg.normalize(tgVec, axis=-1)[0]
+        quaternion = tf.squeeze(pose[:, 3:7])
+        perp_vec = tf.squeeze(tf.multiply(position, self.mapping_perp), axis=-1)
+        perp_vec = tf.linalg.normalize(perp_vec, axis=-1)[0]
         x = tf.constant([1., 0., 0.], dtype=dtype)
-        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, tgVec)
-        err = tfg.geometry.transformation.quaternion.relative_angle(q, quaterion)
+        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, perp_vec)
+        err = tfg.geometry.transformation.quaternion.relative_angle(q, quaternion)
         return err
 
+    '''
+        Computes the distance between the orientation and the desired
+        orientation. The desired orientation is defined by angle
+        between the agent and the elipse tangent.
+
+        - inputs:
+        ---------
+            - pose: Tf tensor representing the pose in the
+                plane frame. Shape [k, 7, 1]
+
+        - outputs:
+        ----------
+            - orientation cost. Shape [k, 1, 1]
+    '''
+    def orientation_error_tg(self, pose):
+        position = pose[:, 0:3]
+        # Rotation from elipse frame to point
+        quaternion = tf.squeeze(pose[:, 3:7])
+        # to compute the tangeant vector to the elipse we differentiate
+        # the elipse implicitly. See obsidian/MyPapers/Experiments#Elipse orientation cost.
+        tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
+        tgVec = tf.squeeze(tf.multiply(tgVec, self.mapping_tg), axis=-1)
+        tgVec = tf.linalg.normalize(tgVec, axis=-1)[0]
+        # X-axis vector (or forward.)
+        x = tf.constant([1., 0., 0.], dtype=dtype)
+        # The desired quaternion is defiend by the rotation from the forward vector
+        # to the tangant vector.
+        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, tgVec)
+        err = tfg.geometry.transformation.quaternion.relative_angle(q, quaternion)
+        return err
+
+    '''
+        Computed the "distance" between the desired velocity and the
+        current velocity in absolute value.
+
+        - inputs:
+        ---------
+            - velocity: Tf tensor representing the current velocity of
+                the agent. Shape [k, 6, 1]
+
+        - outputs:
+        ----------
+            - distance between the desired velocity and the current one
+                Shape [k, 1, 1]
+    '''
     def velocity_error(self, velocity):
-        '''
-            Computed the "distance" between the desired velocity and the
-            current velocity in absolute value.
-
-            - inputs:
-            ---------
-                - velocity: Tf tensor representing the current velocity of
-                    the agent. Shape [k, 6, 1]
-
-            - outputs:
-            ----------
-                - distance between the desired velocity and the current one
-                    Shape [k, 1, 1]
-        '''
         # compute the normalized linear velocity
         v = tf.norm(velocity[:, 0:3], axis=1)
         dv = tf.abs(tf.pow(v, 2) - tf.pow(self.gv, 2))

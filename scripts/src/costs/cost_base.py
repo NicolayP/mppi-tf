@@ -212,7 +212,6 @@ class CostBase(tf.Module):
 
     '''
     def collision_cost(self, scope, state):
-
         k = tf.shape(state)[0]
         mask = tf.broadcast_to(self._mask, (k, 1, 1))
         zeros_vec = tf.broadcast_to(self._zero_vec, (k, 1, 1))
