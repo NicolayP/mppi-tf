@@ -168,7 +168,7 @@ class TestCost(tf.test.TestCase):
 
 class TestPrimitiveCollision(tf.test.TestCase):
     def setUp(self):
-        self.obstacle = PrimitiveObstacles()
+        self.obstacle = PrimitiveObstacles("none-type")
 
     def testPrimitiveCollision(self):
         k, sDim = 5, 13
@@ -734,13 +734,14 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.sigma, normal, aVec, self.axis, center,
                             self.speed, self.v_speed, self.m_state,
                             self.m_vel)
-        
+        exp_b = np.array([[0.], [1.], [0.]], dtype=npdtype)
         exp_r = np.array([
                           [1., 0., 0.],
                           [0., 1., 0.],
                           [0., 0., 1.]
                          ], dtype=npdtype)
         exp_t = center
+        self.assertAllClose(cost.bVec, exp_b)
         self.assertAllClose(cost.R, exp_r)
         self.assertAllClose(cost.t, exp_t)
 
@@ -752,13 +753,14 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.sigma, normal, aVec, self.axis, center,
                             self.speed, self.v_speed, self.m_state,
                             self.m_vel)
-        
+        exp_b = np.array([[0.], [1.], [-1.]], dtype=npdtype)
         exp_r = np.array([
                           [1., 0., 0.],
                           [0., 0.5, -0.5],
                           [0., 0.5, 0.5]
                          ], dtype=npdtype).T
         exp_t = center
+        self.assertAllClose(cost.bVec, exp_b)
         self.assertAllClose(cost.R, exp_r)
         self.assertAllClose(cost.t, exp_t)
 
@@ -767,7 +769,7 @@ class TestElipse3DCost(tf.test.TestCase):
         position = np.array([
                              [[0.1], [0.4], [0.2]],
                              [[1.], [1.], [-2]],
-                             [[2.], [1.], [0.]]
+                             [[2.], [0.], [0.]]
                             ], dtype=npdtype)
         normal = np.array([[0.], [1.], [1.]], dtype=npdtype)
         aVec = np.array([[1.], [0.], [0.]], dtype=npdtype)
@@ -781,14 +783,15 @@ class TestElipse3DCost(tf.test.TestCase):
         
         exp_er = np.array([[[0.8863888888888889]],
                            [[3.6944444444444446]],
-                           [[0.4444444444444444]]], dtype=npdtype)
+                           [[0.]]], dtype=npdtype)
         self.assertAllClose(error, exp_er)
 
     def test_orientation_error(self):
-        orientation = np.array([
+        print("*"*5, "test elipse orientation", "*"*5)
+        pose = np.array([
                                 [
                                  [0.1], [0.4], [0.2],
-                                 [0.0], [0.0], [0.0], [1.]
+                                 [0.0], [0.0], [0.0], [1.] #0 roll, 0 pitch, 0 yaw.
                                 ],
                                 [
                                  [1.], [1.], [-2],
@@ -799,13 +802,9 @@ class TestElipse3DCost(tf.test.TestCase):
                                  [0.20628425], [-0.30942637], [-0.92827912], [0.]
                                 ]
                                ], dtype=npdtype)
-        quat = np.squeeze(orientation[:, 3:7], axis=-1)
-        
-        quatVec = np.array([
-                         [0., -0., 0.99756117, 0.06979764],
-                         [-0., 0., 0.96736124, 0.25340132],
-                         [-0., 0., 0.91224006, 0.40965605]
-                        ], dtype=npdtype)
+
+        print("orientation: ", pose.shape)
+
         normal = np.array([[0.], [1.], [1.]], dtype=npdtype)
         aVec = np.array([[1.], [0.], [0.]], dtype=npdtype)
         center = np.array([[0.], [1.], [-2.]], dtype=npdtype)
@@ -814,13 +813,48 @@ class TestElipse3DCost(tf.test.TestCase):
                             self.sigma, normal, aVec, self.axis, center,
                             self.speed, self.v_speed, self.m_state,
                             self.m_vel)
-        error = cost.orientation_error(orientation)
-        exp_er = np.array([
+
+        tg_vec = np.array([[(-(self.axis[0, 0]/self.axis[1, 0])**2) * pose[0, 1, 0], pose[0, 0, 0], 0.],
+                           [(-(self.axis[0, 0]/self.axis[1, 0])**2) * pose[1, 1, 0], pose[1, 0, 0], 0.],
+                           [(-(self.axis[0, 0]/self.axis[1, 0])**2) * pose[2, 1, 0], pose[2, 0, 0], 0.]])[..., None]
+        tg_vec /= np.linalg.norm(tg_vec, axis=1)[..., None]
+
+        q_tg = np.array([[0., tg_vec[0, 2, 0], tg_vec[0, 1, 0], 1 + tg_vec[0, 0, 0]],
+                         [0., tg_vec[1, 2, 0], tg_vec[1, 1, 0], 1 + tg_vec[1, 0, 0]],
+                         [0., tg_vec[2, 2, 0], tg_vec[2, 1, 0], 1 + tg_vec[2, 0, 0]]])[..., None]
+        q_tg /= np.linalg.norm(q_tg, axis=1)[..., None]
+
+        exp_er_tg = 2* np.arccos(np.sum(q_tg[..., 0] * pose[:, 3:, 0], axis=-1))
+        # Implementation differences between tensorflow and numpy makes a pi difference.
+        exp_er_tg = np.array([
                            3.0018840093006306,
                            2.4098026419889416,
                            1.1216650246733544
                           ], dtype=npdtype)
-        self.assertAllClose(error, exp_er)
+        error_tg = cost.orientation_error_tg(pose)
+        self.assertAllClose(error_tg, exp_er_tg)
+
+        perp_vec = np.array([
+            [pose[0, 0, 0], ((self.axis[0, 0]/self.axis[1, 0])**2) * pose[0, 1, 0], 0.],
+            [pose[1, 0, 0], ((self.axis[0, 0]/self.axis[1, 0])**2) * pose[1, 1, 0], 0.],
+            [pose[2, 0, 0], ((self.axis[0, 0]/self.axis[1, 0])**2) * pose[2, 1, 0], 0.],
+        ])[..., None]
+        perp_vec /= np.linalg.norm(perp_vec, axis=1)[..., None]
+
+        q_perp = np.array([[0., perp_vec[0, 2, 0], -perp_vec[0, 1, 0], 1 + perp_vec[0, 0, 0]],
+                           [0., perp_vec[1, 2, 0], -perp_vec[1, 1, 0], 1 + perp_vec[1, 0, 0]],
+                           [0., perp_vec[2, 2, 0], -perp_vec[2, 1, 0], 1 + perp_vec[2, 0, 0]]])[..., None]
+        q_perp /= np.linalg.norm(q_perp, axis=1)[..., None]
+
+        exp_er_perp = 2* np.arccos(np.sum(q_perp[..., 0] * pose[:, 3:, 0], axis=-1))
+        exp_er_perp = np.array([
+                           1.43108746,
+                           1.3777549,
+                           2.46921356,
+                          ], dtype=npdtype)
+
+        error_perp = cost.orientation_error_perp(pose)
+        self.assertAllClose(error_perp, exp_er_perp)
 
     def test_velocity_error(self):
         velocitiy = np.array([

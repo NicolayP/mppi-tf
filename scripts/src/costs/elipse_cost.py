@@ -245,10 +245,13 @@ class ElipseCost3D(CostBase):
             - orientation cost. Shape [k, 1, 1]
     '''
     def orientation_error_perp(self, pose):
+        # to compute the tangant perpendicular vector to the elipse we differentiate
+        # the elipse implicitly. See obsidian/MyPapers/Experiments#Elipse orientation cost.
         position = pose[:, 0:3]
         quaternion = tf.squeeze(pose[:, 3:7])
         perp_vec = tf.squeeze(tf.multiply(position, self.mapping_perp), axis=-1)
         perp_vec = tf.linalg.normalize(perp_vec, axis=-1)[0]
+        # operation to get the quaternion from the vector
         x = tf.constant([1., 0., 0.], dtype=dtype)
         q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, perp_vec)
         err = tfg.geometry.transformation.quaternion.relative_angle(q, quaternion)

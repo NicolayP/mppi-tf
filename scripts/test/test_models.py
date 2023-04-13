@@ -372,35 +372,35 @@ class TestAUVModel(tf.test.TestCase):
 
         exp_TB2Iquat = np.zeros(shape=(k, 4, 3), dtype=npdtype)
 
-        exp_TB2Iquat[:, 0, 0] = -quat[:, xid, 0]
-        exp_TB2Iquat[:, 0, 1] = -quat[:, yid, 0]
-        exp_TB2Iquat[:, 0, 2] = -quat[:, zid, 0]
+        exp_TB2Iquat[:, 3, 0] = -quat[:, xid, 0]
+        exp_TB2Iquat[:, 3, 1] = -quat[:, yid, 0]
+        exp_TB2Iquat[:, 3, 2] = -quat[:, zid, 0]
 
-        exp_TB2Iquat[:, 1, 0] = quat[:, wid, 0]
-        exp_TB2Iquat[:, 1, 1] = -quat[:, zid, 0]
-        exp_TB2Iquat[:, 1, 2] = quat[:, yid, 0]
+        exp_TB2Iquat[:, 0, 0] = quat[:, wid, 0]
+        exp_TB2Iquat[:, 0, 1] = -quat[:, zid, 0]
+        exp_TB2Iquat[:, 0, 2] = quat[:, yid, 0]
 
-        exp_TB2Iquat[:, 2, 0] = quat[:, zid, 0]
-        exp_TB2Iquat[:, 2, 1] = quat[:, wid, 0]
-        exp_TB2Iquat[:, 2, 2] = -quat[:, xid, 0]
+        exp_TB2Iquat[:, 1, 0] = quat[:, zid, 0]
+        exp_TB2Iquat[:, 1, 1] = quat[:, wid, 0]
+        exp_TB2Iquat[:, 1, 2] = -quat[:, xid, 0]
 
-        exp_TB2Iquat[:, 3, 0] = -quat[:, yid, 0]
-        exp_TB2Iquat[:, 3, 1] = quat[:, xid, 0]
-        exp_TB2Iquat[:, 3, 2] = quat[:, wid, 0]
+        exp_TB2Iquat[:, 2, 0] = -quat[:, yid, 0]
+        exp_TB2Iquat[:, 2, 1] = quat[:, xid, 0]
+        exp_TB2Iquat[:, 2, 2] = quat[:, wid, 0]
         
         exp_TB2Iquat = 0.5*exp_TB2Iquat
 
-        self.model_quat.body2inertial_transform(pose_quat)
+        rotBtoI, TBtoIquat = self.model_quat.body2inertial_transform(pose_quat)
 
-        self.assertAllClose(self.model_quat._rotBtoI, rot_from_lib)
-        self.assertAllClose(self.model_quat._rotBtoI, exp_rot)
+        self.assertAllClose(rotBtoI, rot_from_lib)
+        self.assertAllClose(rotBtoI, exp_rot)
 
-        self.assertAllClose(self.model_quat._TBtoIquat, exp_TB2Iquat)
+        self.assertAllClose(TBtoIquat, exp_TB2Iquat)
 
         exp_jac_quat = np.zeros(shape=(k, 7, 6), dtype=npdtype)
         exp_jac_quat[:, 0:3, 0:3] = exp_rot
         exp_jac_quat[:, 3:7, 3:6] = exp_TB2Iquat
-        jac_quat = self.model_quat.get_jacobian()
+        jac_quat = self.model_quat.get_jacobian(rotBtoI, TBtoIquat)
 
         self.assertAllClose(jac_quat, exp_jac_quat)
 
@@ -480,11 +480,11 @@ class TestAUVModel(tf.test.TestCase):
         exp_rest[:, 4, 0] = mb[:, 1]
         exp_rest[:, 5, 0] = mb[:, 2]
 
-        self.model_quat.body2inertial_transform(pose)
+        rotBtoI, TBtoIquat = self.model_quat.body2inertial_transform(pose)
 
-        rest = self.model_quat.restoring_forces("rest")
+        rest = self.model_quat.restoring_forces("rest", rotBtoI)
 
-        self.assertAllClose(self.model_quat._rotBtoI, rotBtoI)
+        self.assertAllClose(rotBtoI, rotBtoI)
         self.assertAllClose(rest, exp_rest)
 
     def test_damping(self):
