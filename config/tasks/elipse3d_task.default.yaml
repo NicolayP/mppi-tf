@@ -1,8 +1,8 @@
 type: "elipse3d"
-a: 4.
-b: 2.
-center_x: 0.
-center_y: 0.
-speed: 5.
+normal: [[0.], [0.], [1.]]
+aVec: [[1.], [0.], [0.]]
+axis: [[4.], [2.]]
+center: [[0.], [0.]]
+speed: 1.
 m_state: 1.
 m_vel: 0.1
