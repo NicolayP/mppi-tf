@@ -107,11 +107,11 @@ class ElipseCost3D(CostBase):
             - gamma: decoupling parameter between action and noise.
             - upsilon: covariance augmentation for noise generation.
             - sigma: the noise covariance matrix. shape [a_dim, a_dim].
-            - a: the long axis of the elipse.
-            - b: the short axis of the elipse.
-            - center_x: the x value of the elipse center.
-            - center_y: the y value of the elipse center.
-            - speed: the target speed.
+            - normal: np.array, the unit vector normal to the elipse plane. Shape (3, 1)
+            - aVec: np.array, the unit vector indicating the direction of the main axis. Shape (3, 1)
+            - axis: np.array, length of a axis and b axis. Shape (2, 1)
+            - center: np.array, the center point of the elipse. Shape (2, 1)
+            - speed: the target speed in absolute value.
             - m_state: multiplier for the state error.
             - m_vel: multiplier for the vel error.
     '''
@@ -125,7 +125,6 @@ class ElipseCost3D(CostBase):
                  axis,
                  center,
                  speed,
-                 v_speed,
                  mState,
                  mVel):
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
@@ -141,6 +140,7 @@ class ElipseCost3D(CostBase):
                     )
         self.center = tf.convert_to_tensor(center, dtype=dtype)
 
+        # Normalized mapping of tangent vector
         self.mapping_tg = tf.constant([
                                     [
                                      [-axis[0, 0]/axis[1, 0]],
@@ -150,6 +150,7 @@ class ElipseCost3D(CostBase):
                                    ],
                                    dtype=dtype)
 
+        # Normalized mapping of perpendicular vector
         self.mapping_perp = tf.constant([
                                     [
                                      [axis[1, 0]/axis[0, 0]],
@@ -162,8 +163,6 @@ class ElipseCost3D(CostBase):
         self.prepare_consts()
         self.gv = tf.constant(speed, dtype=dtype)
 
-        #self.gv = speed
-        #self.vz = v_speed
         self.mS = tf.cast(mState, dtype)
         self.mV = tf.cast(mVel, dtype)
 
@@ -278,12 +277,17 @@ class ElipseCost3D(CostBase):
         # to compute the tangeant vector to the elipse we differentiate
         # the elipse implicitly. See obsidian/MyPapers/Experiments#Elipse orientation cost.
         tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
+        tf.print("Vec:     ", tgVec)
         tgVec = tf.squeeze(tf.multiply(tgVec, self.mapping_tg), axis=-1)
+        tf.print("Tg:      ", tgVec)
         tgVec = tf.linalg.normalize(tgVec, axis=-1)[0]
+        tf.print("Normred: ", tgVec)
         # X-axis vector (or forward.)
         x = tf.constant([1., 0., 0.], dtype=dtype)
         # The desired quaternion is defiend by the rotation from the forward vector
         # to the tangant vector.
+        tf.print("x:       ", x)
+        tf.print("tg_vec:  ", tgVec)
         q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, tgVec)
         err = tfg.geometry.transformation.quaternion.relative_angle(q, quaternion)
         return err

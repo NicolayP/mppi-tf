@@ -43,15 +43,16 @@ def elipse(task_dic, lam, gamma, upsilon, sigma):
 
 
 def elipse3d(task_dic, lam, gamma, upsilon, sigma):
-    a = task_dic['a']
-    b = task_dic['b']
-    center_y = task_dic['center_x']
-    center_x = task_dic['center_y']
+    normal = task_dic['normal']
+    aVec = task_dic['aVec']
+    axis = task_dic['axis']
+    center = task_dic['center']
     speed = task_dic['speed']
     m_state = task_dic['m_state']
     m_vel = task_dic['m_vel']
-    return ElipseCost3D(lam, gamma, upsilon, sigma, a, b, center_x,
-                      center_y, -10., speed, 0., m_state, m_vel)
+    return ElipseCost3D(lam=lam, gamma=gamma, upsilon=upsilon, sigma=sigma,
+                        normal=normal, aVec=aVec, axis=axis, center=center, speed=speed,
+                        mState=m_state, mVel=m_vel)
 
 
 def waypoints(task_dict, lam, gamma, upsilon, sigma):
