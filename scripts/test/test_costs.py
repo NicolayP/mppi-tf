@@ -732,7 +732,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         exp_b = np.array([[0.], [1.], [0.]], dtype=npdtype)
         exp_r = np.array([
@@ -751,7 +751,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         exp_b = np.array([[0.], [1.], [-1.]], dtype=npdtype)
         exp_r = np.array([
@@ -777,7 +777,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         error = cost.position_error(position)
         
@@ -811,7 +811,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
 
         tg_vec = np.array([[(-(self.axis[0, 0]/self.axis[1, 0])**2) * pose[0, 1, 0], pose[0, 0, 0], 0.],
@@ -877,7 +877,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         error = cost.velocity_error(velocitiy)
         exp_er = np.abs(np.array([[[0.21-1]], [[6-1]], [[9-1]]]), dtype=npdtype)
@@ -911,7 +911,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         c = cost.state_cost("foo", state)
         #exp_c = np.array([])
