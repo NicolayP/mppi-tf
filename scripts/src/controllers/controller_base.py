@@ -97,21 +97,9 @@ class ControllerBase(tf.Module):
         self._debug = debug
         self._graphMode = graphMode
 
-        self._observer = ObserverBase(logPath=logPath,
-                                      log=log,
-                                      debug=debug,
-                                      k=k,
-                                      tau=tau,
-                                      lam=lam,
-                                      configDict=configDict,
-                                      taskDict=taskDict,
-                                      modelDict=modelDict,
-                                      aDim=aDim,
-                                      sDim=sDim,
-                                      modelName=self._model.get_name())
-
-        self._model.set_observer(self._observer)
-        self._cost.set_observer(self._observer)
+        # used when tracing, prototyping or when generating the graph
+        # to avoid critical section exit.
+        self._tracing = False
 
         self._sigma = tf.convert_to_tensor(sigma,
                                            dtype=dtype,
@@ -139,6 +127,11 @@ class ControllerBase(tf.Module):
         self._timingDict = {}
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
+
+    def set_observer(self, observer):
+        self._observer = observer
+        self._model.set_observer(observer)
+        self._cost.set_observer(observer)
 
     def save(self, model_input, u, xNext):
         '''
@@ -363,7 +356,8 @@ class ControllerBase(tf.Module):
 
         if tf.reduce_any(tf.math.is_nan(weighted_noises)):
             tf.print("Nan in weighted noise. EXIT")
-            exit()
+            if not self._tracing:
+                exit()
 
         with tf.name_scope("Sequence_update"):
             rawUpdate = tf.add(self._actionSeq, weighted_noises)
