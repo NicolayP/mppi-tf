@@ -3,7 +3,7 @@ from ..misc.utile import assert_shape, dtype
 
 import numpy as np
 import tensorflow as tf
-import tensorflow_graphics as tfg
+import tensorflow_graphics.geometry.transformation as tfgt
 
 
 class ElipseCost(CostBase):
@@ -138,7 +138,8 @@ class ElipseCost3D(CostBase):
                             tf.squeeze(self.aVec, axis=-1)
                         ), axis=-1
                     )
-        self.center = tf.convert_to_tensor(center, dtype=dtype)
+        # translation to bring points to the elipse origin
+        self.t = tf.convert_to_tensor(center, dtype=dtype)
 
         # Normalized mapping of tangent vector
         self.mapping_tg = tf.constant([
@@ -170,9 +171,8 @@ class ElipseCost3D(CostBase):
         N = tf.concat([self.aVec, self.bVec, self.normal], axis=-1)
         self.R = tf.transpose(tf.linalg.inv(N))
         # quaternion mapping points to the elipse plane.
-        self.q = tfg.geometry.transformation.quaternion.from_rotation_matrix(self.R)
-        # translation to bring points to the elipse origin
-        self.t = self.center
+        self.q = tfgt.quaternion.from_rotation_matrix(self.R)
+        self.x = tf.constant([[1., 0., 0.]], dtype=dtype)
 
     '''
         State cost for eliptic cost. The function transforms the state
@@ -189,17 +189,23 @@ class ElipseCost3D(CostBase):
 
         - outputs:
         ----------
-            - cost = alpha * position_cost + beta * orientation_cost + gamma * velocity_cost
+            - cost = alpha * position_cost + beta * orientation_cost + gamma * velocity_cost,
+            shape [k, 1, 1]
     '''
     def state_cost(self, scope, state):
-        position = tf.squeeze(state[:, 0:3], axis=-1)
-        quat = tf.squeeze(state[:, 3:7], axis=-1)
-        # Express the point in the plane frame.
+        # Express the points in the plane frame.
+        k = tf.shape(state)[0]
+        q = tf.broadcast_to(self.q, (k, 4))
         # Firsrt translate the point
-        position += self.t
-        posPf = tfg.geometry.transformation.quaternion.rotate(position, self.q)
+        position = tf.squeeze(state[:, 0:3] - self.t, axis=-1)
+        quat = tf.squeeze(state[:, 3:7], axis=-1)
+        # Rotate the point in the elipse frame.
+        posPf = tfgt.quaternion.rotate(position, q)
         posPf = tf.expand_dims(posPf, axis=-1)
-        quatPf = tfg.geometry.transformation.quaternion.multiply(self.q, quat)
+        
+        # Rotate the orientation in the elipse frame
+        quatPf = tfgt.quaternion.multiply(q, quat)
+        # The new pose.
         posePf = tf.concat([posPf, tf.expand_dims(quatPf, axis=-1)], axis=1)
         positionCost = self.position_error(posPf)
         orientationCost = self.orientation_error_tg(posePf)
@@ -251,9 +257,10 @@ class ElipseCost3D(CostBase):
         perp_vec = tf.squeeze(tf.multiply(position, self.mapping_perp), axis=-1)
         perp_vec = tf.linalg.normalize(perp_vec, axis=-1)[0]
         # operation to get the quaternion from the vector
-        x = tf.constant([1., 0., 0.], dtype=dtype)
-        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, perp_vec)
-        err = tfg.geometry.transformation.quaternion.relative_angle(q, quaternion)
+        k = tf.shape(perp_vec)[0]
+        x_broad = tf.broadcast_to(self.x, (k, 3))
+        q = tfgt.quaternion.between_two_vectors_3d(x_broad, perp_vec)
+        err = tfgt.quaternion.relative_angle(q, quaternion)[:, None, None]
         return err
 
     '''
@@ -273,23 +280,20 @@ class ElipseCost3D(CostBase):
     def orientation_error_tg(self, pose):
         position = pose[:, 0:3]
         # Rotation from elipse frame to point
-        quaternion = tf.squeeze(pose[:, 3:7])
+        quaternion = pose[..., 3:7, 0]
         # to compute the tangeant vector to the elipse we differentiate
         # the elipse implicitly. See obsidian/MyPapers/Experiments#Elipse orientation cost.
         tgVec = tf.gather(position, indices=[1, 0, 2], axis=1)
-        tf.print("Vec:     ", tgVec)
         tgVec = tf.squeeze(tf.multiply(tgVec, self.mapping_tg), axis=-1)
-        tf.print("Tg:      ", tgVec)
+        # normalize outputs tuple, normed vector and norm.
         tgVec = tf.linalg.normalize(tgVec, axis=-1)[0]
-        tf.print("Normred: ", tgVec)
         # X-axis vector (or forward.)
-        x = tf.constant([1., 0., 0.], dtype=dtype)
+        k = tf.shape(tgVec)[0]
+        x_broad = tf.broadcast_to(self.x, (k, 3))
         # The desired quaternion is defiend by the rotation from the forward vector
         # to the tangant vector.
-        tf.print("x:       ", x)
-        tf.print("tg_vec:  ", tgVec)
-        q = tfg.geometry.transformation.quaternion.between_two_vectors_3d(x, tgVec)
-        err = tfg.geometry.transformation.quaternion.relative_angle(q, quaternion)
+        q = tfgt.quaternion.between_two_vectors_3d(x_broad, tgVec)
+        err = tfgt.quaternion.relative_angle(q, quaternion)[:, None, None]
         return err
 
     '''

@@ -1,9 +1,6 @@
-from dataclasses import dataclass
 import tensorflow as tf
-import tensorflow_graphics as tfg
-from datetime import datetime
+import tensorflow_graphics.geometry.transformation as tfgt
 import os
-from shutil import copyfile
 from tensorflow.python.ops import summary_ops_v2
 import yaml
 import math as m
@@ -12,7 +9,6 @@ from ..misc.utile import assert_shape, dtype
 
 
 class ObserverBase(tf.Module):
-
     def __init__(self,
                  logPath,
                  log,
@@ -418,7 +414,7 @@ class ObserverLaggedQuat(ObserverLagged):
 
         # Not told in the documentation but mostl likely radients.
         euler = tf.expand_dims(
-            tfg.geometry.transformation.euler.from_quaternion(quat[..., 0]),
+            tfgt.euler.from_quaternion(quat[..., 0]),
             axis=-1
         )
         if deg:

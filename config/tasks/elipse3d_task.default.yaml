@@ -2,7 +2,7 @@ type: "elipse3d"
 normal: [[0.], [0.], [1.]]
 aVec: [[1.], [0.], [0.]]
 axis: [[4.], [2.]]
-center: [[0.], [0.]]
+center: [[0.], [0.], [-60.]]
 speed: 1.
 m_state: 1.
 m_vel: 0.1

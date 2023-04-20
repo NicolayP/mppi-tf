@@ -152,7 +152,6 @@ class LaggedModelController(ControllerBase):
                     if laggedAction is not None:
                         laggedAction = push_to_tensor(laggedAction, toApply[:, -1])
 
-
         with tf.name_scope("Terminal_cost") as tc:
             fCost = self._cost.build_final_step_cost_graph(tc, nextState)
         with tf.name_scope("Rollout_cost") as rc:
