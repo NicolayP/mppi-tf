@@ -132,7 +132,7 @@ def push_to_tensor(tensor, element):
     return tf.concat([tensor[:, 1:], tmp], axis=1)
 
 
-def plot_traj(trajs, seq=None, plotStateCols=None, plotActionCols=None, dir=".", filename=None):
+def plot_traj(trajs, seq=None, plotStateCols=None, plotActionCols=None, title="Traj", dir=".", filename=None):
     '''
         Plot trajectories and action sequence.
         inputs:
@@ -145,6 +145,7 @@ def plot_traj(trajs, seq=None, plotStateCols=None, plotActionCols=None, dir=".",
             - frequencies: list of history used for the different models, ignored when model entry is "gt".
             - plotStateCols: Dict containing the state axis name as key and index as entry
             - plotAcitonCols: Dict containing the action axis name as key and index as entry.
+            - title: String the name of fthe figure.
             - horizon: The horizon of the trajectory to plot.
             - dir: The saving directory for the generated images.
     '''
@@ -152,6 +153,7 @@ def plot_traj(trajs, seq=None, plotStateCols=None, plotActionCols=None, dir=".",
     maxA = len(plotActionCols)
     # fig_state = plt.figure(figsize=(50, 50))
     fig, axes = plt.subplots(6, 2, figsize=(50, 50))
+    fig.suptitle(title)
     for k in trajs:
         t, h, freq, tau = trajs[k]
         for i, name in enumerate(plotStateCols):
@@ -190,7 +192,7 @@ def plot_traj(trajs, seq=None, plotStateCols=None, plotActionCols=None, dir=".",
     plt.show()
 
 
-def plot_6d(trajs, ColNames=None, dir=".", filename=None):
+def plot_6d(trajs, ColNames=None, title="Foo", dir=".", filename=None):
     '''
         Plot trajectories and action sequence.
         inputs:
@@ -206,7 +208,7 @@ def plot_6d(trajs, ColNames=None, dir=".", filename=None):
     maxS = len(ColNames)
     #fig_state = plt.figure(figsize=(50, 50))
     fig, axes = plt.subplots(3, 2, figsize=(50, 50))
-
+    fig.suptitle(title)
     for k in trajs:
         t, freq, tau = trajs[k]
         for i, name in enumerate(ColNames):

@@ -1,7 +1,6 @@
 import tensorflow as tf
 #gpu = tf.config.list_physical_devices('GPU')
 #tf.config.experimental.set_memory_growth(device=gpu[0], enable=True)
-import tensorflow_graphics as tfg
 
 import numpy as np
 from .model_base import ModelBase
@@ -283,8 +282,10 @@ class AUVModel(ModelBase):
         return inertial
 
     def build_step_graph(self, scope, state, action, dev=False):
-        if len(state.shape) == 4:
+        if len(tf.shape(state)) == 4:
+            # From lagged controller. Remove history (should be equal to 1)
             state = tf.squeeze(state, axis=1)
+        if len(tf.shape(action)) == 4:
             action = tf.squeeze(action, axis=1)
         if dev:
             step, Cv, Dv, g = self.step(scope, state, action, rk=self._rk, dev=dev)
