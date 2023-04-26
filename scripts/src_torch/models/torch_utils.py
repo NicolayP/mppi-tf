@@ -10,10 +10,10 @@ import matplotlib.pyplot as plt
 from tabulate import tabulate
 from tqdm import tqdm
 import os
-import onnx
-from onnx_tf.backend import prepare
+# import onnx
+# from onnx_tf.backend import prepare
 
-import lietorch as lie
+# import lietorch as lie
 
 class ListDataset(torch.utils.data.Dataset):
     def __init__(self, data_list, steps=1, history=1, rot='rot'):
@@ -646,61 +646,61 @@ def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", 
     return l.item(), batch*len(X)
 
 
-def train_lie(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", verbose=True):
-    torch.autograd.set_detect_anomaly(True)
-    size = len(dataloader.dataset)
-    vel_loss = loss.l2
-    model.train()
-    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False)
-    for batch, data in t:
-        X, U, Y = data
-        X, U, Y = X.to(device), U.to(device), Y.to(device)
-        Y_M = (lie.SE3.InitFromVec(Y[:, :, :7]), Y[:, :, 7:])
+# def train_lie(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", verbose=True):
+#     torch.autograd.set_detect_anomaly(True)
+#     size = len(dataloader.dataset)
+#     vel_loss = loss.l2
+#     model.train()
+#     t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False)
+#     for batch, data in t:
+#         X, U, Y = data
+#         X, U, Y = X.to(device), U.to(device), Y.to(device)
+#         Y_M = (lie.SE3.InitFromVec(Y[:, :, :7]), Y[:, :, 7:])
 
-        pred = model(X, U)
-        opti.zero_grad()
-        l = loss(pred, Y_M)
-        opti.step()
+#         pred = model(X, U)
+#         opti.zero_grad()
+#         l = loss(pred, Y_M)
+#         opti.step()
 
-        if writer is not None:
-            for name, param in model.named_parameters():
-                if param.requires_grad:
-                    writer.add_histogram("train/" + name, param, epoch*size + batch)
-            for dim in range(6):
-                lossDim = vel_loss(pred[1][:, dim], Y_M[1][:, dim])
-                writer.add_scalar("loss/"+ str(dim), lossDim, epoch*size + batch)
-    return l.item(), batch*len(X)
+#         if writer is not None:
+#             for name, param in model.named_parameters():
+#                 if param.requires_grad:
+#                     writer.add_histogram("train/" + name, param, epoch*size + batch)
+#             for dim in range(6):
+#                 lossDim = vel_loss(pred[1][:, dim], Y_M[1][:, dim])
+#                 writer.add_scalar("loss/"+ str(dim), lossDim, epoch*size + batch)
+#     return l.item(), batch*len(X)
 
 
-def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_names=[], dynamic_axes={}):
-    torch_filename = os.path.join(dir, f"{model.name}.pth")
-    onnx_filename = os.path.join(dir, f"{model.name}.onnx")
-    tf_filename = os.path.join(dir, f"{model.name}.pb")
-    torch.save(model.state_dict(), torch_filename)
-    if tf:
-        torch.onnx.export(
-            model,
-            dummy_input,
-            onnx_filename,
-            verbose=True,
-            input_names=input_names,
-            output_names=output_names,
-            dynamic_axes=dynamic_axes
-        )
+# def save_model(model, dir, tf=True, dummy_input=None, input_names=[], output_names=[], dynamic_axes={}):
+#     torch_filename = os.path.join(dir, f"{model.name}.pth")
+#     onnx_filename = os.path.join(dir, f"{model.name}.onnx")
+#     tf_filename = os.path.join(dir, f"{model.name}.pb")
+#     torch.save(model.state_dict(), torch_filename)
+#     if tf:
+#         torch.onnx.export(
+#             model,
+#             dummy_input,
+#             onnx_filename,
+#             verbose=True,
+#             input_names=input_names,
+#             output_names=output_names,
+#             dynamic_axes=dynamic_axes
+#         )
 
-        onnx_model = onnx.load(onnx_filename)
-        onnx.checker.check_model(onnx_model)
-        print(onnx.helper.printable_graph(onnx_model.graph))
+#         onnx_model = onnx.load(onnx_filename)
+#         onnx.checker.check_model(onnx_model)
+#         print(onnx.helper.printable_graph(onnx_model.graph))
 
-        tf_rep = prepare(onnx_model)
-        tf_rep.export_graph(tf_filename)
+#         tf_rep = prepare(onnx_model)
+#         tf_rep.export_graph(tf_filename)
 
 
 def learn(dataLoaders, model, loss, opti, writer=None, maxEpochs=1, device="cpu", encoding="lie"):
-    if encoding == "lie":
-        train_fct = train_lie
-    else:
-        train_fct = train
+    # if encoding == "lie":
+    #     train_fct = train_lie
+    # else:
+    train_fct = train
     dls = dataLoaders
     size = len(dls[0].dataset)
     l = np.nan
