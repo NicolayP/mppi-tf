@@ -82,6 +82,11 @@ class AUVFossen(torch.nn.Module):
                 torch.tensor(mtot, dtype=dtype),
                 dim=0),
             requires_grad=False)
+        
+        self.invMtot = torch.nn.Parameter(
+            torch.linalg.inv(self.mTot),
+            requires_grad=False
+        )
             
 
         if "linear_damping" in dict:
@@ -205,7 +210,8 @@ class AUVFossen(torch.nn.Module):
         Cv = torch.bmm(self.coriolis(v), v)
         g = torch.unsqueeze(self.restoring(rotBtoI), dim=-1)
         rhs = u - Cv - Dv - g
-        acc = torch.linalg.solve(self.mTot, rhs)
+        acc = torch.matmul(self.invMtot, rhs)
+        # acc = torch.linalg.solve(self.mTot, rhs)
         return acc
 
     def restoring(self, rotBtoI):

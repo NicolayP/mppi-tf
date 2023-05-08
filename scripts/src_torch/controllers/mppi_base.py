@@ -71,13 +71,7 @@ class ControllerBase(torch.nn.Module):
         self.cost = cost
 
         self.update = Update(self.lam)
-        self.timeDict = {}
-        self.timeDict["total"] = 0.
-        self.timeDict["rollout"] = 0.
-        self.timeDict["update"] = 0.
-        self.timeDict["model"] = 0.
-        self.timeDict["cost"] = 0.
-        self.timeDict["calls"] = 0
+        self.rest_timer()
 
     '''
         Computes the next action with MPPI.
@@ -202,6 +196,15 @@ class ControllerBase(torch.nn.Module):
     def stats(self):
         print("*"*5, " Mean execution time ", "*"*5)
         print("* Next step : {:.4f} (sec)".format(self.timeDict["total"]/self.timeDict["calls"]))
+
+    def rest_timer(self):
+        self.timeDict = {}
+        self.timeDict["total"] = 0.
+        self.timeDict["rollout"] = 0.
+        self.timeDict["update"] = 0.
+        self.timeDict["model"] = 0.
+        self.timeDict["cost"] = 0.
+        self.timeDict["calls"] = 0
 
 class Update(torch.nn.Module):
     def __init__(self, lam):
