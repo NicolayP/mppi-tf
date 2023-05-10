@@ -71,6 +71,22 @@ class StaticCost(CostBase):
     def dist(self, state):
         return tf.subtract(state, self.goal)
 
+    '''
+    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+    obstacles.
+
+    inputs:
+    -------
+        - state: the state of the agent.
+        - pts: the number of points in the list
+    '''
+    def get_3D(self, state, pts=100):
+        x0 = self.goal[:3]
+        x1 = state[:3]
+        t = np.linspace(0., 1., pts)
+
+        return t * x0 + (1 - t) * x1
+
 
 class StaticQuatCost(CostBase):
     def __init__(self, lam, gamma, upsilon, sigma, goal, Q, diag=False):

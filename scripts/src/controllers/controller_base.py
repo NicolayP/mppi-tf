@@ -128,6 +128,14 @@ class ControllerBase(tf.Module):
         self._timingDict['total'] = 0.
         self._timingDict['calls'] = 0
 
+    @property
+    def tracing(self):
+        return self._tracing
+
+    @tracing.setter
+    def tracing(self, value):
+        self._tracing = value
+
     def set_observer(self, observer):
         self._observer = observer
         self._model.set_observer(observer)
@@ -145,7 +153,7 @@ class ControllerBase(tf.Module):
                 - xNext: the next state. Shape [sDim, 1]
         '''
         if self._log:
-            pred = self.predict(model_input, u, self._actionSeq, xNext)
+            #pred = self.predict(model_input, u, self._actionSeq, xNext)
             self._observer.advance()
 
     def state_error(self, stateGt, statePred):
@@ -235,7 +243,6 @@ class ControllerBase(tf.Module):
                 - next the next action to be applied. Shape: [aDim, 1]
 
         '''
-        #print("Tracing with {}".format(model_input))
         self._model.set_k(k)
         # every input has already been check in parent function calls
         if profile:
@@ -369,7 +376,6 @@ class ControllerBase(tf.Module):
         self._observer.write_control("weights", weights)
         self._observer.write_control("weighted_noise", weighted_noises)
         self._observer.write_control("update", update)
-
         return update, weights
 
     def beta(self, scope, cost):
@@ -479,16 +485,18 @@ class ControllerBase(tf.Module):
             --------
                 None.
         '''
+        if not self._graphMode:
+            warnings.warn("Not using graph mode, no trace to generate.")
+            return
         fake_input = self._model.fake_input()
         # Try with tf.zeros()
         fake_sequence = tf.zeros((self._tau, self._aDim, 1), dtype=dtype, name="fake_sequence")
-
+        self._tracing = True
         _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
                            fake_input,
                            fake_sequence,
                            self._normalizeCost)
-        if not self._graphMode:
-            warnings.warn("Not using graph mode, no trace to generate.")
+        self._tracing = False
 
     def profile(self):
         fake_state = np.zeros((self._sDim, 1))

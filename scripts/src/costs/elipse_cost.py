@@ -2,6 +2,7 @@ from .cost_base import CostBase
 from ..misc.utile import assert_shape, dtype
 
 import numpy as np
+from scipy.spatial.transform import Rotation as R
 import tensorflow as tf
 import tensorflow_graphics.geometry.transformation as tfgt
 
@@ -97,6 +98,21 @@ class ElipseCost(CostBase):
         return_dict["v_dist"] = v_dist[0]
         return return_dict
 
+    '''
+    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+    obstacles.
+
+    inputs:
+    -------
+        - state: the state of the agent.
+        - pts: the number of points in the list
+    '''
+    def get_3D(self, state, pts=100):
+        alpha = np.linspace(0, 2*np.pi, pts)
+        x = self.a*np.cos(alpha) + self.cx
+        y = self.b*np.sin(alpha) + self.cy
+        return x, y
+
 
 class ElipseCost3D(CostBase):
     '''
@@ -172,6 +188,7 @@ class ElipseCost3D(CostBase):
         self.R = tf.transpose(tf.linalg.inv(N))
         # quaternion mapping points to the elipse plane.
         self.q = tfgt.quaternion.from_rotation_matrix(self.R)
+        self.np_r = R.from_quat(self.q.numpy())
         self.x = tf.constant([[1., 0., 0.]], dtype=dtype)
 
     '''
@@ -315,3 +332,22 @@ class ElipseCost3D(CostBase):
         v = tf.norm(velocity[:, 0:3], axis=1)
         dv = tf.abs(tf.pow(v, 2) - tf.pow(self.gv, 2))
         return tf.expand_dims(dv, axis=-1)
+
+    '''
+    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+    obstacles.
+
+    inputs:
+    -------
+        - state: the state of the agent.
+        - pts: the number of points in the list
+    '''
+    def get_3D(self, state, pts=100):
+        alpha = np.linspace(0, 2*np.pi, pts)
+        x = self.axis[0]*np.cos(alpha)
+        y = self.axis[1]*np.sin(alpha)
+        z = np.zeros(shape=alpha.shape)
+        points = np.concatenate([x[..., None], y[..., None], z[..., None]], axis=-1)
+        r_inv = self.np_r.inv()
+        points = r_inv.apply(points) + self.t.numpy()[:, 0]
+        return points
