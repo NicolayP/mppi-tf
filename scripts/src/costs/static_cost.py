@@ -81,9 +81,9 @@ class StaticCost(CostBase):
         - pts: the number of points in the list
     '''
     def get_3D(self, state, pts=100):
-        x0 = self.goal[:3]
-        x1 = state[:3]
-        t = np.linspace(0., 1., pts)
+        x0 = self.goal[:3, 0]
+        x1 = state[:3, 0]
+        t = np.linspace(0., 1., pts)[:, None]
 
         return t * x0 + (1 - t) * x1
 
@@ -182,7 +182,21 @@ class StaticQuatCost(CostBase):
         split_cost = tf.math.multiply(diff, rhs, name="split")
         return split_cost
 
+    '''
+    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+    obstacles.
 
+    inputs:
+    -------
+        - state: the state of the agent.
+        - pts: the number of points in the list
+    '''
+    def get_3D(self, state, pts=100):
+        x0 = self.goal[:3, 0]
+        x1 = state[:3, 0]
+        t = np.linspace(0., 1., pts)[:, None]
+
+        return t * x0 + (1 - t) * x1
 
 class StaticRotCost(CostBase):
     def __init__(self, lam, gamma, upsilon, sigma, goal, Q, diag=False, rep="quat"):
@@ -289,3 +303,19 @@ class StaticRotCost(CostBase):
         vel_dist = tf.subtract(vel, goal_vel)        
         diff = tf.concat([pos_dist, theta[..., None], vel_dist], axis=1)[..., None]
         return diff
+
+    '''
+    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+    obstacles.
+
+    inputs:
+    -------
+        - state: the state of the agent.
+        - pts: the number of points in the list
+    '''
+    def get_3D(self, state, pts=100):
+        x0 = self.goal[:3, 0]
+        x1 = state[:3, 0]
+        t = np.linspace(0., 1., pts)[:, None]
+
+        return t * x0 + (1 - t) * x1
