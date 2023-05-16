@@ -182,6 +182,8 @@ class ControllerBase(tf.Module):
                 - next_action. The next action to be applied to the system.
                     Shape: [aDim, 1]
         '''
+        # first update the cost funciton's objective according to the newly recieved state.
+        self.cost.update_goal(model_input[0][-1])
         # if not tf.ensure_shape(state, [self._sDim, 1]):
         #    raise AssertionError("State tensor doesn't have the expected \
         #                         shape.\n Expected [{}, 1], got {}".

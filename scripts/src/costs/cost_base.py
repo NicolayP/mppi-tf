@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_graphics.geometry.transformation as tfgt
 from ..misc.utile import assert_shape, dtype
 import numpy as np
 
@@ -262,6 +263,13 @@ class CostBase(tf.Module):
     def get_3D(self, state, pts=100):
         raise NotImplementedError
 
+    '''
+        When the cost contains multiple goals.
+    '''
+    def update_goal(self, state):
+        pass
+
+
 class PrimitiveObstacles(tf.Module):
     def __init__(self, type):
         self.type = type
@@ -310,6 +318,7 @@ class CylinderObstacle(PrimitiveObstacles):
         super(CylinderObstacle, self).__init__("cylinder")
         self.p1, self.p2 = tf.convert_to_tensor(p1, dtype=dtype), tf.convert_to_tensor(p2, dtype=dtype)
         self.e = self.p2 - self.p1
+        self.n = tf.constant([0., 0., 1.], dtype=dtype) # cylinder always up.
         self.r = radius
 
     '''
@@ -344,7 +353,7 @@ class CylinderObstacle(PrimitiveObstacles):
     def get_pose(self):
         pc = (self.p1  + (self.e/2)).numpy()
         vec = self.e/tf.linalg.norm(self.e)
-        q = tf.concat([vec, [[0.]]], axis=0).numpy()
+        q = tfgt.quaternion.between_two_vectors_3d(self.n, tf.squeeze(vec, axis=-1))
         return pc, q
 
     def get_param(self):

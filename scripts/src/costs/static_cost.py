@@ -198,21 +198,72 @@ class StaticQuatCost(CostBase):
 
         return t * x0 + (1 - t) * x1
 
+
+class ListQuatCost(StaticQuatCost):
+    '''
+    '''
+    def __init__(self, lam, gamma, upsilon, sigma, goals, Q, diag=False):
+        self.goals = goals
+        self.i = 0
+        goal = self.goals[self.i]
+        self.i += 1
+        self.min_dist = 0.5
+        StaticQuatCost.__init__(self, lam, gamma, upsilon, sigma, goal, Q, diag)
+
+    '''
+    '''
+    def update_goal(self, state):
+        p_dist = self.position_dist(state)
+        if p_dist < self.min_dist and self.i < len(self.goal):
+            self.set_goal(self.goals[self.i])
+            self.i += 1
+
+    '''
+    '''
+    def get_3D(self, state, pts=100):
+        pts_seg = int(pts / len(self.goals[self.i:])) # number of points per segment remaining
+        s1 = state
+        s2 = self.goals[self.i-1] # current goal in numpy
+        segments = [self.gen_segment(s1, s2, pts_seg)]
+        for i in range(self.i, len(self.goals)):
+            s1 = self.goals[i-1]
+            s2 = self.goals[i]
+            segments.append(self.gen_segment(s1, s2, pts_seg))
+        return np.concatenate(segments, axis=0)
+
+    '''
+    '''
+    def gen_segment(self, s1, s2, pts):
+        x0 = s1[:3, 0]
+        x1 = s2[:3, 0]
+        t = np.linspace(0., 1., pts)[:, None]
+
+        return t * x0 + (1 - t) * x1
+
+    '''
+    '''
+    def position_dist(self, state):
+        p = state[:, :3]
+        g_p = self.goal[:3]
+        d = g_p - p
+        return tf.linalg.norm(d)
+
+
+
 class StaticRotCost(CostBase):
+    '''
+        Compute the cost for a static point.
+
+        - input:
+        --------
+            - lam (lambda) the inverse temperature. 
+            - gamma: decoupling parameter between action and noise.
+            - upsilon: covariance augmentation for noise generation.
+            - sigma: the noise covariance matrix. shape [aDim, aDim].
+            - goal: target goal (psition; speed). shape [sDim, 1].
+            - Q: weight matrix for the different part of the cost function. shape: [sDim, sDim]
+    '''
     def __init__(self, lam, gamma, upsilon, sigma, goal, Q, diag=False, rep="quat"):
-        '''
-            Compute the cost for a static point.
-
-            - input:
-            --------
-                - lam (lambda) the inverse temperature. 
-                - gamma: decoupling parameter between action and noise.
-                - upsilon: covariance augmentation for noise generation.
-                - sigma: the noise covariance matrix. shape [aDim, aDim].
-                - goal: target goal (psition; speed). shape [sDim, 1].
-                - Q: weight matrix for the different part of the cost function. shape: [sDim, sDim]
-        '''
-
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
         
         self.Q = tf.convert_to_tensor(Q, dtype=dtype)
@@ -235,13 +286,17 @@ class StaticRotCost(CostBase):
             name="goal")
 
         self.set_goal(goal)
-        
+
+    '''
+    ''' 
     def set_goal(self, goal):
         if not assert_shape(goal, (18, 1)):
             raise AssertionError("Goal tensor shape error, expected: [{}, 1], got {}".format(self.q_shape[0], goal.shape))
 
         self.goal.assign(goal)
 
+    '''
+    '''
     def to_vec(self, goal):
         if self.rep == "quat":
             quat = goal[3:7, 0]
@@ -254,23 +309,25 @@ class StaticRotCost(CostBase):
         goal_vel = goal[-6:]
         return np.concatenate([pos, mat, goal_vel], axis=0)
 
+    '''
+    '''
     def get_goal(self):
         return self.goal
 
+    '''
+        Computes state cost for the static point.
+
+        - input:
+        --------
+            - scope: the tensorflow scope.
+            - state: current state. Shape: [k/1, sDim, 1]
+
+        - output:
+        ---------
+            - dict with entries:
+                "state_cost" = (state-goal)^T Q (state-goal)
+    '''
     def state_cost(self, scope, state):
-        '''
-            Computes state cost for the static point.
-
-            - input:
-            --------
-                - scope: the tensorflow scope.
-                - state: current state. Shape: [k/1, sDim, 1]
-
-            - output:
-            ---------
-                - dict with entries:
-                    "state_cost" = (state-goal)^T Q (state-goal)
-        '''
         diff = self.dist(state)
         stateCost = tf.linalg.matmul(
                         diff,
@@ -281,10 +338,14 @@ class StaticRotCost(CostBase):
                         name="left")
         return stateCost
 
+    '''
+    '''
     def draw_goal(self):
         np_goal = self.goal
         return np_goal[0], np_goal[1]
 
+    '''
+    '''
     def dist(self, state):
         state = tf.squeeze(state, axis=-1)
         goal = tf.squeeze(self.goal, axis=-1)

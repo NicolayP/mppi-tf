@@ -1,6 +1,7 @@
 import numpy as np
 
 from .costs.static_cost import StaticCost, StaticQuatCost, StaticRotCost
+from .costs.static_cost import ListQuatCost
 from .costs.elipse_cost import ElipseCost, ElipseCost3D
 from .costs.cost_base import CylinderObstacle
 
@@ -28,6 +29,13 @@ def static_quat(task_dic, lam, gamma, upsilon, sigma):
     Q = np.array(task_dic['Q'])
     diag = task_dic["diag"]
     return StaticQuatCost(lam, gamma, upsilon, sigma, goal, Q, diag)
+
+
+def list_quat(task_dic, lam, gamma, upsilon, sigma):
+    goals = np.expand_dims(np.array(task_dic['goals']), -1)
+    Q = np.array(task_dic['Q'])
+    diag = task_dic["diag"]
+    return ListQuatCost(lam, gamma, upsilon, sigma, goals, Q, diag)
 
 
 def elipse(task_dic, lam, gamma, upsilon, sigma):
@@ -78,6 +86,7 @@ def get_cost(task, lam, gamma, upsilon, sigma):
     switcher = {
         "static": static,
         "static_quat": static_quat,
+        "list_quat": list_quat,
         "static_rot": static_rot,
         "elipse": elipse,
         "elipse3d": elipse3d,
