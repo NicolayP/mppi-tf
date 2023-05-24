@@ -12,8 +12,8 @@ inertial:
 cog: [0, 0, 0]
 # CoB represented wrt ENU convention
 cob: [0, 0, 0.3]
-volume: 1.83826
-#volume: 1.8121303501945525
+#volume: 1.83826
+volume: 1.8121303501945525
 length: 2.6
 height: 1.6
 width: 1.5
