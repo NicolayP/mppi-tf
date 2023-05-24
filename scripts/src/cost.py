@@ -35,7 +35,8 @@ def list_quat(task_dic, lam, gamma, upsilon, sigma):
     goals = np.expand_dims(np.array(task_dic['goals']), -1)
     Q = np.array(task_dic['Q'])
     diag = task_dic["diag"]
-    return ListQuatCost(lam, gamma, upsilon, sigma, goals, Q, diag)
+    min_dist = task_dic["min_dist"]
+    return ListQuatCost(lam, gamma, upsilon, sigma, goals, Q, diag, min_dist=min_dist)
 
 
 def elipse(task_dic, lam, gamma, upsilon, sigma):

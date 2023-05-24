@@ -21,7 +21,7 @@ def lagged(
         model, cost,
         k, tau,
         sDim, aDim,
-        lam, upsilon, sigma,
+        lam, upsilon, sigma, initSeq,
         normalizeCost, filterSeq,
         log, logPath,
         graphMode, debug,
@@ -31,7 +31,7 @@ def lagged(
         model=model, cost=cost,
         k=k, tau=tau,
         sDim=sDim, aDim=aDim, h=configDict['history'],
-        lam=lam, upsilon=upsilon, sigma=sigma,
+        lam=lam, upsilon=upsilon, sigma=sigma, initSeq=initSeq,
         normalizeCost=normalizeCost, filterSeq=filterSeq,
         log=log, logPath=logPath,
         graphMode=graphMode, debug=debug,
@@ -42,7 +42,7 @@ def state(
         model, cost,
         k, tau,
         sDim, aDim,
-        lam, upsilon, sigma,
+        lam, upsilon, sigma, initSeq,
         normalizeCost, filterSeq,
         log, logPath,
         graphMode, debug,
@@ -52,7 +52,7 @@ def state(
         model=model, cost=cost,
         k=k, tau=tau,
         sDim=sDim, aDim=aDim,
-        lam=lam, upsilon=upsilon, sigma=sigma,
+        lam=lam, upsilon=upsilon, sigma=sigma, initSeq=initSeq,
         normalizeCost=normalizeCost, filterSeq=filterSeq,
         log=log, logPath=logPath,
         graphMode=graphMode, debug=debug,
@@ -64,6 +64,7 @@ def get_controller(
     k, tau,
     sDim, aDim,
     lam, upsilon, sigma,
+    initSeq,
     normalizeCost, filterSeq,
     log, logPath,
     graphMode, debug,
@@ -81,7 +82,7 @@ def get_controller(
 
     return getter(
         model=model, cost=cost, k=k, tau=tau, sDim=sDim, aDim=aDim,
-        lam=lam, upsilon=upsilon, sigma=sigma, normalizeCost=normalizeCost,
+        lam=lam, upsilon=upsilon, sigma=sigma, initSeq=initSeq, normalizeCost=normalizeCost,
         filterSeq=filterSeq, log=log, logPath=logPath, graphMode=graphMode, debug=debug,
         configDict=configDict, taskDict=taskDict, modelDict=modelDict
     )

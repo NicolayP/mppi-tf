@@ -240,6 +240,21 @@ class ObserverBase(tf.Module):
                                     tf.squeeze(tensor),
                                     step=self.step)
 
+    def write_cost(self, name, tensor):
+        if not self._log:
+            return
+
+        with self._writer.as_default():
+            if name == "angle_error":
+                tf.summary.scalar(f"Cost/angle_error",
+                                  tensor, step=self.step)
+            elif name == "velocity_error":
+                tf.summary.scalar(f"Cost/velocity_error",
+                                  tensor, step=self.step)
+            elif name == "position_error":
+                tf.summary.scalar(f"Cost/position_error",
+                                  tensor, step=self.step)
+
     def to_euler(self, state, deg):
         raise NotImplementedError
 

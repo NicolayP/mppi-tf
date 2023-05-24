@@ -269,6 +269,14 @@ class CostBase(tf.Module):
     def update_goal(self, state):
         pass
 
+    def angle_error(self, state, split=False):
+        pass
+
+    def velocity_error(self, state, split=False):
+        pass
+
+    def position_error(self, state, split=False):
+        pass
 
 class PrimitiveObstacles(tf.Module):
     def __init__(self, type):

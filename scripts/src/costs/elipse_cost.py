@@ -142,7 +142,8 @@ class ElipseCost3D(CostBase):
                  center,
                  speed,
                  mState,
-                 mVel):
+                 mVel,
+                 tg=True):
         CostBase.__init__(self, lam, gamma, upsilon, sigma)
         axis = np.concatenate([axis, np.array([[1.]])], axis=0)
         self.axis = tf.convert_to_tensor(axis, dtype=dtype)
@@ -182,6 +183,7 @@ class ElipseCost3D(CostBase):
 
         self.mS = tf.cast(mState, dtype)
         self.mV = tf.cast(mVel, dtype)
+        self.tg = tg
 
     def prepare_consts(self):
         N = tf.concat([self.aVec, self.bVec, self.normal], axis=-1)
@@ -210,22 +212,10 @@ class ElipseCost3D(CostBase):
             shape [k, 1, 1]
     '''
     def state_cost(self, scope, state):
-        # Express the points in the plane frame.
-        k = tf.shape(state)[0]
-        q = tf.broadcast_to(self.q, (k, 4))
-        # Firsrt translate the point
-        position = tf.squeeze(state[:, 0:3] - self.t, axis=-1)
-        quat = tf.squeeze(state[:, 3:7], axis=-1)
-        # Rotate the point in the elipse frame.
-        posPf = tfgt.quaternion.rotate(position, q)
-        posPf = tf.expand_dims(posPf, axis=-1)
-        
-        # Rotate the orientation in the elipse frame
-        quatPf = tfgt.quaternion.multiply(q, quat)
-        # The new pose.
-        posePf = tf.concat([posPf, tf.expand_dims(quatPf, axis=-1)], axis=1)
-        positionCost = self.position_error(posPf)
-        orientationCost = self.orientation_error_tg(posePf)
+        posePf = self.to_elipse_frame(state)
+        posPf = posePf[:, :3]
+        positionCost = self.dist_to_elipse(posPf)
+        orientationCost = self.orientation_error(posePf)
         velCost = self.velocity_error(state[:, 7:13])
 
         stateCost = self.mS*positionCost + self.mS*orientationCost + self.mV*velCost
@@ -246,11 +236,16 @@ class ElipseCost3D(CostBase):
             - distance in euclidian norm between the point and the elipse.
                 Shape [k, 1, 1]
     '''
-    def position_error(self, position):
+    def dist_to_elipse(self, position):
         d = tf.pow(tf.divide(position, self.axis), 2)
         d = tf.reduce_sum(d, axis=1) # -> shape [k, 1, 1]
         d = tf.abs(d - 1.)
         return tf.expand_dims(d, axis=-1)
+
+    def orientation_error(self, pose):
+        if self.tg:
+            return self.orientation_error_tg(pose)
+        return self.orientation_error_perp(pose)
 
     '''
         Computes the distance between the orientation and the desired
@@ -330,7 +325,7 @@ class ElipseCost3D(CostBase):
     def velocity_error(self, velocity):
         # compute the normalized linear velocity
         v = tf.norm(velocity[:, 0:3], axis=1)
-        dv = tf.abs(tf.pow(v, 2) - tf.pow(self.gv, 2))
+        dv = tf.abs(v - self.gv)
         return tf.expand_dims(dv, axis=-1)
 
     '''
@@ -351,3 +346,28 @@ class ElipseCost3D(CostBase):
         r_inv = self.np_r.inv()
         points = r_inv.apply(points) + self.t.numpy()[:, 0]
         return points
+
+    def angle_error(self, state, split=False):
+        posePf = self.to_elipse_frame(state)
+        return self.orientation_error(posePf)
+
+    def position_error(self, state, split=False):
+        posPf = self.to_elipse_frame(state)[:, :3]
+        return self.dist_to_elipse(posPf)
+
+    def to_elipse_frame(self, state):
+        # Express the points in the plane frame.
+        k = tf.shape(state)[0]
+        q = tf.broadcast_to(self.q, (k, 4))
+        # Firsrt translate the point
+        position = tf.squeeze(state[:, 0:3] - self.t, axis=-1)
+        quat = tf.squeeze(state[:, 3:7], axis=-1)
+        # Rotate the point in the elipse frame.
+        posPf = tfgt.quaternion.rotate(position, q)
+        posPf = tf.expand_dims(posPf, axis=-1)
+
+        # Rotate the orientation in the elipse frame
+        quatPf = tfgt.quaternion.multiply(q, quat)
+        # The new pose.
+        posePf = tf.concat([posPf, tf.expand_dims(quatPf, axis=-1)], axis=1)
+        return posePf

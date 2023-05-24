@@ -14,7 +14,6 @@ tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
 class ControllerBase(tf.Module):
-
     def __init__(self,
                  model,
                  cost,
@@ -118,7 +117,7 @@ class ControllerBase(tf.Module):
                                        name="Action_sequence_init")
         else:
             if assert_shape(initSeq, (tau, aDim, 1)):
-                self._actionSeq = initSeq
+                self._actionSeq = tf.convert_to_tensor(initSeq, dtype=dtype)
             else:
                 raise AssertionError
 
@@ -183,7 +182,7 @@ class ControllerBase(tf.Module):
                     Shape: [aDim, 1]
         '''
         # first update the cost funciton's objective according to the newly recieved state.
-        self.cost.update_goal(model_input[0][-1])
+        self._cost.update_goal(model_input[0][-1])
         # if not tf.ensure_shape(state, [self._sDim, 1]):
         #    raise AssertionError("State tensor doesn't have the expected \
         #                         shape.\n Expected [{}, 1], got {}".
@@ -215,6 +214,11 @@ class ControllerBase(tf.Module):
                                         axis=-1))
 
         end = t.perf_counter()
+
+        state = model_input[0][-1][None, ...]
+        self._observer.write_cost("angle_error", tf.squeeze(self._cost.angle_error(state)))
+        self._observer.write_cost("velocity_error", tf.squeeze(self._cost.velocity_error(state)))
+        self._observer.write_cost("position_error", tf.squeeze(self._cost.position_error(state)))
 
         self._timingDict['total'] += end-start
         self._timingDict['calls'] += 1
@@ -344,24 +348,25 @@ class ControllerBase(tf.Module):
     def update(self, scope, cost, noises, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
         if tf.reduce_any(tf.math.is_inf(cost)):
-            tf.print("Collision detected.")
-        with tf.name_scope("Beta"):
-            beta = self.beta(scope, cost)
-        with tf.name_scope("Expodential_arg"):
-            arg = self.norm_arg(scope, cost, beta, normalize=normalize)
-            exp_arg = self.exp_arg(scope, arg)
-        with tf.name_scope("Expodential"):
-            exp = self.exp(scope, exp_arg)
-        with tf.name_scope("Nabla"):
-            nabla = self.nabla(scope, exp)
+            tf.print("Inf, Collision detected.")
+
+        with tf.name_scope("Beta") as b:
+            beta = self.beta(b, cost)
+        with tf.name_scope("Expodential_arg") as e:
+            arg = self.norm_arg(e, cost, beta, normalize=normalize)
+            exp_arg = self.exp_arg(e, arg)
+        with tf.name_scope("Expodential") as e:
+            exp = self.exp(e, exp_arg)
+        with tf.name_scope("Nabla") as e:
+            nabla = self.nabla(e, exp)
 
         if nabla < 1e-10:
             tf.print("Warning, small normalization constant! Might be unstable")
 
-        with tf.name_scope("Weights"):
-            weights = self.weights(scope, exp, nabla)
-        with tf.name_scope("Weighted_Noise"):
-            weighted_noises = self.weighted_noise(scope, weights, noises)
+        with tf.name_scope("Weights") as w:
+            weights = self.weights(w, exp, nabla)
+        with tf.name_scope("Weighted_Noise") as wn:
+            weighted_noises = self.weighted_noise(wn, weights, noises)
 
         if tf.reduce_any(tf.math.is_nan(weighted_noises)):
             tf.print("Nan in weighted noise. EXIT")
@@ -388,7 +393,7 @@ class ControllerBase(tf.Module):
         shift = tf.math.subtract(cost, beta)
 
         if normalize:
-            max = tf.reduce_max(shift, 0)
+            max = tf.reduce_max(tf.boolean_mask(shift, tf.math.is_finite(shift)), 0)
             return tf.divide(shift, max)
         return shift
 

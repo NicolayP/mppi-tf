@@ -198,30 +198,48 @@ class StaticQuatCost(CostBase):
 
         return t * x0 + (1 - t) * x1
 
+    def angle_error(self, state, split=False):
+        goal = tf.squeeze(self.goal, axis=-1)
+        quat = state[:, 3:7]
+        goal_quat = goal[3:7]
+        theta = tf.math.acos(2*tf.math.pow(tf.tensordot(quat, goal_quat, 1), 2) - 1)
+        return theta
+
+    def velocity_error(self, state, split=False):
+        vel = state[:, -6:]
+        goal_vel = tf.squezze(self.goal[-6:], axis=-1)
+        vel_dist = tf.math.abs(tf.subtract(vel, goal_vel))
+        return vel_dist
+
+    def position_error(self, state, split=False):
+        pos = state[:, :3]
+        goal_pos = tf.squezze(self.goal[:3], axis=-1)
+        pos_dist = tf.linalg.norm(tf.subtract(pos, goal_pos))
+        return pos_dist
 
 class ListQuatCost(StaticQuatCost):
     '''
     '''
-    def __init__(self, lam, gamma, upsilon, sigma, goals, Q, diag=False):
+    def __init__(self, lam, gamma, upsilon, sigma, goals, Q, diag=False, min_dist=0.5):
         self.goals = goals
         self.i = 0
         goal = self.goals[self.i]
         self.i += 1
-        self.min_dist = 0.5
+        self.min_dist = min_dist
         StaticQuatCost.__init__(self, lam, gamma, upsilon, sigma, goal, Q, diag)
 
     '''
     '''
     def update_goal(self, state):
         p_dist = self.position_dist(state)
-        if p_dist < self.min_dist and self.i < len(self.goal):
+        if p_dist < self.min_dist and self.i < len(self.goals):
             self.set_goal(self.goals[self.i])
             self.i += 1
 
     '''
     '''
     def get_3D(self, state, pts=100):
-        pts_seg = int(pts / len(self.goals[self.i:])) # number of points per segment remaining
+        pts_seg = int(pts / (len(self.goals[self.i:])+1)) # number of points per segment remaining
         s1 = state
         s2 = self.goals[self.i-1] # current goal in numpy
         segments = [self.gen_segment(s1, s2, pts_seg)]
@@ -243,7 +261,7 @@ class ListQuatCost(StaticQuatCost):
     '''
     '''
     def position_dist(self, state):
-        p = state[:, :3]
+        p = state[:3]
         g_p = self.goal[:3]
         d = g_p - p
         return tf.linalg.norm(d)
@@ -380,3 +398,12 @@ class StaticRotCost(CostBase):
         t = np.linspace(0., 1., pts)[:, None]
 
         return t * x0 + (1 - t) * x1
+
+    def angle_error(self, state, split=False):
+        pass
+
+    def velocity_error(self, state, split=False):
+        pass
+
+    def position_error(self, state, split=False):
+        pass

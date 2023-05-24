@@ -31,10 +31,10 @@ class LaggedModelController(ControllerBase):
             taskDict=taskDict,
             modelDict=modelDict,
             h=h, aDim=aDim, sDim=sDim, modelName=self._model.get_name()))
-        if self._log:
-            self._tracing = True
-            self._observer.save_graph(self._next_fct, self._graphMode)
-            self._tracing = False
+        # if self._log:
+        #     self._tracing = True
+        #     self._observer.save_graph(self._next_fct, self._graphMode)
+        #     self._tracing = False
 
     def predict(self, model_input, u, actionSeq, xNext):
         laggedX, laggedU = model_input
