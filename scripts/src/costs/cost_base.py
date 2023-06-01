@@ -278,6 +278,7 @@ class CostBase(tf.Module):
     def position_error(self, state, split=False):
         pass
 
+
 class PrimitiveObstacles(tf.Module):
     def __init__(self, type):
         self.type = type

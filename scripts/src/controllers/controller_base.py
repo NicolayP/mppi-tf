@@ -196,7 +196,6 @@ class ControllerBase(tf.Module):
                               self._normalizeCost)
         self._actionSeq = seq
         # tf.profiler.experimental.stop()
-
         # FIRST GUESS window_length = 5, we don't want to filter out to much
         # since we expect smooth inputs, need to be played around with.
         # FIRST GUESS polyorder = 3, think that a 3rd degree polynome is
@@ -217,8 +216,8 @@ class ControllerBase(tf.Module):
 
         state = model_input[0][-1][None, ...]
         self._observer.write_cost("angle_error", tf.squeeze(self._cost.angle_error(state)))
-        self._observer.write_cost("velocity_error", tf.squeeze(self._cost.velocity_error(state)))
         self._observer.write_cost("position_error", tf.squeeze(self._cost.position_error(state)))
+        self._observer.write_cost("velocity_error", tf.squeeze(self._cost.velocity_error(state[:, -6:])))
 
         self._timingDict['total'] += end-start
         self._timingDict['calls'] += 1
@@ -342,8 +341,8 @@ class ControllerBase(tf.Module):
                                mean=0.,
                                dtype=dtype,
                                seed=1)
-
-        return tf.linalg.matmul(self._upsilon*self._sigma, rng)
+        rng = tf.linalg.matmul(self._upsilon*self._sigma, rng)
+        return rng
 
     def update(self, scope, cost, noises, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
@@ -379,6 +378,7 @@ class ControllerBase(tf.Module):
             update = rawUpdate
 
         self._observer.write_control("eta", nabla)
+        self._observer.write_control("exp", exp)
         self._observer.write_control("arg", arg)
         self._observer.write_control("weights", weights)
         self._observer.write_control("weighted_noise", weighted_noises)

@@ -360,6 +360,9 @@ class ObserverLagged(ObserverBase):
                                                             dtype=dtype)),
                                 step=self.step)
 
+            elif name == "exp":
+                tf.summary.histogram("exponential", tensor, step=self.step)
+
             elif name == "arg":
                 tf.summary.histogram("exponenetial_arg",
                                 tensor,

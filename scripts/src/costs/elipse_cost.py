@@ -216,10 +216,19 @@ class ElipseCost3D(CostBase):
         posPf = posePf[:, :3]
         positionCost = self.dist_to_elipse(posPf)
         orientationCost = self.orientation_error(posePf)
-        velCost = self.velocity_error(state[:, 7:13])
-
+        #velCost = self.velocity_error(state[:, 7:13])
+        velCost = self.velocity_cost(state[:, 7:13])
         stateCost = self.mS*positionCost + self.mS*orientationCost + self.mV*velCost
         return stateCost
+
+    def velocity_cost(self, velocity):
+        if self.tg:
+            v = velocity[:, 0]
+        else:
+            v = velocity[:, 1]
+        dv = tf.pow(v-self.gv, 2)
+        dv = tf.expand_dims(dv, axis=-1)
+        return dv
 
     '''
         Computes the distance between a set of points and the elipse.
@@ -323,8 +332,9 @@ class ElipseCost3D(CostBase):
                 Shape [k, 1, 1]
     '''
     def velocity_error(self, velocity):
-        # compute the normalized linear velocity
-        v = tf.norm(velocity[:, 0:3], axis=1)
+        # compute the norm of linear velocity
+        return self.velocity_cost(velocity)
+        v = tf.norm(velocity[:, :3], axis=1)
         dv = tf.abs(v - self.gv)
         return tf.expand_dims(dv, axis=-1)
 

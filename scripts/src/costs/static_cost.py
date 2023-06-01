@@ -164,7 +164,6 @@ class StaticQuatCost(CostBase):
         goal = tf.squeeze(self.goal, axis=-1)
         quat = state[:, 3:7]
         goal_quat = goal[3:7]
-
         theta = tf.math.acos(2*tf.math.pow(tf.tensordot(quat, goal_quat, 1), 2) - 1)
 
         pos = state[:, :3]
@@ -199,6 +198,7 @@ class StaticQuatCost(CostBase):
         return t * x0 + (1 - t) * x1
 
     def angle_error(self, state, split=False):
+        state = tf.squeeze(state, axis=-1)
         goal = tf.squeeze(self.goal, axis=-1)
         quat = state[:, 3:7]
         goal_quat = goal[3:7]
@@ -206,16 +206,18 @@ class StaticQuatCost(CostBase):
         return theta
 
     def velocity_error(self, state, split=False):
-        vel = state[:, -6:]
-        goal_vel = tf.squezze(self.goal[-6:], axis=-1)
-        vel_dist = tf.math.abs(tf.subtract(vel, goal_vel))
+        vel = tf.squeeze(state[:, -6:], axis=-1)
+        goal_vel = tf.squeeze(self.goal[-6:], axis=-1)
+        vel_dist = tf.linalg.norm(tf.subtract(vel, goal_vel), axis=-1)
         return vel_dist
 
     def position_error(self, state, split=False):
-        pos = state[:, :3]
-        goal_pos = tf.squezze(self.goal[:3], axis=-1)
-        pos_dist = tf.linalg.norm(tf.subtract(pos, goal_pos))
+        pos = tf.squeeze(state[:, :3], axis=-1)
+        state = tf.squeeze(state, axis=-1)
+        goal_pos = tf.squeeze(self.goal[:3], axis=-1)
+        pos_dist = tf.linalg.norm(tf.subtract(pos, goal_pos), axis=-1)
         return pos_dist
+
 
 class ListQuatCost(StaticQuatCost):
     '''
@@ -265,7 +267,6 @@ class ListQuatCost(StaticQuatCost):
         g_p = self.goal[:3]
         d = g_p - p
         return tf.linalg.norm(d)
-
 
 
 class StaticRotCost(CostBase):
