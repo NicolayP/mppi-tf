@@ -52,7 +52,6 @@ def main():
 
     # Call the controller:
     a = controller(s)
-    print("Next aciton: ", a.shape)
 
 if __name__ == "__main__":
     main()

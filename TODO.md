@@ -3,7 +3,7 @@
 ## Prepare for Mykhaylo
 
     - [x] Getter for the model, cost and controller.
-    - [ ] Requirements file.
+    - [x] Requirements file. (Should work with the same environement as for the rnn)
     - [x] Single controller step.
 
 ## Optimization
@@ -21,3 +21,9 @@
 # Notes:
 
 Write here notes and comments on the different tasks.
+
+the function to optimize is the last one of `run_controller.py`
+
+```python
+a = controller(s)
+```

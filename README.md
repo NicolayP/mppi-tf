@@ -2,7 +2,7 @@
 
 ## Dependencies:
 
-## Installation:
+similar as for the rnn repo
 
 ## Running:
 
