@@ -1,5 +1,5 @@
 ---
-type: "auv"
+type: "auv_fossen"
 mass: 1862.87
 model: rexrov2
 inertial:
