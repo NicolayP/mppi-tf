@@ -1,4 +1,4 @@
-import tensorflow_graphics as tfg
+import tensorflow_graphics.geometry.transformation as tfgt
 import tensorflow as tf
 
 from .model_utils import ToSE3Mat, SE3int, FlattenSE3
@@ -580,7 +580,7 @@ class NNAUVModelSpeed(NNAUVModel):
         samples = stateQ.shape[0]
         pos = stateQ[:, 0:3, :]
         quats = tf.squeeze(stateQ[:, 3:7, :], axis=-1)
-        euler = tfg.geometry.transformation.euler.from_quaternion(quats)
+        euler = tfgt.euler.from_quaternion(quats)
         
         euler = tf.expand_dims(euler, axis=-1)
 

@@ -24,15 +24,17 @@ class LaggedModelController(ControllerBase):
             log=log, logPath=logPath, graphMode=graphMode, debug=debug
         )
         self._h = h
-        self._observer = ObserverLaggedQuat(
+        self.set_observer(ObserverLaggedQuat(
             logPath=logPath, log=log, debug=debug,
             k=k, tau=tau, lam=lam,
             configDict=configDict,
             taskDict=taskDict,
             modelDict=modelDict,
-            h=h, aDim=aDim, sDim=sDim, modelName=self._model.get_name())
+            h=h, aDim=aDim, sDim=sDim, modelName=self._model.get_name()))
         if self._log:
+            self._tracing = True
             self._observer.save_graph(self._next_fct, self._graphMode)
+            self._tracing = False
 
     def predict(self, model_input, u, actionSeq, xNext):
         laggedX, laggedU = model_input
@@ -88,11 +90,12 @@ class LaggedModelController(ControllerBase):
         
         fake_sequence = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
 
-
+        self._tracing = True
         _ = self._next_fct(tf.Variable(1, dtype=tf.int32),
                            fake_input,
                            fake_sequence,
                            self._normalizeCost)
+        self._tracing = False
 
     def build_model(self, scope, k, model_input, noises, actionSeq):
         '''
@@ -148,7 +151,6 @@ class LaggedModelController(ControllerBase):
                     laggedState = push_to_tensor(laggedState, nextState)
                     if laggedAction is not None:
                         laggedAction = push_to_tensor(laggedAction, toApply[:, -1])
-
 
         with tf.name_scope("Terminal_cost") as tc:
             fCost = self._cost.build_final_step_cost_graph(tc, nextState)

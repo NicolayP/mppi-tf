@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-import tensorflow_graphics as tfg
+import tensorflow_graphics.geometry.transformation as tfgt
 
 from ..src.costs.cost_base import CostBase
 from ..src.costs.cost_base import PrimitiveObstacles
@@ -732,7 +732,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         exp_b = np.array([[0.], [1.], [0.]], dtype=npdtype)
         exp_r = np.array([
@@ -751,7 +751,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         exp_b = np.array([[0.], [1.], [-1.]], dtype=npdtype)
         exp_r = np.array([
@@ -777,7 +777,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         error = cost.position_error(position)
         
@@ -787,7 +787,6 @@ class TestElipse3DCost(tf.test.TestCase):
         self.assertAllClose(error, exp_er)
 
     def test_orientation_error(self):
-        print("*"*5, "test elipse orientation", "*"*5)
         pose = np.array([
                                 [
                                  [0.1], [0.4], [0.2],
@@ -803,15 +802,13 @@ class TestElipse3DCost(tf.test.TestCase):
                                 ]
                                ], dtype=npdtype)
 
-        print("orientation: ", pose.shape)
-
         normal = np.array([[0.], [1.], [1.]], dtype=npdtype)
         aVec = np.array([[1.], [0.], [0.]], dtype=npdtype)
         center = np.array([[0.], [1.], [-2.]], dtype=npdtype)
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
 
         tg_vec = np.array([[(-(self.axis[0, 0]/self.axis[1, 0])**2) * pose[0, 1, 0], pose[0, 0, 0], 0.],
@@ -827,9 +824,9 @@ class TestElipse3DCost(tf.test.TestCase):
         exp_er_tg = 2* np.arccos(np.sum(q_tg[..., 0] * pose[:, 3:, 0], axis=-1))
         # Implementation differences between tensorflow and numpy makes a pi difference.
         exp_er_tg = np.array([
-                           3.0018840093006306,
-                           2.4098026419889416,
-                           1.1216650246733544
+                           [[3.0018840093006306]],
+                           [[2.4098026419889416]],
+                           [[1.1216650246733544]]
                           ], dtype=npdtype)
         error_tg = cost.orientation_error_tg(pose)
         self.assertAllClose(error_tg, exp_er_tg)
@@ -848,9 +845,9 @@ class TestElipse3DCost(tf.test.TestCase):
 
         exp_er_perp = 2* np.arccos(np.sum(q_perp[..., 0] * pose[:, 3:, 0], axis=-1))
         exp_er_perp = np.array([
-                           1.43108746,
-                           1.3777549,
-                           2.46921356,
+                           [[1.43108746]],
+                           [[1.3777549]],
+                           [[2.46921356]],
                           ], dtype=npdtype)
 
         error_perp = cost.orientation_error_perp(pose)
@@ -877,7 +874,7 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         error = cost.velocity_error(velocitiy)
         exp_er = np.abs(np.array([[[0.21-1]], [[6-1]], [[9-1]]]), dtype=npdtype)
@@ -911,11 +908,11 @@ class TestElipse3DCost(tf.test.TestCase):
 
         cost = ElipseCost3D(self.lam, self.gamma, self.upsilon,
                             self.sigma, normal, aVec, self.axis, center,
-                            self.speed, self.v_speed, self.m_state,
+                            self.speed, self.m_state,
                             self.m_vel)
         c = cost.state_cost("foo", state)
-        #exp_c = np.array([])
-        #self.assertAllClose(c, exp_c)
+        exp_shape = np.zeros(shape=(3, 1, 1), dtype=npdtype)
+        self.assertShapeEqual(exp_shape, c)
 
     def test_tf_rot(self):
         # plane is the zy plane
@@ -924,10 +921,10 @@ class TestElipse3DCost(tf.test.TestCase):
         # Pose x, y, z and roll 90, pitch 0, yaw 0.
         position = np.array([1., 2., 3.], dtype=npdtype)
         quat = np.array([0.7071068, 0., 0., 0.7071068], dtype=npdtype)
-        posPf = tfg.geometry.transformation.quaternion.rotate(position, self.q)
+        posPf = tfgt.quaternion.rotate(position, self.q)
         posPf = tf.expand_dims(posPf, axis=-1)
 
-        quatPf = tfg.geometry.transformation.quaternion.multiply(self.q, quat)
+        quatPf = tfgt.quaternion.multiply(self.q, quat)
         quatPf = tf.expand_dims(quatPf, axis=-1)
 
         exp_pos = np.array([[3.], [2.], [-1.]], dtype=npdtype)

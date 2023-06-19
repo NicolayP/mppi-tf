@@ -250,6 +250,17 @@ class CostBase(tf.Module):
     def set_observer(self, observer):
         self._observer = observer
 
+    '''
+    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+    obstacles.
+
+    inputs:
+    -------
+        - state: the state of the agent.
+        - pts: the number of points in the list
+    '''
+    def get_3D(self, state, pts=100):
+        raise NotImplementedError
 
 class PrimitiveObstacles(tf.Module):
     def __init__(self, type):

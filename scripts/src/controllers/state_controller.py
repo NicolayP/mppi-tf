@@ -2,6 +2,7 @@ import tensorflow as tf
 
 from ..misc.utile import assert_shape, push_to_tensor, dtype
 from .controller_base import ControllerBase
+from ..observer.observer_base import ObserverBase
 import numpy as np
 
 
@@ -20,8 +21,17 @@ class StateModelController(ControllerBase):
             configDict=configDict, taskDict=taskDict, modelDict=modelDict,
             log=log, logPath=logPath, graphMode=graphMode, debug=debug
         )
+        self.set_observer(ObserverBase(
+            logPath=logPath, log=log, debug=debug,
+            k=k, tau=tau, lam=lam,
+            configDict=configDict,
+            taskDict=taskDict,
+            modelDict=modelDict,
+            aDim=aDim, sDim=sDim, modelName=self._model.get_name()))
         if self._log:
+            self._tracing = True
             self._observer.save_graph(self._next_fct, self._graphMode)
+            self._tracing = False
 
     def predict(self, model_input, actionSeq, xNext):
         x, u = model_input

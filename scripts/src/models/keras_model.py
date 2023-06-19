@@ -1,6 +1,5 @@
-from asyncore import loop
 import tensorflow as tf
-import tensorflow_graphics as tfg
+import tensorflow_graphics.geometry.transformation as tfgt
 
 # Gets rid of the error triggered when running
 # tfg in graph mode.
@@ -65,7 +64,7 @@ class PrepData(tf.keras.layers.Layer):
                                                cos(roll), cos(pitch), cos(yaw)]
         '''
         if self.angRep in ["Quaternion"]:
-            angles = tfg.geometry.transformation.euler.from_quaternion(angles)
+            angles = tfgt.euler.from_quaternion(angles)
         cos = tf.math.cos(angles)
         sin = tf.math.sin(angles)
 

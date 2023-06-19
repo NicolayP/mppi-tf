@@ -1,9 +1,6 @@
-from dataclasses import dataclass
 import tensorflow as tf
-import tensorflow_graphics as tfg
-from datetime import datetime
+import tensorflow_graphics.geometry.transformation as tfgt
 import os
-from shutil import copyfile
 from tensorflow.python.ops import summary_ops_v2
 import yaml
 import math as m
@@ -12,7 +9,6 @@ from ..misc.utile import assert_shape, dtype
 
 
 class ObserverBase(tf.Module):
-
     def __init__(self,
                  logPath,
                  log,
@@ -96,8 +92,7 @@ class ObserverBase(tf.Module):
         return self.logdir
 
     def save_graph(self, function, graphMode=True):
-        state = tf.zeros((self._sDim, 1), dtype=dtype)
-        seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
+        state, seq = self._fake_input()
         with self._writer.as_default():
             if graphMode:
                 graph = function.get_concrete_function(1, state, seq).graph
@@ -105,6 +100,11 @@ class ObserverBase(tf.Module):
                 graph = tf.function(function).get_concrete_function(1, state, seq).graph
             # visualize
             summary_ops_v2.graph(graph.as_graph_def())
+
+    def _fake_input(self):
+        state = tf.zeros((self._sDim, 1), dtype=dtype)
+        seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
+        return state, seq
 
     def advance(self):
         if not self._log:
@@ -118,7 +118,6 @@ class ObserverBase(tf.Module):
 
         with self._writer.as_default():
             if name == "update":
-                print("Update: ", tensor.shape)
                 for i in range(self._aDim):
                     mean = tf.math.reduce_mean(tensor[:, i])
                     tf.summary.scalar("Controller/update_mean/{}".format(i),
@@ -259,7 +258,7 @@ class ObserverLagged(ObserverBase):
             aDim, sDim, modelName)
         self._h = h
 
-    def save_graph(self, function, graphMode=True):
+    def _fake_input(self):
         if self._h > 1:
             state = (
                 tf.zeros((self._h, self._sDim, 1), dtype=dtype), 
@@ -271,13 +270,7 @@ class ObserverLagged(ObserverBase):
                 None
             )
         seq = tf.zeros((self._tau, self._aDim, 1), dtype=dtype)
-        with self._writer.as_default():
-            if graphMode:
-                graph = function.get_concrete_function(tf.Variable(1, dtype=tf.int32), state, seq).graph
-            else:
-                graph = tf.function(function).get_concrete_function(tf.Variable(1, dtype=tf.int32), state, seq).graph
-            # visualize
-            summary_ops_v2.graph(graph.as_graph_def())
+        return state, seq
 
     def write_control(self, name, tensor):
         if not self._log:
@@ -421,7 +414,7 @@ class ObserverLaggedQuat(ObserverLagged):
 
         # Not told in the documentation but mostl likely radients.
         euler = tf.expand_dims(
-            tfg.geometry.transformation.euler.from_quaternion(quat[..., 0]),
+            tfgt.euler.from_quaternion(quat[..., 0]),
             axis=-1
         )
         if deg:
