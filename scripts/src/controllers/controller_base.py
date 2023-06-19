@@ -9,8 +9,8 @@ import time as t
 
 import warnings
 
-gpu_devices = tf.config.list_physical_devices('GPU')
-tf.config.experimental.set_memory_growth(gpu_devices[0], True)
+# gpu_devices = tf.config.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(gpu_devices[0], True)
 
 
 class ControllerBase(tf.Module):
@@ -341,29 +341,20 @@ class ControllerBase(tf.Module):
 
     def update(self, scope, cost, noises, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
-        if tf.reduce_any(tf.math.is_inf(cost)):
-            tf.print("Collision detected.")
         with tf.name_scope("Beta"):
             beta = self.beta(scope, cost)
         with tf.name_scope("Expodential_arg"):
-            arg = self.norm_arg(scope, cost, beta, normalize=normalize)
+            # arg = self.norm_arg(scope, cost, beta, normalize=normalize)
+            arg = self.norm_arg(scope, cost, beta, normalize=False)
             exp_arg = self.exp_arg(scope, arg)
         with tf.name_scope("Expodential"):
             exp = self.exp(scope, exp_arg)
         with tf.name_scope("Nabla"):
             nabla = self.nabla(scope, exp)
-
-        if nabla < 1e-10:
-            tf.print("Warning, small normalization constant! Might be unstable")
-
         with tf.name_scope("Weights"):
             weights = self.weights(scope, exp, nabla)
         with tf.name_scope("Weighted_Noise"):
             weighted_noises = self.weighted_noise(scope, weights, noises)
-
-        if tf.reduce_any(tf.math.is_nan(weighted_noises)):
-            tf.print("Nan in weighted noise. EXIT")
-            exit()
 
         with tf.name_scope("Sequence_update"):
             rawUpdate = tf.add(self._actionSeq, weighted_noises)
