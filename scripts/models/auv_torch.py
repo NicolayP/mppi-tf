@@ -3,7 +3,6 @@ import torch
 import numpy as np
 from utils import dtype
 
-
 class AUVFossen(torch.nn.Module):
     def __init__(self, dict={}, dt=0.1, file=None):
         super(AUVFossen, self).__init__()
@@ -125,14 +124,15 @@ class AUVFossen(torch.nn.Module):
                 dim=0),
             requires_grad=False)
             
-    def forward(self, x, u, rk=2):
+    def forward(self, x, u, rk:int=2):
         # Rk2 integration.
-        self.k = x.shape[0]
+        # self.k = x.shape[0]
         k1 = self.x_dot(x, u)
-        if rk == 1:
-            tmp = k1*self.dt
+        tmp = k1*self.dt
+        # if rk == 1:
+        #     tmp = k1*self.dt
 
-        elif rk == 2:
+        if rk == 2:
             k2 = self.x_dot(x + k1*self.dt, u)
             tmp = (self.dt/2.)*(k1 + k2)
 
@@ -227,11 +227,11 @@ class AUVFossen(torch.nn.Module):
 
         return -torch.concat([fbg+fbb, mbg+mbb], dim=-1)
 
-    def damping(self, v):
+    def damping(self, v:torch.Tensor):
         D = - self.linDamp - (v * self.linDampFow)
         tmp = - torch.mul(self.quadDamp, 
                           torch.abs(
-            torch.diag_embed(torch.squeeze(v, axis=-1))))
+            torch.diag_embed(torch.squeeze(v, dim=-1))))
 
         return D + tmp
 

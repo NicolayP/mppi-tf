@@ -52,10 +52,10 @@ class ControllerBase(torch.nn.Module):
         self.aDim = 6
         self.sDim = 13
 
-        self.register_buffer("sigma", torch.tensor(sigma))
-        self.register_buffer("upsilon", torch.tensor(upsilon))
+        self.register_buffer("sigma", torch.tensor(sigma, dtype=dtype))
+        self.register_buffer("upsilon", torch.tensor(upsilon, dtype=dtype))
         self.register_buffer("lam", torch.tensor(lam))
-        self.register_buffer("A", torch.zeros(tau, self.aDim, 1))
+        self.register_buffer("A", torch.zeros(tau, self.aDim, 1, dtype=dtype))
 
         # Shift_init.
         self.register_buffer("init", torch.zeros(self.aDim, 1))
@@ -78,7 +78,7 @@ class ControllerBase(torch.nn.Module):
             - action: the next optimal aciton.
                 shape: [ActionDim, 1]
     '''    
-    def forward(self, state):
+    def forward(self, state) -> torch.Tensor:
         action, self.A = self.control(state, self.A)
         return action
 
@@ -99,7 +99,6 @@ class ControllerBase(torch.nn.Module):
 
         # Rollout the model and compute the cost of every sample.
         costs = self.rollout_cost(s, noises, A)
-
         # Compute the update of the action sequence.
         weighted_noises, eta = self.update(costs, noises)
         A = torch.add(A, weighted_noises)
@@ -119,6 +118,7 @@ class ControllerBase(torch.nn.Module):
         # self.obs.write_control("sample_weight", weights)
         # self.obs.advance()
         # return next action and updated action sequence.
+
         return next, A_next
 
     '''
@@ -134,8 +134,8 @@ class ControllerBase(torch.nn.Module):
                 Shape, [k, tau, aDim, 1]
     '''
     def noise(self):
-        n = torch.normal(mean=torch.zeros(self.k, self.tau, self.aDim, 1, dtype=dtype),
-                         std=torch.ones(self.k, self.tau, self.aDim, 1, dtype=dtype)).to(self.upsilon.device)
+        n = torch.normal(mean=torch.zeros(self.k, self.tau, self.aDim, 1, dtype=torch.double),
+                         std=torch.ones(self.k, self.tau, self.aDim, 1, dtype=torch.double)).to(self.upsilon.device)
         noise = torch.matmul(self.upsilon*self.sigma, n)
         return noise
 
@@ -156,7 +156,7 @@ class ControllerBase(torch.nn.Module):
             - costs: Cost tensor of each rollout. 
                 Shape: [k/1]
     '''
-    def rollout_cost(self, s, noise, A):
+    def rollout_cost(self, s, noise, A) -> torch.Tensor:
         s = torch.unsqueeze(s, dim=0)
         cost = torch.zeros(self.k).to(s.device)
         s = torch.broadcast_to(s, (self.k, self.sDim, 1))
@@ -172,10 +172,9 @@ class ControllerBase(torch.nn.Module):
             cost = torch.add(cost, tmp)
             s = next_s
 
-        f_cost = self.cost(s, final=True)
+        f_cost = self.cost(s, A[-1], noise[:, -1], final=True)
         cost = torch.add(cost, f_cost)
         return cost
-
 
 class Update(torch.nn.Module):
     '''
@@ -244,7 +243,7 @@ class Update(torch.nn.Module):
         -------
             - normalize(costs - beta)
     '''
-    def arg(self, costs, beta, norm=False):
+    def arg(self, costs, beta, norm:bool=False):
         shift = torch.sub(costs, beta)
         if norm:
             max = torch.max(shift)
