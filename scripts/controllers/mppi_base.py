@@ -66,6 +66,7 @@ class ControllerBase(torch.nn.Module):
         self.cost = cost
 
         self.update = Update(self.lam)
+        self.dtype = dtype
 
     '''
         Computes the next action with MPPI.
@@ -134,8 +135,8 @@ class ControllerBase(torch.nn.Module):
                 Shape, [k, tau, aDim, 1]
     '''
     def noise(self):
-        n = torch.normal(mean=torch.zeros(self.k, self.tau, self.aDim, 1, dtype=torch.double),
-                         std=torch.ones(self.k, self.tau, self.aDim, 1, dtype=torch.double)).to(self.upsilon.device)
+        n = torch.normal(mean=torch.zeros(self.k, self.tau, self.aDim, 1, dtype=self.dtype),
+                         std=torch.ones(self.k, self.tau, self.aDim, 1, dtype=self.dtype)).to(self.upsilon.device)
         noise = torch.matmul(self.upsilon*self.sigma, n)
         return noise
 
