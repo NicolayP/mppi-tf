@@ -3,6 +3,13 @@ import torch
 import numpy as np
 from utils import dtype
 
+def diag(tensor):
+    diag_matrix = tensor.unsqueeze(1) * torch.eye(len(tensor), device=tensor.device)
+    return diag_matrix
+
+def diag_embed(tensor):
+    return torch.stack([diag(s_) for s_ in tensor]) if tensor.dim() > 1 else diag(tensor)
+
 class AUVFossen(torch.nn.Module):
     def __init__(self, dict={}, dt=0.1, file=None):
         super(AUVFossen, self).__init__()
@@ -94,7 +101,7 @@ class AUVFossen(torch.nn.Module):
 
         self.linDamp = torch.nn.Parameter(
             torch.unsqueeze(
-                torch.diag_embed(
+                diag_embed(
                     torch.tensor(linDamp, dtype=dtype),
                     ),
             dim=0),
@@ -107,7 +114,7 @@ class AUVFossen(torch.nn.Module):
 
         self.linDampFow = torch.nn.Parameter(
             torch.unsqueeze(
-                torch.diag_embed(
+                diag_embed(
                     torch.tensor(linDampFow, dtype=dtype)),
                 dim=0),
             requires_grad=False)
@@ -119,7 +126,7 @@ class AUVFossen(torch.nn.Module):
 
         self.quadDamp = torch.nn.Parameter(
             torch.unsqueeze(
-                torch.diag_embed(
+                diag_embed(
                     torch.tensor(quadDam, dtype=dtype)),
                 dim=0),
             requires_grad=False)
@@ -231,7 +238,7 @@ class AUVFossen(torch.nn.Module):
         D = - self.linDamp - (v * self.linDampFow)
         tmp = - torch.mul(self.quadDamp, 
                           torch.abs(
-            torch.diag_embed(torch.squeeze(v, dim=-1))))
+            diag_embed(torch.squeeze(v, dim=-1))))
 
         return D + tmp
 
