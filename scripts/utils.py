@@ -5,8 +5,8 @@ import yaml
 import warnings
 
 
-npdtype= np.float32
-dtype = torch.float32
+npdtype= np.double
+dtype = torch.double
 
 def load_param(yaml_file):
     with open(yaml_file, "r") as stream:

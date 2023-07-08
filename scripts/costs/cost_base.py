@@ -1,4 +1,5 @@
 import torch
+from utils import dtype
 
 # TODO: compute all constants without tensorflow. Out of the graph
 # computation.
@@ -29,9 +30,9 @@ class CostBase(torch.nn.Module):
         self.lam = lam
         self.gamma = gamma
         self.upsilon = upsilon
-        self.register_buffer("invSig", torch.linalg.inv(torch.tensor(sigma)))
+        self.register_buffer("invSig", torch.linalg.inv(torch.tensor(sigma, dtype=dtype)))
 
-    def forward(self, state, action=None, noise=None, final=False):
+    def forward(self, state, action=None, noise=None, final: bool =False):
         '''
             Computes the cost of a sample at a given time.
             - input:
@@ -80,13 +81,13 @@ class CostBase(torch.nn.Module):
         '''
         # Right hand side noise
         rhsNcost = torch.matmul(self.invSig, noise)
-
+        
         # Right hand side action
         rhsAcost = torch.matmul(self.invSig, action)
 
         # \u^{T}_t \Sigma^{-1} \epsilon_t, Mix cost
         mixCost = torch.matmul(torch.transpose(action, -1, -2), rhsNcost)
-        mixCost = torch.multiply(2., mixCost)
+        mixCost = torch.multiply(mixCost, 2.)
 
         # \epsilon^{T}_t \Sigma^{-1} \epsilon_t
         nCost = torch.matmul(torch.transpose(noise, -1, -2), rhsNcost)
@@ -94,15 +95,15 @@ class CostBase(torch.nn.Module):
         # \u^{T}_t \Sigma^{-1} \u_t
         aCost = torch.matmul(torch.transpose(action, -1, -2), rhsAcost)
 
-        aCost = torch.multiply(self.gamma, aCost)
+        aCost = torch.multiply(aCost, self.gamma)
 
-        mixCost = torch.multiply(self.gamma, mixCost)
+        mixCost = torch.multiply(mixCost, self.gamma)
 
-        nCost = torch.multiply(self.lam*(1.-1./self.upsilon), nCost)
+        nCost = torch.multiply(nCost, self.lam*(1.-1./self.upsilon))
 
         # \gamma [action_cost + 2mix_cost]
         controlCost = torch.add(aCost, mixCost)
-        actionCost = torch.multiply(0.5, torch.add(controlCost, nCost))
+        actionCost = torch.multiply(torch.add(controlCost, nCost), 0.5)
         return actionCost
 
     def set_observer(self, observer):
