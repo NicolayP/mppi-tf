@@ -32,7 +32,7 @@ class CostBase(torch.nn.Module):
         self.upsilon = upsilon
         self.register_buffer("invSig", torch.linalg.inv(torch.tensor(sigma, dtype=dtype)))
 
-    def forward(self, state, action=None, noise=None, final: bool =False):
+    def forward(self, state, action, noise, final: bool = False):
         '''
             Computes the cost of a sample at a given time.
             - input:
