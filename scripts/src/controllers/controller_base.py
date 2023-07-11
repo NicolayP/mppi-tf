@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 import scipy.signal
 
-from ..misc.utile import assert_shape, push_to_tensor, dtype
+from ..misc.utile import assert_shape, push_to_tensor, dtype, npdtype
 from ..observer.observer_base import ObserverBase
 import time as t
 
@@ -121,6 +121,9 @@ class ControllerBase(tf.Module):
             else:
                 raise AssertionError
 
+        self._filterPast = 10
+        self._filteredSeq = np.zeros((tau+self._filterPast, aDim, 1), dtype=npdtype)
+
         self._trainStep = 0
 
         self._timingDict = {}
@@ -194,24 +197,30 @@ class ControllerBase(tf.Module):
                               model_input,
                               self._actionSeq,
                               self._normalizeCost)
-        self._actionSeq = seq
         # tf.profiler.experimental.stop()
         # FIRST GUESS window_length = 5, we don't want to filter out to much
         # since we expect smooth inputs, need to be played around with.
         # FIRST GUESS polyorder = 3, think that a 3rd degree polynome is
         # enough for this.
         if self._filterSeq:
-            self._actionSeqNp = tf.convert_to_tensor(
-                                    np.expand_dims(
-                                        scipy.signal.savgol_filter(
-                                            self._actionSeq.numpy()[:, :, 0],
-                                            29,
-                                            9,
-                                            deriv=0,
-                                            delta=1.0,
-                                            axis=0),
-                                        axis=-1))
-
+            self._filteredSeq[self._filterPast] = next.numpy()
+            self._filteredSeq[self._filterPast:] = seq.numpy()
+            self._filteredSeq = np.expand_dims(
+                                    scipy.signal.savgol_filter(
+                                        self._filteredSeq[:, :, 0],
+                                        29,
+                                        7,
+                                        deriv=0,
+                                        delta=1.0,
+                                        axis=0),
+                                    axis=-1)
+            next = self._filteredSeq[self._filterPast]
+            seq = tf.convert_to_tensor(self._filteredSeq[self._filterPast:])
+            # Rotate only needs us to 
+            self._filteredSeq = np.roll(self._filteredSeq, -1)
+        else:
+            next = next.numpy()
+        self._actionSeq = seq
         end = t.perf_counter()
 
         state = model_input[0][-1][None, ...]
@@ -221,7 +230,7 @@ class ControllerBase(tf.Module):
 
         self._timingDict['total'] += end-start
         self._timingDict['calls'] += 1
-        return np.squeeze(next.numpy()), np.squeeze(trajs.numpy()), np.squeeze(weights.numpy())
+        return np.squeeze(next), np.squeeze(trajs.numpy()), np.squeeze(weights.numpy())
 
     def _next(self, k, model_input, actionSeq, normalizeCost=False, profile=False):
         '''
