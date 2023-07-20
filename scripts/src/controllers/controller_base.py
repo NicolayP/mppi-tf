@@ -92,6 +92,7 @@ class ControllerBase(tf.Module):
         self._aDim = aDim
         self._normalizeCost = normalizeCost
         self._filterSeq = filterSeq
+        self._prev = np.zeros(shape=(self._aDim, 1))
         self._log = log
         self._debug = debug
         self._graphMode = graphMode
@@ -121,8 +122,8 @@ class ControllerBase(tf.Module):
             else:
                 raise AssertionError
 
-        self._filterPast = 10
-        self._filteredSeq = np.zeros((tau+self._filterPast, aDim, 1), dtype=npdtype)
+        self._filterPast = 0
+        self._filteredSeq = np.zeros((tau+self._filterPast+1, aDim, 1), dtype=npdtype)
 
         self._trainStep = 0
 
@@ -195,7 +196,7 @@ class ControllerBase(tf.Module):
         # tf.profiler.experimental.start(self._observer.get_logdir())
         next, trajs, weights, seq = self._next_fct(self._k,
                               model_input,
-                              self._actionSeq,
+                              tf.identity(self._actionSeq),
                               self._normalizeCost)
         # tf.profiler.experimental.stop()
         # FIRST GUESS window_length = 5, we don't want to filter out to much
@@ -204,23 +205,25 @@ class ControllerBase(tf.Module):
         # enough for this.
         if self._filterSeq:
             self._filteredSeq[self._filterPast] = next.numpy()
-            self._filteredSeq[self._filterPast:] = seq.numpy()
+            self._filteredSeq[self._filterPast+1:] = seq.numpy()
             self._filteredSeq = np.expand_dims(
                                     scipy.signal.savgol_filter(
                                         self._filteredSeq[:, :, 0],
-                                        29,
-                                        7,
+                                        window_length=25,
+                                        polyorder=5,
                                         deriv=0,
-                                        delta=1.0,
-                                        axis=0),
+                                        axis=0,
+                                        mode="nearest"),
                                     axis=-1)
             next = self._filteredSeq[self._filterPast]
-            seq = tf.convert_to_tensor(self._filteredSeq[self._filterPast:])
+            seq = tf.convert_to_tensor(self._filteredSeq[self._filterPast+1:])
             # Rotate only needs us to 
-            self._filteredSeq = np.roll(self._filteredSeq, -1)
+            # self._filteredSeq = np.roll(self._filteredSeq, -1)
+            # next = 0.1 * next.numpy() + 0.9 * self._prev
+            # self._prev = next
         else:
             next = next.numpy()
-        self._actionSeq = seq
+        self._actionSeq = tf.identity(seq)
         end = t.perf_counter()
 
         state = model_input[0][-1][None, ...]
@@ -230,7 +233,7 @@ class ControllerBase(tf.Module):
 
         self._timingDict['total'] += end-start
         self._timingDict['calls'] += 1
-        return np.squeeze(next), np.squeeze(trajs.numpy()), np.squeeze(weights.numpy())
+        return np.squeeze(self._model.action_to_input(next)), np.squeeze(trajs.numpy()), np.squeeze(weights.numpy()), np.squeeze(seq.numpy())
 
     def _next(self, k, model_input, actionSeq, normalizeCost=False, profile=False):
         '''
@@ -314,11 +317,12 @@ class ControllerBase(tf.Module):
             with tf.name_scope("Rollout") as roll:
                 cost, trajs = self.build_model(roll, k, model_input, noises, actionSeq)
             with tf.name_scope("Update") as up:
-                update, weights = self.update(up, cost, noises, normalize=normalize)
+                update, weights = self.update(up, cost, noises, actionSeq, normalize=normalize)
             with tf.name_scope("Next") as n:
                 next = self.get_next(n, update, 1)
             with tf.name_scope("shift_and_init") as si:
                 init = self.init_zeros(si, 1)
+                #init = tf.expand_dims(tf.identity(update[-1]), axis=0)
                 actionSeq = self.shift(si, update, init, 1)
         self._observer.write_control("noises", noises)
         self._observer.write_control("applied", applied)
@@ -353,7 +357,7 @@ class ControllerBase(tf.Module):
         rng = tf.linalg.matmul(self._upsilon*self._sigma, rng)
         return rng
 
-    def update(self, scope, cost, noises, normalize=False):
+    def update(self, scope, cost, noises, actionSeq, normalize=False):
         # shapes: in [k, 1, 1], [k, tau, aDim, 1]; out [tau, aDim, 1]
         if tf.reduce_any(tf.math.is_inf(cost)):
             tf.print("Inf, Collision detected.")
@@ -382,7 +386,7 @@ class ControllerBase(tf.Module):
                 exit()
 
         with tf.name_scope("Sequence_update"):
-            rawUpdate = tf.add(self._actionSeq, weighted_noises)
+            rawUpdate = tf.add(actionSeq, weighted_noises)
             #update = self.clip_act("clipping", rawUpdate)
             update = rawUpdate
 
@@ -486,6 +490,9 @@ class ControllerBase(tf.Module):
     def init_zeros(self, scope, size):
         # shape: out [size, aDim, 1]
         return tf.zeros([size, self._aDim, 1], dtype=dtype)
+
+    def init_last(self, scope, size):
+        return
 
     def trace(self):
         '''
