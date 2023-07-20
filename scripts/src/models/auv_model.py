@@ -87,8 +87,8 @@ class AUVModel(ModelBase):
     def __init__(self, modelDict,
                  inertialFrameId='world',
                  actionDim=6,
-                 limMax=tf.ones(shape=(1,), dtype=tf.float64),
-                 limMin=-tf.ones(shape=(1,), dtype=tf.float64),
+                 limMax=np.ones(shape=(6, 1), dtype=npdtype),
+                 limMin=-np.ones(shape=(6, 1), dtype=npdtype),
                  name="AUV",
                  k=tf.Variable(1),
                  dt=0.1,
@@ -103,8 +103,8 @@ class AUVModel(ModelBase):
         ModelBase.__init__(self, modelDict,
                            stateDim=stateDim,
                            actionDim=actionDim,
-                           limMax=limMax,
-                           limMin=limMin,
+                           limMax=tf.constant(limMax, dtype=dtype),
+                           limMin=tf.constant(limMin, dtype=dtype),
                            name=name,
                            k=k,
                            dt=dt,
@@ -282,6 +282,8 @@ class AUVModel(ModelBase):
         return inertial
 
     def build_step_graph(self, scope, state, action, dev=False):
+        # Assume input is between -1; 1
+        action = self.action_to_input(action)
         if len(tf.shape(state)) == 4:
             # From lagged controller. Remove history (should be equal to 1)
             state = tf.squeeze(state, axis=1)
@@ -678,6 +680,10 @@ class AUVModel(ModelBase):
                 print("Diff Acc_hat: ", gt_acc - acc_hat)
                 print("Diff Acc:     ", gt_acc - acc)
 
+    def action_to_input(self, action):
+        # assume input between [-1; 1]
+        action = tf.clip_by_value(action, -1, 1)
+        return self._actMax * action
 
 class AUVModelDebug(AUVModel):
     def __init__(self, modelDict,
