@@ -182,13 +182,13 @@ class StaticQuatCost(CostBase):
         return split_cost
 
     '''
-    Returns a list of 3D points representing the trajectory of the task. Doesn't handl
-    obstacles.
+        Returns a list of 3D points representing the trajectory of the task. Doesn't handl
+        obstacles.
 
-    inputs:
-    -------
-        - state: the state of the agent.
-        - pts: the number of points in the list
+        inputs:
+        -------
+            - state: the state of the agent.
+            - pts: the number of points in the list
     '''
     def get_3D(self, state, pts=100):
         x0 = self.goal[:3, 0]
@@ -217,6 +217,32 @@ class StaticQuatCost(CostBase):
         goal_pos = tf.squeeze(self.goal[:3], axis=-1)
         pos_dist = tf.linalg.norm(tf.subtract(pos, goal_pos), axis=-1)
         return pos_dist
+
+    '''
+        Final step cost only dependant on the pose not on the velocity.
+    '''
+    def build_final_step_cost_graph(self, scope, state):
+        state = tf.squeeze(state, axis=-1)
+        goal = tf.squeeze(self.goal, axis=-1)
+        quat = state[:, 3:7]
+        goal_quat = goal[3:7]
+        theta = tf.math.acos(2*tf.math.pow(tf.tensordot(quat, goal_quat, 1), 2) - 1)
+
+        pos = state[:, :3]
+        goal_pos = goal[:3]
+        pos_dist = tf.subtract(pos, goal_pos)
+
+        pose_dist = tf.concat([pos_dist, theta[..., None]], axis=1)[..., None]
+
+        pose_cost = tf.linalg.matmul(
+                pose_dist,
+                tf.linalg.matmul(self.Q[0:4, 0:4],
+                                    pose_dist,
+                                    name="right"),
+                transpose_a=True,
+                name="left")
+
+        return 100*pose_cost
 
 
 class ListQuatCost(StaticQuatCost):
