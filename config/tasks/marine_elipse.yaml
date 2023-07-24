@@ -1,8 +1,10 @@
+---
 type: "elipse3d"
 normal: [[0.], [0.], [1.]]
 aVec: [[1.], [0.], [0.]]
 axis: [[8.], [4.]]
-center: [[3.], [0.], [-50.]]
-speed: 10.
-m_state: 1000.
-m_vel: 100.
+center: [[10.], [2.], [-50.]]
+speed: 3.
+m_state: 20.
+m_vel: 1.
+tg: False # indicates if we want to stay tangeant or perpendicular to the elipse
