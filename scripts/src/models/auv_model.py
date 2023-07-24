@@ -233,6 +233,7 @@ class AUVModel(ModelBase):
 
         self._massEye = self._mass * tf.eye(3, dtype=dtype)
         self._massLower = self._mass * tf_skew_op("Skew_cog", self._cog)
+
         self._rbMass = self.rigid_body_mass()
         self._mTot = self.total_mass()
         self._invMTot = tf.linalg.inv(self._mTot)
@@ -273,9 +274,9 @@ class AUVModel(ModelBase):
         iyz = tf.Variable(dict['iyz'], trainable=True, dtype=dtype)
         izz = tf.Variable(dict['izz'], trainable=True, dtype=dtype)
 
-        row0 = tf.expand_dims(tf.concat([ixx, ixy, ixz], axis=0), axis=0)
-        row1 = tf.expand_dims(tf.concat([ixy, iyy, iyz], axis=0), axis=0)
-        row2 = tf.expand_dims(tf.concat([ixz, iyz, izz], axis=0), axis=0)
+        row0 = tf.expand_dims(tf.stack([ixx, ixy, ixz], axis=0), axis=0)
+        row1 = tf.expand_dims(tf.stack([ixy, iyy, iyz], axis=0), axis=0)
+        row2 = tf.expand_dims(tf.stack([ixz, iyz, izz], axis=0), axis=0)
 
         inertial = tf.concat([row0, row1, row2], axis=0)
 
