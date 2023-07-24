@@ -171,8 +171,8 @@ class ElipseCost3D(CostBase):
         # Normalized mapping of perpendicular vector
         self.mapping_perp = tf.constant([
                                     [
-                                     [axis[1, 0]/axis[0, 0]],
-                                     [axis[0, 0]/axis[1, 0]],
+                                     [-axis[1, 0]/axis[0, 0]],
+                                     [-axis[0, 0]/axis[1, 0]],
                                      [0.]
                                     ]
                                    ],
@@ -274,7 +274,7 @@ class ElipseCost3D(CostBase):
         # to compute the tangant perpendicular vector to the elipse we differentiate
         # the elipse implicitly. See obsidian/MyPapers/Experiments#Elipse orientation cost.
         position = pose[:, 0:3]
-        quaternion = tf.squeeze(pose[:, 3:7])
+        quaternion = pose[:, 3:7, 0]
         perp_vec = tf.squeeze(tf.multiply(position, self.mapping_perp), axis=-1)
         perp_vec = tf.linalg.normalize(perp_vec, axis=-1)[0]
         # operation to get the quaternion from the vector
