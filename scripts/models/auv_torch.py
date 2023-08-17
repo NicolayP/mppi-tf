@@ -131,7 +131,7 @@ class AUVFossen(torch.nn.Module):
                 dim=0),
             requires_grad=False)
             
-    def forward(self, x, u, rk:int=2):
+    def forward(self, x, u, rk : int=2):
         # Rk2 integration.
         # self.k = x.shape[0]
         k1 = self.x_dot(x, u)

@@ -158,7 +158,6 @@ class ControllerBase(torch.nn.Module):
                 Shape: [k/1]
     '''
     def rollout_cost(self, s, noise, A) -> torch.Tensor:
-        s = torch.unsqueeze(s, dim=0)
         cost = torch.zeros(self.k).to(s.device)
         s = torch.broadcast_to(s, (self.k, self.sDim, 1))
 

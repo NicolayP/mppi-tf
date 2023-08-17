@@ -44,25 +44,21 @@ def main():
 
     sigma = cont_dict["noise"]
     dt = cont_dict["dt"]
-
+    print(device)
 
     s = torch.tensor([0., 0., 0.,
                       0., 0., 0., 1.,
                       0., 0., 0.,
                       0., 0., 0.], dtype=dtype)[..., None].double().to(device)
-    
+
     ############################
     ### Instanciate normal controller: ###
     ############################
     cost = get_cost(cost_dict, lam, gamma, upsilon, sigma).to(device)
     print("Cost loaded")
 
-    cost = cost
-
     model = get_model(model_dict, dt, 0., 0.).to(device)
     print("Model loaded")
-
-    model = model
 
     observer = ObserverBase(log=False, k=samples)
     print("Observer loaded")
@@ -76,14 +72,17 @@ def main():
     ### Instanciate scripted controller: ###
     ############################
     cost = get_cost(cost_dict, lam, gamma, upsilon, sigma).to(device)
+    cost = torch.jit.script(cost)
 
     model = get_model(model_dict, dt, 0., 0.).to(device)
+    model = torch.jit.script(model)
 
     observer = ObserverBase(log=False, k=samples)
     scripted_controller = get_controller(cont_dict, model, cost, observer,
                                 samples, tau, lam, upsilon, sigma).to(device)
 
     scripted_controller = torch.jit.script(scripted_controller)
+    scripted_controller.save("scripted_controller.pt")
 
     ################# UNCOMMENT TO EXPORT ONNX MODEL #################
     # torch.onnx.export(controller,
