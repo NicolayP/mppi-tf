@@ -1,5 +1,6 @@
 from controllers.mppi_base import ControllerBase
 from models.auv_torch import AUVFossen
+from models.rnn_auv import 
 from costs.static import Static
 
 import numpy as np

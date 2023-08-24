@@ -1,7 +1,7 @@
 import yaml
 import torch
 import numpy as np
-from utils import dtype
+from scripts.utils.utils import dtype
 
 def diag(tensor):
     diag_matrix = tensor.unsqueeze(1) * torch.eye(len(tensor), device=tensor.device)

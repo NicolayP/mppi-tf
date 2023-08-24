@@ -1,5 +1,5 @@
 import torch
-from utils import dtype
+from scripts.utils.utils import dtype
 
 # TODO: compute all constants without tensorflow. Out of the graph
 # computation.

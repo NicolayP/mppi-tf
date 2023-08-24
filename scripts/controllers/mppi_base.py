@@ -1,5 +1,8 @@
 import torch
-from utils import dtype
+from scripts.utils.utils import dtype
+from inputs.ControllerInput import ControllerInput
+from inputs.ModelInput import ModelInput
+
 
 class ControllerBase(torch.nn.Module):
     '''
@@ -55,7 +58,7 @@ class ControllerBase(torch.nn.Module):
         self.register_buffer("sigma", torch.tensor(sigma, dtype=dtype))
         self.register_buffer("upsilon", torch.tensor(upsilon, dtype=dtype))
         self.register_buffer("lam", torch.tensor(lam))
-        self.register_buffer("A", torch.zeros(tau, self.aDim, 1, dtype=dtype))
+        self.register_buffer("act_sequence", torch.zeros(tau, self.aDim, 1, dtype=dtype))
 
         # Shift_init.
         self.register_buffer("init", torch.zeros(self.aDim, 1))
@@ -79,8 +82,8 @@ class ControllerBase(torch.nn.Module):
             - action: the next optimal aciton.
                 shape: [ActionDim, 1]
     '''    
-    def forward(self, state) -> torch.Tensor:
-        action, self.A = self.control(state, self.A)
+    def forward(self, state: ControllerInput) -> torch.Tensor:
+        action, self.act_sequence = self.control(state, self.act_sequence)
         return action
 
     '''
@@ -120,7 +123,7 @@ class ControllerBase(torch.nn.Module):
         # self.obs.advance()
         # return next action and updated action sequence.
 
-        return next, A_next
+        return next, A_next.clone()
 
     '''
         Noise generator for the samples.

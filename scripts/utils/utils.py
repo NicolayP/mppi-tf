@@ -6,6 +6,7 @@ import warnings
 
 
 npdtype= np.double
+tdtype = torch.double
 dtype = torch.double
 
 def load_param(yaml_file):
