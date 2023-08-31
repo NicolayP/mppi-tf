@@ -1,137 +1,134 @@
 import yaml
 import torch
 import numpy as np
-from scripts.utils.utils import dtype
 
-def diag(tensor):
-    diag_matrix = tensor.unsqueeze(1) * torch.eye(len(tensor), device=tensor.device)
-    return diag_matrix
+from scripts.utils.utils import tdtype, diag, diag_embed
+from scripts.models.model_base import ModelBase
+from scripts.inputs.ModelInput import ModelInput
 
-def diag_embed(tensor):
-    return torch.stack([diag(s_) for s_ in tensor]) if tensor.dim() > 1 else diag(tensor)
 
-class AUVFossen(torch.nn.Module):
-    def __init__(self, dict={}, dt=0.1, file=None):
-        super(AUVFossen, self).__init__()
-        self.name = dict["type"]
-        self.dt = dt
+class AUVFossen(ModelBase):
+    def __init__(self, dt=0.1, config=None, yaml_config=None):
+        super(AUVFossen, self).__init__(dt, config, yaml_config)
 
-        self.init_param(dict, file)
+        self.register_buffer("gravity", torch.tensor(9.81, dtype=tdtype))
+        self.register_buffer("density", torch.tensor(1028., dtype=tdtype))
+
         # masks/pads
-        self.register_buffer("z", torch.tensor([0., 0., 1.], dtype=dtype))
-        self.register_buffer("gravity", torch.tensor(9.81, dtype=dtype))
-        self.register_buffer("density", torch.tensor(1028., dtype=dtype))
-        
-        self.register_buffer("pad3x3", torch.zeros(1, 3, 3, dtype=dtype))
-        self.register_buffer("pad4x3", torch.zeros(1, 4, 3, dtype=dtype))
-        
+        self.register_buffer("z", torch.tensor([0., 0., 1.], dtype=tdtype))
+        self.register_buffer("pad3x3", torch.zeros(1, 3, 3, dtype=tdtype))
+        self.register_buffer("pad4x3", torch.zeros(1, 4, 3, dtype=tdtype))
+
         ## Skew matrix masks
-        self.register_buffer("A", torch.tensor([[[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]]], dtype=dtype))
-        self.register_buffer("B", torch.tensor([[[0., 0., -1.], [0., 0., 0.], [1., 0., 0.]]], dtype=dtype))
-        self.register_buffer("C", torch.tensor([[[0., 1., 0.], [-1., 0., 0.], [0., 0., 0.]]], dtype=dtype))
+        self.register_buffer("A", torch.tensor([[[0., 0., 0.], [0., 0., 1.], [0., -1., 0.]]], dtype=tdtype))
+        self.register_buffer("B", torch.tensor([[[0., 0., -1.], [0., 0., 0.], [1., 0., 0.]]], dtype=tdtype))
+        self.register_buffer("C", torch.tensor([[[0., 1., 0.], [-1., 0., 0.], [0., 0., 0.]]], dtype=tdtype))
 
-    def init_param(self, dict, file=None):
-        
-        if file is not None:
-            with open(file, "r") as stream:
-                dict = yaml.safe_load(stream)
+        self.init_param()
 
-        if "mass" in dict:
-            mass = dict["mass"]
-        else:
-            mass = 100.
+    def init_param(self):
+        mass = 100.
+        if "mass" in self.config:
+            mass = self.config["mass"]
 
         self.mass = torch.nn.Parameter(
-            torch.tensor(mass, dtype=dtype),
+            torch.tensor(mass, dtype=tdtype),
             requires_grad=False)
 
-        if "volume" in dict:
-            volume = dict["volume"]
-        else:
-            volume = 1.
+        volume = 1.
+        if "volume" in self.config:
+            volume = self.config["volume"]
 
         self.volume = torch.nn.Parameter(
-            torch.tensor(volume, dtype=dtype),
+            torch.tensor(volume, dtype=tdtype),
             requires_grad=False)
 
-        if "cog" in dict:
-            cog = dict["cog"]
-        else:
-            cog = [0., 0., 0.]
+
+        cog = [0., 0., 0.]
+        if "cog" in self.config:
+            cog = self.config["cog"]
 
         self.cog = torch.nn.Parameter(
-            torch.tensor([cog], dtype=dtype),
+            torch.tensor([cog], dtype=tdtype),
             requires_grad=False)
 
-        if "cob" in dict:
-            cob = dict["cob"]
-        else:
-            cob = [0., 0., 0.2]
+
+        cob = [0., 0., 0.2]
+        if "cob" in self.config:
+            cob = self.config["cob"]
 
         self.cob = torch.nn.Parameter(
-            torch.tensor([cob], dtype=dtype),
+            torch.tensor([cob], dtype=tdtype),
             requires_grad=False)
 
-        if "mtot" in dict:
-            mtot = dict["mtot"]
-        else:
-            mtot = np.array([[100., 0., 0., 0., 0., 0.],
-                             [0., 100., 0., 0., 0., 0.],
-                             [0., 0., 100., 0., 0., 0.],
-                             [0., 0., 0., 100., 0., 0.],
-                             [0., 0., 0., 0., 100., 0.],
-                             [0., 0., 0., 0., 0., 100.]]) + 1e-7
 
-        self.mTot = torch.nn.Parameter(
-            torch.unsqueeze(
-                torch.tensor(mtot, dtype=dtype),
-                dim=0),
-            requires_grad=False)
-        
+        inertialKey = ["ixx", "iyy", "izz", "ixy", "ixz", "iyz"]
+        inertialArg = dict(ixx=200, iyy=300, izz=250, ixy=110, ixz=120, iyz=130)
+        if "inertial" in self.config:
+            inertialArg = self.config["inertial"]
+            for key in inertialKey:
+                if key not in inertialArg:
+                    raise AssertionError('Invalid moments of inertia')
+        self.inertial = self.get_inertial(inertialArg)
+
+        addedMass = np.zeros((6, 6))
+        if "Ma" in self.config:
+            addedMass = np.array(self.config["Ma"])
+            assert (addedMass.shape == (6, 6)), "Invalid add mass matrix"
+        self.addedMass = torch.tensor(addedMass, dtype=tdtype)
+
+
+        massEye = self.mass * torch.eye(3, dtype=tdtype)
+        massLower = self.mass * self.skew_sym(self.cog[..., None])[0]
+
+        upper = torch.concat([massEye, -massLower], dim=1)
+        lower = torch.concat([massLower, self.inertial], dim=1)
+        self.rbMass = torch.concat([upper, lower], dim=0)
+
+        self.mTot = torch.unsqueeze(self.rbMass + self.addedMass, dim=0)
         self.invMtot = torch.nn.Parameter(
             torch.linalg.inv(self.mTot),
             requires_grad=False
         )
-            
 
-        if "linear_damping" in dict:
-            linDamp = dict["linear_damping"]
-        else:
-            linDamp = [-70., -70., -700., -300., -300., -100.]
+
+        linDamp = [-70., -70., -700., -300., -300., -100.]
+        if "linear_damping" in self.config:
+            linDamp = self.config["linear_damping"]
 
         self.linDamp = torch.nn.Parameter(
             torch.unsqueeze(
                 diag_embed(
-                    torch.tensor(linDamp, dtype=dtype),
+                    torch.tensor(linDamp, dtype=tdtype),
                     ),
             dim=0),
             requires_grad=False)
 
-        if "linear_damping_forward" in dict:
-            linDampFow = dict["linear_damping_forward"]
-        else:
-            linDampFow = [0., 0., 0., 0., 0., 0.]
+
+        linDampFow = [0., 0., 0., 0., 0., 0.]
+        if "linear_damping_forward" in self.config:
+            linDampFow = self.config["linear_damping_forward"]
 
         self.linDampFow = torch.nn.Parameter(
             torch.unsqueeze(
                 diag_embed(
-                    torch.tensor(linDampFow, dtype=dtype)),
+                    torch.tensor(linDampFow, dtype=tdtype)),
                 dim=0),
             requires_grad=False)
-            
-        if "quad_damping" in dict:
-            quadDam = dict["quad_damping"]
-        else:
-            quadDam = [-740., -990., -1800., -670., -770., -520.]
+
+
+        quadDam = [-740., -990., -1800., -670., -770., -520.]
+        if "quad_damping" in self.config:
+            quadDam = self.config["quad_damping"]
 
         self.quadDamp = torch.nn.Parameter(
             torch.unsqueeze(
                 diag_embed(
-                    torch.tensor(quadDam, dtype=dtype)),
+                    torch.tensor(quadDam, dtype=tdtype)),
                 dim=0),
             requires_grad=False)
-            
-    def forward(self, x, u, rk:int=2):
+
+    def forward(self, x: torch.tensor, u: torch.tensor, rk: int=2) -> torch.tensor:
         # Rk2 integration.
         # self.k = x.shape[0]
         k1 = self.x_dot(x, u)
@@ -145,7 +142,7 @@ class AUVFossen(torch.nn.Module):
 
         return self.norm_quat(x+tmp)
 
-    def x_dot(self, x, u):
+    def x_dot(self, x: torch.tensor, u: torch.tensor) -> torch.tensor:
         p, v = torch.split(x, [7, 6], dim=1)
         rotBtoI, tBtoI = self.body2inertial(p)
         jac = self.jacobian(rotBtoI, tBtoI)
@@ -153,14 +150,14 @@ class AUVFossen(torch.nn.Module):
         vDot = self.acc(v, u, rotBtoI)
         return torch.concat([pDot, vDot], dim=-2)
 
-    def norm_quat(self, quatState):
+    def norm_quat(self, quatState: torch.tensor) -> torch.tensor:
         quat = quatState[:, 3:7].clone()
         norm = torch.linalg.norm(quat, dim=-2)[..., None]
         quat = quat/norm
         quatState[:, 3:7] = quat.clone()
         return quatState
 
-    def body2inertial(self, pose):
+    def body2inertial(self, pose: torch.tensor):
         quat = pose[:, 3:7]
         x = quat[:, 0]
         y = quat[:, 1]
@@ -202,7 +199,7 @@ class AUVFossen(torch.nn.Module):
         tBtoI = 0.5 * torch.concat([r1t, r2t, r3t, r4t], dim=-2)
         return rotBtoI, tBtoI
 
-    def jacobian(self, rotBtoI, tBtoI):
+    def jacobian(self, rotBtoI: torch.tensor, tBtoI: torch.tensor) -> torch.tensor:
         k = rotBtoI.shape[0]
         pad3x3 = torch.broadcast_to(self.pad3x3, (k, 3, 3))
         pad4x3 = torch.broadcast_to(self.pad4x3, (k, 4, 3))
@@ -211,7 +208,7 @@ class AUVFossen(torch.nn.Module):
 
         return torch.concat([jacR1, jacR2], dim=-2)
     
-    def acc(self, v, u, rotBtoI):
+    def acc(self, v: torch.tensor, u: torch.tensor, rotBtoI: torch.tensor) -> torch.tensor:
         Dv = torch.bmm(self.damping(v), v)
         Cv = torch.bmm(self.coriolis(v), v)
         g = torch.unsqueeze(self.restoring(rotBtoI), dim=-1)
@@ -220,7 +217,7 @@ class AUVFossen(torch.nn.Module):
         # acc = torch.linalg.solve(self.mTot, rhs)
         return acc
 
-    def restoring(self, rotBtoI):
+    def restoring(self, rotBtoI: torch.tensor) -> torch.tensor:
         fng = -self.mass * self.gravity * self.z
         fnb = self.volume * self.density * self.gravity * self.z
 
@@ -234,7 +231,7 @@ class AUVFossen(torch.nn.Module):
 
         return -torch.concat([fbg+fbb, mbg+mbb], dim=-1)
 
-    def damping(self, v:torch.Tensor):
+    def damping(self, v:torch.tensor) -> torch.tensor:
         D = - self.linDamp - (v * self.linDampFow)
         tmp = - torch.mul(self.quadDamp, 
                           torch.abs(
@@ -242,7 +239,7 @@ class AUVFossen(torch.nn.Module):
 
         return D + tmp
 
-    def coriolis(self, v):
+    def coriolis(self, v: torch.tensor) -> torch.tensor:
         k = v.shape[0]
         skewCori = torch.matmul(self.mTot[:, 0:3, 0:3].clone(), v[:, 0:3]) + \
                    torch.matmul(self.mTot[:, 0:3, 3:6].clone(), v[:, 3:6])
@@ -257,8 +254,7 @@ class AUVFossen(torch.nn.Module):
         r2 = torch.concat([s12, s22], dim=-1)
         return torch.concat([r1, r2], dim=-2)
 
-    def skew_sym(self, vec):
-        # TODO: Define A B and C in the constructor.
+    def skew_sym(self, vec: torch.tensor) -> torch.tensor:
         k = vec.shape[0]
         A = torch.broadcast_to(self.A, (k, 3, 3))
         B = torch.broadcast_to(self.B, (k, 3, 3))
@@ -288,6 +284,22 @@ class AUVFossen(torch.nn.Module):
         print('Center of buoyancy:\n{}\nTrainable: {}\n'.format(self.cob.detach().cpu().numpy(),
                                                                 self.cob.requires_grad))
 
-    @property
-    def multi(self):
-        return False
+    def reset(self):
+        pass
+
+    def get_inertial(self, dict):
+        # buid the inertial matrix
+        ixx = dict['ixx']
+        ixy = dict['ixy']
+        ixz = dict['ixz']
+        iyy = dict['iyy']
+        iyz = dict['iyz']
+        izz = dict['izz']
+
+        row0 = torch.tensor([[ixx], [ixy], [ixz]], dtype=tdtype)
+        row1 = torch.tensor([[ixy], [iyy], [iyz]], dtype=tdtype)
+        row2 = torch.tensor([[ixz], [iyz], [izz]], dtype=tdtype)
+
+        inertial = torch.concat([row0, row1, row2], dim=-1)
+
+        return inertial

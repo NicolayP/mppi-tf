@@ -1,5 +1,6 @@
 import torch
 from .cost_base import CostBase
+from scripts.utils.utils import tdtype
 
 # TODO: compute all constants without tensorflow. Out of the graph computation.
 class Static(CostBase):
@@ -18,8 +19,8 @@ class Static(CostBase):
     def __init__(self, lam, gamma, upsilon, sigma, goal, Q, diag=False):
         super(Static, self).__init__(lam, gamma, upsilon, sigma)
         # TODO register buffer for those parameters.
-        self.register_buffer("Q", torch.diag(torch.tensor(Q)))
-        self.register_buffer("goal", torch.tensor(goal))
+        self.register_buffer("Q", torch.diag(torch.tensor(Q, dtype=tdtype)))
+        self.register_buffer("goal", torch.tensor(goal, dtype=tdtype))
         
     def setGoal(self, goal):
         self.goal = goal

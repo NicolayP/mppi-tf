@@ -1,56 +1,56 @@
 import torch
-from scripts.utils.utils import dtype
+from scripts.utils.utils import tdtype
 
 # TODO: compute all constants without tensorflow. Out of the graph
 # computation.
+
+'''
+    Cost base class for the mppi controller.
+    This is an abstract class and should be heritated by every
+    specific cost.
+'''
 class CostBase(torch.nn.Module):
     '''
-        Cost base class for the mppi controller.
-        This is an abstract class and should be heritated by every
-        specific cost.
+    Abstract class for the cost function.
+    - input:
+    --------
+        - lam (lambda) the inverse temperature.
+        - gamma: decoupling parameter between action and noise.
+        - upsilon: covariance augmentation for noise generation.
+        - sigma: the noise covariance matrix. shape [aDim, aDim]
+        - TODO: add diag arg to feed sigma as the diag element if
+        prefered.
+
+    - output:
+    ---------
+        the new cost object.
     '''
     def __init__(self, lam, gamma, upsilon, sigma):
-        '''
-            Abstract class for the cost function.
-            - input:
-            --------
-                - lam (lambda) the inverse temperature.
-                - gamma: decoupling parameter between action and noise.
-                - upsilon: covariance augmentation for noise generation.
-                - sigma: the noise covariance matrix. shape [aDim, aDim]
-                - TODO: add diag arg to feed sigma as the diag element if
-                prefered.
-
-            - output:
-            ---------
-                the new cost object.
-        '''
         super(CostBase, self).__init__()
         self._observer = None
         self.lam = lam
         self.gamma = gamma
         self.upsilon = upsilon
-        self.register_buffer("invSig", torch.linalg.inv(torch.tensor(sigma, dtype=dtype)))
+        self.register_buffer("invSig", torch.linalg.inv(torch.tensor(sigma, dtype=tdtype)))
 
+    '''
+        Computes the cost of a sample at a given time.
+        - input:
+        --------
+            - state: The current state of the system.
+                shape: [k/1, sDim, 1]
+            - action: The action applied to reach the current state.
+                shape: [aDim, 1]
+            - noise: The noise applied to the sample.
+                shape: [k/1, aDim, 1]
+            - final: Bool, if true it computes the final state cost.
+
+        - output:
+        ---------
+            - cost for a given step,
+                shape: [k/1]
+    '''
     def forward(self, state, action=None, noise=None, final: bool =False):
-        '''
-            Computes the cost of a sample at a given time.
-            - input:
-            --------
-                - state: The current state of the system.
-                    shape: [k/1, sDim, 1]
-                - action: The action applied to reach the current state.
-                    shape: [aDim, 1]
-                - noise: The noise applied to the sample.
-                    shape: [k/1, aDim, 1]
-                - final: Bool, if true it computes the final state cost.
-
-            - output:
-            ---------
-                - cost for a given step,
-                    shape: [k/1]
-        '''
-
         if final:
             return torch.squeeze(self.final_cost(state))
 
@@ -58,27 +58,53 @@ class CostBase(torch.nn.Module):
         a_cost = torch.squeeze(self.action_cost(action, noise))
         return torch.add(s_cost, a_cost)
 
-    def final_cost(self, state):
-        raise NotImplementedError
+    '''
+        Abstract method that should be implemented by any child class and will compute
+        the terminal state cost.
+
+        inputs:
+        -------
+            - state: torch.tensor with shape [k/1, sDim, 1]
     
-    def state_cost(self, state):
+        outputs:
+        --------
+            - terminal state cost $\psi(state)$.
+    '''
+    def final_cost(self, state: torch.tensor):
         raise NotImplementedError
 
-    def action_cost(self, action, noise):
-        '''
-            action related cost part.
+    '''
+        Abstract method that should be implemented by any child class and will compute
+        the step state cost.
 
-            - input: 
-            --------
-                - action: the action applied to reach the current state.
-                    shape: [k/1, aDim, 1]
-                - noise: the noise applied to the sample.
-                    shape: [k/1, aDim, 1]
+        inputs:
+        -------
+            - state: torch.tensor with shape [k/1, sDim, 1]
+    
+        outputs:
+        --------
+            - terminal state cost $q(state)$.
+                shape [k/1, 1, 1]
+    '''
+    def state_cost(self, state: torch.tensor):
+        raise NotImplementedError
 
-            - output:
-            ---------
-                - The cost associated with the current action.
-        '''
+    '''
+        action related cost part.
+
+        - input: 
+        --------
+            - action: the action applied to reach the current state.
+                shape: [k/1, aDim, 1]
+            - noise: the noise applied to the sample.
+                shape: [k/1, aDim, 1]
+
+        - output:
+        ---------
+            - The cost associated with the current action.
+                shape: [k/1, 1, 1]
+    '''
+    def action_cost(self, action: torch.tensor, noise: torch.tensor):
         # Right hand side noise
         rhsNcost = torch.matmul(self.invSig, noise)
         

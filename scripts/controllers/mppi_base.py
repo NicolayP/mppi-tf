@@ -1,7 +1,7 @@
 import torch
-from scripts.utils.utils import dtype
-from inputs.ControllerInput import ControllerInput
-from inputs.ModelInput import ModelInput
+from scripts.utils.utils import tdtype
+from scripts.inputs.ControllerInput import ControllerInput
+from scripts.inputs.ModelInput import ModelInput
 
 
 class ControllerBase(torch.nn.Module):
@@ -55,13 +55,13 @@ class ControllerBase(torch.nn.Module):
         self.aDim = 6
         self.sDim = 13
 
-        self.register_buffer("sigma", torch.tensor(sigma, dtype=dtype))
-        self.register_buffer("upsilon", torch.tensor(upsilon, dtype=dtype))
+        self.register_buffer("sigma", torch.tensor(sigma, dtype=tdtype))
+        self.register_buffer("upsilon", torch.tensor(upsilon, dtype=tdtype))
         self.register_buffer("lam", torch.tensor(lam))
-        self.register_buffer("act_sequence", torch.zeros(tau, self.aDim, 1, dtype=dtype))
+        self.register_buffer("act_sequence", torch.zeros(tau, self.aDim, dtype=tdtype))
 
         # Shift_init.
-        self.register_buffer("init", torch.zeros(self.aDim, 1))
+        self.register_buffer("init", torch.zeros(self.aDim))
 
         # TODO: Create observer.
         self.obs = observer
@@ -69,21 +69,22 @@ class ControllerBase(torch.nn.Module):
         self.cost = cost
 
         self.update = Update(self.lam)
-        self.dtype = dtype
+        self.dtype = tdtype
 
     '''
         Computes the next action with MPPI.
         input:
         ------
             - state: The current observed state of the system.
-                shape: [StateDim, 1]
+                shape: [StateDim]
         output:
         -------
             - action: the next optimal aciton.
-                shape: [ActionDim, 1]
+                shape: [ActionDim]
     '''    
     def forward(self, state: ControllerInput) -> torch.Tensor:
-        action, self.act_sequence = self.control(state, self.act_sequence)
+        model_input = ModelInput(self.k, state.steps).init(state)
+        action, self.act_sequence = self.control(model_input, self.act_sequence)
         return action
 
     '''
@@ -93,11 +94,11 @@ class ControllerBase(torch.nn.Module):
         ------
             - k: the number of samples to use.
             - s: the state of the system.
-                shape: [StateDim, 1]
+                shape: [StateDim]
             - A: the action sequence to optimize.
-                shape: [tau, ActionDim, 1]
+                shape: [tau, ActionDim]
     '''
-    def control(self, s, A):
+    def control(self, s: ModelInput, A):
         # Compute random noise.
         noises = self.noise()
 
@@ -135,12 +136,13 @@ class ControllerBase(torch.nn.Module):
         output:
         -------
             - the noise associated with each samples ~ \mathcal{N}(\mu, \Sigma)
-                Shape, [k, tau, aDim, 1]
+                Shape, [k, tau, aDim]
     '''
     def noise(self):
-        n = torch.normal(mean=torch.zeros(self.k, self.tau, self.aDim, 1, dtype=self.dtype),
-                         std=torch.ones(self.k, self.tau, self.aDim, 1, dtype=self.dtype)).to(self.upsilon.device)
-        noise = torch.matmul(self.upsilon*self.sigma, n)
+        n = torch.normal(mean=torch.zeros(self.k, self.tau, self.aDim, dtype=tdtype),
+                         std=torch.ones(self.k, self.tau, self.aDim, dtype=tdtype)).to(self.upsilon.device)
+
+        noise = torch.matmul(self.upsilon*self.sigma, n[..., None])[..., 0]
         return noise
 
     '''
@@ -148,37 +150,37 @@ class ControllerBase(torch.nn.Module):
 
         input:
         ------
-            - s: the inital state of the system.
-                Shape: [sDim, 1]
+            - s: modelInput, the input (can also contain old state and action) that is needed
+                for the model forwarding.
             - noise: The noise generated for each sample and applied for the rollout.
-                Shape: [k, tau, aDim, 1]
+                Shape: [k, tau, aDim]
             - A: the action sequence. The mean to apply.
-                Shape: [tau, aDim, 1]
+                Shape: [tau, aDim]
 
         output:
         -------
             - costs: Cost tensor of each rollout. 
                 Shape: [k/1]
     '''
-    def rollout_cost(self, s, noise, A) -> torch.Tensor:
-        s = torch.unsqueeze(s, dim=0)
-        cost = torch.zeros(self.k).to(s.device)
-        s = torch.broadcast_to(s, (self.k, self.sDim, 1))
+    def rollout_cost(self, s: ModelInput, noise, A) -> torch.Tensor:
+        self.model.reset()
+        cost = torch.zeros(self.k, dtype=tdtype).to(noise.device)
 
         for t in range(self.tau):
             a = A[t]
             n = noise[:, t]
             act = torch.add(a, n)
-
-            next_s = self.model(s, act)
+            next_s = self.model(*s(act))
             tmp = self.cost(next_s, a, n)
 
             cost = torch.add(cost, tmp)
-            s = next_s
+            s.update(next_s)
 
-        f_cost = self.cost(s, A[-1], noise[:, -1], final=True)
+        f_cost = self.cost(next_s, A[-1], noise[:, -1], final=True)
         cost = torch.add(cost, f_cost)
+        print(cost.shape)
         return cost
+
 
 class Update(torch.nn.Module):
     '''
