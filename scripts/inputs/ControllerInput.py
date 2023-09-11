@@ -15,29 +15,36 @@ class ControllerInput(torch.nn.Module):
         inputs:
         -------
             - steps: the number of past states and acitons to maintain.
-            - sDim: int, the state dimension.
+            - pDim: int, the pose dimension.
+            - vDim: int, the velocity dimension.
             - aDim: int, the action dimension.
     '''
-    def __init__(self, steps, sDim=13, aDim=6):
+    def __init__(self, steps, pDim=7, vDim=6, aDim=6):
         super(ControllerInput, self).__init__()
-        self.register_buffer("states", torch.zeros(steps, sDim, dtype=tdtype))
+        self.register_buffer("poses", torch.zeros(steps, pDim, dtype=tdtype))
+        self.register_buffer("vels", torch.zeros(steps, vDim, dtype=tdtype))
         self.register_buffer("actions", torch.zeros(steps-1, aDim, dtype=tdtype))
 
         self.steps = steps
         self.cur = [0, 0]
-        self.sDim = sDim
+        self.pDim = pDim
+        self.vDim = vDim
         self.aDim = aDim
 
     '''
-        Add state method. This adds a state to the state history buffer.
+        Add state method. This adds a state (pose and velocity) to the history buffer.
 
         inputs:
         -------
-            - state: torch.tensor with shape (sDim, 1) the state to be saved.
+            - pose: torch.tensor with shape (pDim) the pose to be saved.
+            - vel: torch.tensor with shape (vDim) the velocity to be saved.
     '''
-    def add_state(self, state: torch.tensor):
-        self.states[0] = state
-        self.states = torch.roll(self.states, -1, 0)
+    def add_state(self, pose: torch.tensor, vel: torch.tensor):
+        self.poses[0] = pose
+        self.poses = torch.roll(self.poses, -1, 0)
+
+        self.vels[0] = vel
+        self.vels = torch.roll(self.vels, -1, 0)
 
         if not self.is_init:
             self.cur[0] += 1
@@ -68,10 +75,10 @@ class ControllerInput(torch.nn.Module):
             - state: torch.tensor with shape (sDim, 1) the state to be saved.
             - action: torch.tensor with shape (aDim, 1) the action to be saved.
     '''
-    def add(self, state: torch.tensor, action: torch.tensor):
+    def add(self, pose: torch.tensor, vel: torch.tensor, action: torch.tensor):
         # add the new state and action to the buffers at the location of
         # the oldest element.
-        self.add_state(state)
+        self.add_state(pose, vel)
         self.add_act(action)
 
     '''
@@ -84,12 +91,14 @@ class ControllerInput(torch.nn.Module):
 
         outputs:
         --------
-            - states, the state history buffer with shape (k, steps, sDim, 1)
-            - actions, the action history buffer with shape (k, steps-1, aDim, 1)
+            - poses, the poses history buffer with shape (k, steps, pDim)
+            - vels, the velocities history buffer with shape (k, steps, vDim)
+            - actions, the action history buffer with shape (k, steps-1, aDim)
     '''
     def get(self, k):
-        return torch.broadcast_to(self.states.clone()[None], (k, self.steps, self.sDim)), \
-               torch.broadcast_to(self.actions.clone()[None], (k, self.steps-1, self.aDim))
+        return torch.broadcast_to(self.poses.clone(), (k, self.steps, self.pDim)), \
+               torch.broadcast_to(self.vels.clone(), (k, self.steps, self.vDim)), \
+               torch.broadcast_to(self.actions.clone(), (k, self.steps-1, self.aDim))
 
     '''
         Returns the number of steps to maintain.
@@ -194,16 +203,17 @@ class ControllerInputPypose(torch.nn.Module):
 
         outputs:
         --------
-            - states, the state history buffer with shape (k, steps, sDim, 1)
-            - actions, the action history buffer with shape (k, steps-1, aDim, 1)
+            - poses, the pose history buffer with shape [k, steps, pDim]
+            - vels, the velocity history buffer with shape [k, steps, vDim]
+            - actions, the action history buffer with shape [k, steps-1, aDim]
     '''
     def get(self, k):
         # Broadcasting through multiplication as pypose doesn't have a method for broadcasting
         # and torch.broadcast_to returns a tensor
         i = pp.identity_SE3(k, self.steps, dtype=tdtype)
-        return i + self.poses.clone()[None], \
-               torch.broadcast_to(self.vels.clone()[None], (k, self.steps, 6)), \
-               torch.broadcast_to(self.actions.clone()[None], (k, self.steps-1, self.aDim))
+        return i + self.poses.clone(), \
+               torch.broadcast_to(self.vels.clone(), (k, self.steps, 6)), \
+               torch.broadcast_to(self.actions.clone(), (k, self.steps-1, self.aDim))
 
     '''
         Returns the number of steps to maintain.

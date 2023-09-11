@@ -1,7 +1,7 @@
 import torch
 from scripts.utils.utils import tdtype
-from scripts.inputs.ControllerInput import ControllerInput
-from scripts.inputs.ModelInput import ModelInput
+from scripts.inputs.ControllerInput import ControllerInput, ControllerInputPypose
+from scripts.inputs.ModelInput import ModelInput, ModelInputPypose
 
 
 class ControllerBase(torch.nn.Module):
@@ -37,15 +37,8 @@ class ControllerBase(torch.nn.Module):
                 and logs more information.
 
     '''
-    def __init__(self,
-                 model,
-                 cost,
-                 observer,
-                 k=1,
-                 tau=1,
-                 lam=1.,
-                 upsilon=1.,
-                 sigma=0.):
+    def __init__(self, model, cost, observer,
+                 k=1, tau=1, lam=1., upsilon=1., sigma=0.):
         # TODO: Check parameters and make the tensors.
         super(ControllerBase, self).__init__()
         # This is needed to create a correct trace.
@@ -83,9 +76,7 @@ class ControllerBase(torch.nn.Module):
                 shape: [ActionDim]
     '''    
     def forward(self, state: ControllerInput) -> torch.Tensor:
-        model_input = ModelInput(self.k, state.steps).init(state)
-        action, self.act_sequence = self.control(model_input, self.act_sequence)
-        return action
+        raise NotImplementedError
 
     '''
         Computes the optimal action sequence with MPPI.
@@ -165,20 +156,19 @@ class ControllerBase(torch.nn.Module):
     def rollout_cost(self, s: ModelInput, noise, A) -> torch.Tensor:
         self.model.reset()
         cost = torch.zeros(self.k, dtype=tdtype).to(noise.device)
-
         for t in range(self.tau):
             a = A[t]
             n = noise[:, t]
             act = torch.add(a, n)
-            next_s = self.model(*s(act))
-            tmp = self.cost(next_s, a, n)
-
+            next_p, next_v = self.model(*s(act))
+            tmp = self.cost(next_p, next_v, a, n)
             cost = torch.add(cost, tmp)
-            s.update(next_s)
+            s.update(next_p, next_v)
 
-        f_cost = self.cost(next_s, A[-1], noise[:, -1], final=True)
+
+
+        f_cost = self.cost(next_p, next_v, A[-1], noise[:, -1], final=True)
         cost = torch.add(cost, f_cost)
-        print(cost.shape)
         return cost
 
 
@@ -202,12 +192,12 @@ class Update(torch.nn.Module):
             - costs: torch.tensor, the costs associated with each sample rollout. 
                 Shape, [k]
             - noise: torch.tensor, the noise associated with each sample rollout.
-                Shape, [k, tau, aDim, 1]
+                Shape, [k, tau, aDim]
 
         output:
         -------
             - weighted_noise: torch.tensor, the noise reweighted according to the
-                importance sampling procedure. Shape, [k, tau, aDim, 1]
+                importance sampling procedure. Shape, [k, tau, aDim]
             - eta: float, the normalization term, indicator of MPPI's behavior.
     '''
     def forward(self, costs, noise):
@@ -325,16 +315,39 @@ class Update(torch.nn.Module):
         ------
             - weights, torch.Tensor, the sample weights. Shape [k]
             - noise, torch.Tensor, the noise samples.
-                Shape [k, tau, aDim, 1]
+                Shape [k, tau, aDim]
 
         output:
         -------
             - Weighted_noise, torch.Tensor.
-                Shape [tau, aDim, 1]
+                Shape [tau, aDim]
     '''
     def weighted_noise(self, weights, noise):
-        w = torch.unsqueeze(
-                torch.unsqueeze(
-                    torch.unsqueeze(weights, -1), -1), -1)
-
+        w = weights[..., None, None]
         return torch.sum(torch.mul(w, noise), 0)
+
+
+class MPPIBase(ControllerBase):
+    def __init__(self, model, cost, observer,
+                 k=1, tau=1, lam=1, upsilon=1, sigma=0):
+        super(MPPIBase, self).__init__(model=model, cost=cost, observer=observer,
+                                       k=k, tau=tau, lam=lam, upsilon=upsilon, sigma=sigma)
+
+    def forward(self, state: ControllerInput) -> torch.Tensor:
+        model_input = ModelInput(self.k, state.steps)
+        model_input.init(state)
+        action, self.act_sequence = self.control(model_input, self.act_sequence)
+        return action
+
+
+class MPPIPypose(ControllerBase):
+    def __init__(self, model, cost, observer,
+                 k=1, tau=1, lam=1, upsilon=1, sigma=0):
+        super(MPPIPypose, self).__init__(model=model, cost=cost, observer=observer,
+                                         k=k, tau=tau, lam=lam, upsilon=upsilon, sigma=sigma)
+
+    def forward(self, state: ControllerInputPypose) -> torch.Tensor:
+        model_input = ModelInputPypose(self.k, state.steps)
+        model_input.init(state)
+        action, self.act_sequence = self.control(model_input, self.act_sequence)
+        return action

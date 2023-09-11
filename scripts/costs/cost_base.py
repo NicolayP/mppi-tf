@@ -37,12 +37,14 @@ class CostBase(torch.nn.Module):
         Computes the cost of a sample at a given time.
         - input:
         --------
-            - state: The current state of the system.
-                shape: [k/1, sDim, 1]
+            - pose: The current state of the system.
+                shape: [k/1, pDim]
+            - velocity: The current state of the system.
+                shape: [k/1, vDim]
             - action: The action applied to reach the current state.
-                shape: [aDim, 1]
+                shape: [aDim]
             - noise: The noise applied to the sample.
-                shape: [k/1, aDim, 1]
+                shape: [k/1, aDim]
             - final: Bool, if true it computes the final state cost.
 
         - output:
@@ -50,11 +52,11 @@ class CostBase(torch.nn.Module):
             - cost for a given step,
                 shape: [k/1]
     '''
-    def forward(self, state, action=None, noise=None, final: bool =False):
+    def forward(self, pose, velocity, action=None, noise=None, final: bool =False):
         if final:
-            return torch.squeeze(self.final_cost(state))
+            return torch.squeeze(self.final_cost(pose, velocity))
 
-        s_cost = torch.squeeze(self.state_cost(state))
+        s_cost = torch.squeeze(self.state_cost(pose, velocity))
         a_cost = torch.squeeze(self.action_cost(action, noise))
         return torch.add(s_cost, a_cost)
 
@@ -64,13 +66,16 @@ class CostBase(torch.nn.Module):
 
         inputs:
         -------
-            - state: torch.tensor with shape [k/1, sDim, 1]
+            - pose: The current state of the system.
+                shape: [k/1, pDim]
+            - velocity: The current state of the system.
+                shape: [k/1, vDim]
     
         outputs:
         --------
             - terminal state cost $\psi(state)$.
     '''
-    def final_cost(self, state: torch.tensor):
+    def final_cost(self, pose: torch.tensor, velocity: torch.tensor):
         raise NotImplementedError
 
     '''
@@ -79,14 +84,17 @@ class CostBase(torch.nn.Module):
 
         inputs:
         -------
-            - state: torch.tensor with shape [k/1, sDim, 1]
+            - pose: The current state of the system.
+                shape: [k/1, pDim]
+            - velocity: The current state of the system.
+                shape: [k/1, vDim]
     
         outputs:
         --------
             - terminal state cost $q(state)$.
-                shape [k/1, 1, 1]
+                shape [k/1]
     '''
-    def state_cost(self, state: torch.tensor):
+    def state_cost(self, pose: torch.tensor, velocity: torch.tensor):
         raise NotImplementedError
 
     '''
@@ -95,19 +103,19 @@ class CostBase(torch.nn.Module):
         - input: 
         --------
             - action: the action applied to reach the current state.
-                shape: [k/1, aDim, 1]
+                shape: [k/1, aDim]
             - noise: the noise applied to the sample.
-                shape: [k/1, aDim, 1]
+                shape: [k/1, aDim]
 
         - output:
         ---------
             - The cost associated with the current action.
-                shape: [k/1, 1, 1]
+                shape: [k/1]
     '''
     def action_cost(self, action: torch.tensor, noise: torch.tensor):
+        action, noise = action[..., None], noise[..., None]
         # Right hand side noise
         rhsNcost = torch.matmul(self.invSig, noise)
-        
         # Right hand side action
         rhsAcost = torch.matmul(self.invSig, action)
 
@@ -117,7 +125,6 @@ class CostBase(torch.nn.Module):
 
         # \epsilon^{T}_t \Sigma^{-1} \epsilon_t
         nCost = torch.matmul(torch.transpose(noise, -1, -2), rhsNcost)
-
         # \u^{T}_t \Sigma^{-1} \u_t
         aCost = torch.matmul(torch.transpose(action, -1, -2), rhsAcost)
 
@@ -130,7 +137,8 @@ class CostBase(torch.nn.Module):
         # \gamma [action_cost + 2mix_cost]
         controlCost = torch.add(aCost, mixCost)
         actionCost = torch.multiply(torch.add(controlCost, nCost), 0.5)
-        return actionCost
+
+        return actionCost[:, 0, 0]
 
     def set_observer(self, observer):
         self._observer = observer

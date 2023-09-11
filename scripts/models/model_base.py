@@ -1,5 +1,4 @@
 import torch
-from scripts.inputs.ModelInput import ModelInput
 from scripts.utils.utils import load_param
 
 
@@ -36,9 +35,16 @@ class ModelBase(torch.nn.Module):
 
         inputs:
         -------
-            - input: ModelInput.
+            - x, the pose of the model. shape [k, steps, poseDim]
+            - v, the velocity of the model. [k, steps, velDim]
+            - u, the aciton applied to the system. [k, steps, actDim]
+
+        output:
+        -------
+            - next_x, the next pose of the model. shape [k, 1, poseDim] 
+            - next_v, the next velocity of the model. shape [k, 1, velDim]
     '''
-    def forward(self, x, u: torch.tensor) -> torch.tensor:
+    def forward(self, x, v, u: torch.tensor) -> torch.tensor:
         raise NotImplementedError
 
     '''

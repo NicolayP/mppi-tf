@@ -12,10 +12,11 @@ class TestModelBase(unittest.TestCase):
         self.model = ModelBase()
 
     def test_forward(self):
-        x = torch.randn(2, 13, 1)
-        u = torch.randn(2, 6, 1)
+        x = torch.randn(2, 1, 7)
+        v = torch.randn(2, 1, 6)
+        u = torch.randn(2, 1, 6)
         with self.assertRaises(NotImplementedError):
-            self.model.forward(x, u)
+            self.model.forward(x, v, u)
 
     def test_init_param(self):
         with self.assertRaises(NotImplementedError):
@@ -28,55 +29,68 @@ class TestAUVFossen(unittest.TestCase):
         self.auv = AUVFossen(dt=self.dt)
 
     def test_forward_random_state(self):
-        state = torch.randn(2, 13, 1, dtype=tdtype)
-        action = torch.randn(2, 6, 1, dtype=tdtype)
-        new_state_rk1 = self.auv.forward(state, action, rk=1)
-        new_state_rk2 = self.auv.forward(state, action, rk=2)
-        self.assertEqual(new_state_rk1.shape, torch.Size([2, 13, 1]))  # Check shape
-        self.assertEqual(new_state_rk2.shape, torch.Size([2, 13, 1]))  # Check shape
+        x = torch.randn(3, 1, 7, dtype=tdtype)
+        v = torch.randn(3, 1, 6, dtype=tdtype)
+        u = torch.randn(3, 1, 6, dtype=tdtype)
+        new_state_rk1 = self.auv.forward(x, v, u, rk=1)
+        new_state_rk2 = self.auv.forward(x, v, u, rk=2)
+        self.assertEqual(new_state_rk1[0].shape, torch.Size([3, 1, 7]))  # Check shape
+        self.assertEqual(new_state_rk1[1].shape, torch.Size([3, 1, 6]))  # Check shape
+        self.assertEqual(new_state_rk2[0].shape, torch.Size([3, 1, 7]))  # Check shape
+        self.assertEqual(new_state_rk2[1].shape, torch.Size([3, 1, 6]))  # Check shape
 
     def test_forward_non_random_state(self):
-        state = torch.tensor([[[1.0], [2.0], [3.0], [0.5], [0.2], [0.7], [0.1], [0.3], [0.4], [0.2], [0.5], [0.7], [0.9]]], dtype=tdtype)
-        action = torch.tensor([[[0.1], [0.2], [0.3], [0.4], [0.5], [0.6]]], dtype=tdtype)
-        new_state_rk1 = self.auv.forward(state, action, rk=1)
-        new_state_rk2 = self.auv.forward(state, action, rk=2)
-        self.assertEqual(new_state_rk1.shape, torch.Size([1, 13, 1]))  # Check shape
-        self.assertEqual(new_state_rk2.shape, torch.Size([1, 13, 1]))  # Check shape
+        x = torch.tensor([[[1.0, 2.0, 3.0, 0.5, 0.2, 0.7, 0.1]]], dtype=tdtype)
+        v = torch.tensor([[[0.3, 0.4, 0.2, 0.5, 0.7, 0.9]]], dtype=tdtype)
+        u = torch.tensor([[[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]]], dtype=tdtype)
+        new_state_rk1 = self.auv.forward(x, v, u, rk=1)
+        new_state_rk2 = self.auv.forward(x, v, u, rk=2)
+        self.assertEqual(new_state_rk1[0].shape, torch.Size([1, 1, 7]))  # Check shape
+        self.assertEqual(new_state_rk1[1].shape, torch.Size([1, 1, 6]))  # Check shape
+        self.assertEqual(new_state_rk2[0].shape, torch.Size([1, 1, 7]))  # Check shape
+        self.assertEqual(new_state_rk2[1].shape, torch.Size([1, 1, 6]))  # Check shape
 
     def test_x_dot_random_state(self):
-        state = torch.randn(2, 13, 1, dtype=tdtype)
-        action = torch.randn(2, 6, 1, dtype=tdtype)
-        x_dot = self.auv.x_dot(state, action)
-        self.assertEqual(x_dot.shape, torch.Size([2, 13, 1]))  # Check shape
+        x = torch.randn(2, 7, dtype=tdtype)
+        v = torch.randn(2, 6, dtype=tdtype)
+        u = torch.randn(2, 6, dtype=tdtype)
+        x_dot, v_dot = self.auv.x_dot(x, v, u)
+        self.assertEqual(x_dot.shape, torch.Size([2, 7]))  # Check shape
+        self.assertEqual(v_dot.shape, torch.Size([2, 6]))  # Check shape
 
     def test_x_dot_non_random_state(self):
-        state = torch.tensor([[[1.0], [2.0], [3.0], [0.5], [0.2], [0.7], [0.1], [0.3], [0.4], [0.2], [0.5], [0.7], [0.9]]], dtype=tdtype)
-        action = torch.tensor([[[0.1], [0.2], [0.3], [0.4], [0.5], [0.6]]], dtype=tdtype)
-        x_dot = self.auv.x_dot(state, action)
-        self.assertEqual(x_dot.shape, torch.Size([1, 13, 1]))  # Check shape
+        x = torch.tensor([[1.0, 2.0, 3.0, 0.5, 0.2, 0.7, 0.1]], dtype=tdtype)
+        v = torch.tensor([[0.3, 0.4, 0.2, 0.5, 0.7, 0.9]], dtype=tdtype)
+        u = torch.tensor([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]], dtype=tdtype)
+        x_dot, v_dot = self.auv.x_dot(x, v, u)
+        self.assertEqual(x_dot.shape, torch.Size([1, 7]))  # Check shape
+        self.assertEqual(v_dot.shape, torch.Size([1, 6]))  # Check shape
 
     def test_norm_quat(self):
-        quat_state = torch.tensor([[[0.5], [0.5], [0.5], [0.5], [0.2], [0.7], [0.1], [0.3], [0.4], [0.2], [0.5], [0.7], [0.9]]], dtype=tdtype)
-        normalized_quat_state = self.auv.norm_quat(quat_state.clone())
-        self.assertTrue(torch.allclose(torch.linalg.vector_norm(normalized_quat_state[:, 3:7]), 
-                                       torch.tensor([1], dtype=tdtype), atol=1e-6)) # check normalization
+        quat_x = torch.tensor([[0.5, 0.5, 0.5, 0.5, 0.2, 0.7, 0.1],
+                               [0.5, 0.5, 0.5, 0.5, 0.2, 0.7, 0.1]], dtype=tdtype)
+
+        normalized_quat_state = self.auv.norm_quat(quat_x.clone())
+        self.assertTrue(torch.allclose(torch.linalg.vector_norm(normalized_quat_state[:, 3:7], dim=-1), 
+                                       torch.tensor([1., 1.], dtype=tdtype), atol=1e-6)) # check normalization
 
     def test_damping(self):
-        v = torch.tensor([[[0.1], [0.2], [0.3], [0.4], [0.5], [0.6]]], dtype=tdtype)
+        v = torch.tensor([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]], dtype=tdtype)
         damping_result = self.auv.damping(v)
         expected_result = torch.diag_embed(
-            torch.tensor([[[144, 268, 1240, 568, 685, 412]]], dtype=tdtype)
+            torch.tensor([[144, 268, 1240, 568, 685, 412]], dtype=tdtype)
         )
         self.assertTrue(torch.allclose(damping_result, expected_result, atol=1e-6))
 
     def test_restoring(self):
-        rotBtoI, _ = self.auv.body2inertial(torch.tensor([[[1.0], [0.0], [0.0], [0.0], [0.0], [0.0], [1.0], [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]], dtype=tdtype))
+        state = torch.tensor([[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]], dtype=tdtype)
+        rotBtoI, _ = self.auv.body2inertial(state)
         restoring_result = self.auv.restoring(rotBtoI)
         expected_result = torch.tensor([[0.0, 0.0, -(1028.0 - 100) * 9.81, 0.0, 0.0, 0.0]], dtype=tdtype)
         self.assertTrue(torch.allclose(restoring_result, expected_result, atol=1e-6))
 
     def test_coriolis(self):
-        v = torch.tensor([[[0.1], [0.2], [0.3], [0.4], [0.5], [0.6]]], dtype=tdtype)
+        v = torch.tensor([[0.1, 0.2, 0.3, 0.4, 0.5, 0.6]], dtype=tdtype)
         coriolis_result = self.auv.coriolis(v)
         expected_result = torch.tensor([[[0.0, 0.0, 0.0, 0.0, 30, -20],
                                          [0.0, 0.0, 0.0, -30, 0.0, 10],

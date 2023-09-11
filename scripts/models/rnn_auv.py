@@ -148,6 +148,7 @@ class AUVRNNDeltaV(torch.nn.Module):
     def init_hidden(self, k, device):
         return torch.zeros(self.rnn_layers, k, self.rnn_hidden_size, device=device)
 
+
     def reset(self):
         self.hidden = None
 
@@ -439,8 +440,9 @@ class AUVStep(ModelBase):
     '''
 
     '''
-    def update_model(self, dv_pred: ModelBase):
+    def update_model(self, dv_pred):
         self.dv_pred = dv_pred
+
 
     def reset(self):
         self.dv_pred.reset()

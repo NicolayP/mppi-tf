@@ -16,12 +16,14 @@ class ModelInput(torch.nn.Module):
         -------
             - k: the number of samples.
             - steps: the number of previous states and action to maintain.
-            - sDim: the state dimension.
+            - pDim: the pose dimension.
+            - vDim: the velocity dimension.
             - aDim: the action dimesnion.
     '''
-    def __init__(self, k, steps, sDim=13, aDim=6):
+    def __init__(self, k, steps, pDim=7, vDim=6, aDim=6):
         super(ModelInput, self).__init__()
-        self.register_buffer("states", torch.zeros(k, steps, sDim, dtype=tdtype))
+        self.register_buffer("poses", torch.zeros(k, steps, pDim, dtype=tdtype))
+        self.register_buffer("vels", torch.zeros(k, steps, vDim, dtype=tdtype))
         self.register_buffer("actions", torch.zeros(k, steps, aDim, dtype=tdtype))
         self.k = k
 
@@ -35,7 +37,8 @@ class ModelInput(torch.nn.Module):
                 states and actions.
     '''
     def init(self, input: ControllerInput):
-        self.states, self.actions[:, :-1] = input.get(self.k)
+        poses, vels, actions = input.get(self.k)
+        self.poses, self.vels, self.actions[:, :-1] = poses, vels, actions
 
     '''
         Given a new action it returns the states and actions that will be applied
@@ -44,29 +47,39 @@ class ModelInput(torch.nn.Module):
         inputs:
         -------
             - action: the latest action to apply to the model.
+                shape [k, 1, aDim]
+
+        output:
+        -------
+            - poses, torch.tensor, the poses, shape [k, steps, pDim]
+            - vels, torch.tensor, the velocities, shape [k, steps, vDim]
+            - actions, torch.tensor, the actions, shape [k, steps, aDim]
     '''
     def forward(self, action: torch.tensor):
         self.actions[:, -1] = action
-        return self.states.clone(), self.actions.clone()
+        return self.poses.clone(), self.vels.clone(), self.actions.clone()
 
     '''
         Update the ModelInput with the newest state.
         
         inputs:
         -------
-            - state: torch.tensor with shape (k, sDim, 1). The newest
+            - pose: torch.tensor with shape (k, 1, pDim). The newest
                 state of the system.
     '''
-    def update(self, state: torch.tensor):
+    def update(self, pose: torch.tensor, vel: torch.tensor):
         # add the new state and action to the buffers at the location of
         # the oldest element.
 
         # TODO: FIGURE OUT WHAT IS HAPPENING HERE 
-        self.states = self.states.clone()
+        self.poses = self.poses.clone()
+        self.vels = self.vels.clone()
 
-        self.states[:, 0] = state
+        self.poses[:, 0:1] = pose
+        self.vels[:, 0:1] = vel
         # roll the tensor to the "left" by one step.
-        self.states = torch.roll(self.states, -1, 1)
+        self.poses = torch.roll(self.poses, -1, 1)
+        self.vels = torch.roll(self.vels, -1, 1)
 
 
 class ModelInputPypose(torch.nn.Module):
@@ -77,12 +90,15 @@ class ModelInputPypose(torch.nn.Module):
         self.register_buffer("actions", torch.zeros(k, steps, aDim, dtype=tdtype))
         self.k = k
 
+
     def init(self, input: ControllerInputPypose):
         self.poses, self.vels, self.actions[:, :-1] = input.get(self.k)
+
 
     def forward(self, action: torch.tensor):
         self.actions[:, -1] = action
         return self.poses.clone(), self.vels.clone(), self.actions.clone()
+
 
     def update(self, pose, vel):
         # add the new state and action to the buffers at the location of
@@ -91,10 +107,11 @@ class ModelInputPypose(torch.nn.Module):
         # TODO: FIGURE OUT WHAT IS HAPPENING HERE 
         self.poses = self.poses.clone()
         self.vels = self.vels.clone()
-
-        self.poses[:, 0] = pose
-        self.vels[:, 0] = vel
+        self.poses[:, 0:1] = pose
+        self.vels[:, 0:1] = vel
         # roll the tensor to the "left" by one step.
-        self.poses = torch.roll(self.poses, -1, 1)
+        # TODO This is ugly as we need to call a constructor at every step. need to figure
+        # out if we can create a pypose.roll method
+        self.poses = pp.SE3(torch.roll(self.poses, -1, 1))
         self.vels = torch.roll(self.vels, -1, 1)
         self.actions = torch.roll(self.actions, -1, 1)

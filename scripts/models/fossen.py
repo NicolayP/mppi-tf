@@ -128,37 +128,103 @@ class AUVFossen(ModelBase):
                 dim=0),
             requires_grad=False)
 
-    def forward(self, x: torch.tensor, u: torch.tensor, rk: int=2) -> torch.tensor:
+    '''
+        Forward the state pose and velocity to the next one using the action u. It is assumed that
+        steps is = 1.
+
+        input:
+        ------
+            - x, torch.tensor, the pose of the vehicle using quaternion representation.
+                Shape [k, steps, 7]
+            - v, torch.tensor, the velocity vector of the vehicle.
+                Shape [k, steps, 6]
+            - u, torch.tensor, the action applied on the vehicle.
+                Shape [k, steps, 6]
+            - rk, runage-Kuttah integration steps. (Default = 2)
+
+        output:
+        -------
+            - x_next, torch.tensor, the next pose of the vehicle.
+                Shape [k, 1, 7]
+            - v_next, torch.tensor, the next velocity of the vehicle.
+    '''
+    def forward(self, x: torch.tensor, v: torch.tensor, u: torch.tensor, rk: int=2) -> torch.tensor:
+        
+        x, v, u = x[:, -1], v[:, -1], u[:, -1]
         # Rk2 integration.
         # self.k = x.shape[0]
-        k1 = self.x_dot(x, u)
-        tmp = k1*self.dt
+        x_k1, v_k1 = self.x_dot(x, v, u)
+        x_tmp = x_k1*self.dt
+        v_tmp = v_k1*self.dt
         # if rk == 1:
         #     tmp = k1*self.dt
 
         if rk == 2:
-            k2 = self.x_dot(x + k1*self.dt, u)
-            tmp = (self.dt/2.)*(k1 + k2)
+            x_k2, v_k2 = self.x_dot(x + x_k1*self.dt, v + v_k1*self.dt, u)
+            x_tmp = (self.dt/2.)*(x_k1 + x_k2)
+            v_tmp = (self.dt/2.)*(v_k1 + v_k2)
 
-        return self.norm_quat(x+tmp)
+        return self.norm_quat(x+x_tmp)[:, None], (v+v_tmp)[:, None]
 
-    def x_dot(self, x: torch.tensor, u: torch.tensor) -> torch.tensor:
-        p, v = torch.split(x, [7, 6], dim=1)
-        rotBtoI, tBtoI = self.body2inertial(p)
-        jac = self.jacobian(rotBtoI, tBtoI)
-        pDot = torch.bmm(jac, v)
+    '''
+        Computes x_dot and v_dot that can be used after for integration. Steps should always be equal to
+        1 in this model.
+
+        input:
+        ------
+            - x, the pose of the vehicle, shape [k, 7].
+            - v, the velocity of the vehicle, shape [k, 6].
+            - u, the action applied on the vehicle, shape [k, 6]
+
+        output:
+        -------
+            - x_dot, the time derivative of the pose, shape [k, 7]
+            - v_dot, the time derivative of the velocity, aka the acceleration. shape [k, 6]
+    '''
+    def x_dot(self, x: torch.tensor, v: torch.tensor, u: torch.tensor) -> torch.tensor:
+        rotBtoI, tBtoI = self.body2inertial(x)
+        jac = self.jacobian(rotBtoI, tBtoI) # shape is [k, 7, 6]
+
+        xDot = torch.bmm(jac, v[..., None])[..., 0]
         vDot = self.acc(v, u, rotBtoI)
-        return torch.concat([pDot, vDot], dim=-2)
 
+        return xDot, vDot
+
+    '''
+        Normalizes a batch of states using quaternions representation.
+
+        input:
+        ------
+            - quatState: torch.tensor. The state with a quaternions. It is
+            assumed that the quaternion is [qx, qy, qz, qw] and are elements 3:7.
+                shape [k, 7]
+    '''
     def norm_quat(self, quatState: torch.tensor) -> torch.tensor:
         quat = quatState[:, 3:7].clone()
-        norm = torch.linalg.norm(quat, dim=-2)[..., None]
+        norm = torch.linalg.norm(quat, dim=-1)[..., None]
         quat = quat/norm
         quatState[:, 3:7] = quat.clone()
         return quatState
 
+    '''
+        Computes the transformation allowing to transform a state from body to
+        inertial frame.
+
+        input:
+        ------
+            - pose: torch.tensor. The se3 state with a quaternions representation. It is
+            assumed that the quaternion is [qx, qy, qz, qw] and are elements 3:7.
+                shape [k, 7]
+        
+        output:
+        -------
+            - rotBtoI. The rotation matrix that transforms a position vector from Body to Inertia
+                shape [k, 3, 3]
+            - tBtoI. Transformation changing a quaternion from Body to Inertial frame.
+                shape [k, 4, 3]
+    '''
     def body2inertial(self, pose: torch.tensor):
-        quat = pose[:, 3:7]
+        quat = pose[:, 3:7, None]
         x = quat[:, 0]
         y = quat[:, 1]
         z = quat[:, 2]
@@ -199,6 +265,19 @@ class AUVFossen(ModelBase):
         tBtoI = 0.5 * torch.concat([r1t, r2t, r3t, r4t], dim=-2)
         return rotBtoI, tBtoI
 
+    '''
+        Computes the jacobian that transforms a Pose from the body frame to the inertial frame.
+
+        inputs:
+        -------
+            - rotBtoI, the rotation matrix from body to inertial. Shape [k, 3, 3]
+            - tBtoI, the transformation matrix for quaternions, shape [k, 4, 3]
+
+        output:
+        -------
+            - Jacobian, the jacobian to go from body to inertial.
+                Shape [k, 7, 6]
+    '''
     def jacobian(self, rotBtoI: torch.tensor, tBtoI: torch.tensor) -> torch.tensor:
         k = rotBtoI.shape[0]
         pad3x3 = torch.broadcast_to(self.pad3x3, (k, 3, 3))
@@ -207,16 +286,44 @@ class AUVFossen(ModelBase):
         jacR2 = torch.concat([pad4x3, tBtoI], dim=-1)
 
         return torch.concat([jacR1, jacR2], dim=-2)
-    
+
+    '''
+        Computes the acceleration vector from the current velocity, the action and
+        the vehicle orientation.
+
+        input:
+        ------
+            - v, torch.tensor, the velocity vector. Shape [k, 6]
+            - u, torch.tensor, the action applied to the vehicle. Shape [k, 6]
+            - rotBtoI, torch.tensor, the rotation matrix. Shape [k, 3, 3]
+
+        output:
+        -------
+            - acc, torch.tensor, the acceleration vector. Shape [k, 6]
+    '''
     def acc(self, v: torch.tensor, u: torch.tensor, rotBtoI: torch.tensor) -> torch.tensor:
-        Dv = torch.bmm(self.damping(v), v)
-        Cv = torch.bmm(self.coriolis(v), v)
-        g = torch.unsqueeze(self.restoring(rotBtoI), dim=-1)
+        Dv = torch.bmm(self.damping(v), v[..., None])[..., 0]
+        Cv = torch.bmm(self.coriolis(v), v[..., None])[..., 0]
+        g = torch.unsqueeze(self.restoring(rotBtoI), dim=-1)[..., 0]
+
         rhs = u - Cv - Dv - g
-        acc = torch.matmul(self.invMtot, rhs)
+        acc = torch.matmul(self.invMtot, rhs[..., None])[..., 0]
         # acc = torch.linalg.solve(self.mTot, rhs)
         return acc
 
+    '''
+        Computes restoring forces given the rotation matrix body to inertia.
+
+        input:
+        ------
+            - rotBtoI, torch.tensor, the rotation matrix from body to inertia.
+                Shape [k, 3, 3]
+
+        output:
+        -------
+            - restoring forces, torch.tensor, the restoring forces vector.
+                Shape [k, 6]
+    '''
     def restoring(self, rotBtoI: torch.tensor) -> torch.tensor:
         fng = -self.mass * self.gravity * self.z
         fnb = self.volume * self.density * self.gravity * self.z
@@ -231,22 +338,48 @@ class AUVFossen(ModelBase):
 
         return -torch.concat([fbg+fbb, mbg+mbb], dim=-1)
 
+    '''
+        Computes the damping matrix given the current velocity vector.
+
+        input:
+        ------
+            - v, torch.tensor, the velocity vector.
+                Shape [k, 6]
+
+        output:
+        -------
+            - D(v), torch.tensor, the damping matrix.
+                Shape [k, 6, 6]
+    '''
     def damping(self, v:torch.tensor) -> torch.tensor:
-        D = - self.linDamp - (v * self.linDampFow)
+        D = - self.linDamp - (v[..., None] * self.linDampFow)
         tmp = - torch.mul(self.quadDamp, 
                           torch.abs(
-            diag_embed(torch.squeeze(v, dim=-1))))
+            diag_embed(torch.squeeze(v[..., None], dim=-1))))
 
         return D + tmp
 
+    '''
+        Computes the coriolis matrix given the current velocity vector.
+
+        input:
+        ------
+            - v, torch.tensor, the velocity vector.
+                Shape [k, 6]
+
+        output:
+        -------
+            - C(v), torch.tensor, the coriolis matrix.
+                Shape [k, 6, 6]
+    '''
     def coriolis(self, v: torch.tensor) -> torch.tensor:
         k = v.shape[0]
-        skewCori = torch.matmul(self.mTot[:, 0:3, 0:3].clone(), v[:, 0:3]) + \
-                   torch.matmul(self.mTot[:, 0:3, 3:6].clone(), v[:, 3:6])
+        skewCori = torch.matmul(self.mTot[:, 0:3, 0:3].clone(), v[:, 0:3, None]) + \
+                   torch.matmul(self.mTot[:, 0:3, 3:6].clone(), v[:, 3:6, None])
         s12 = - self.skew_sym(skewCori)
 
-        skewCoriDiag = torch.matmul(self.mTot[:, 3:6, 0:3].clone(), v[:, 0:3]) + \
-                       torch.matmul(self.mTot[:, 3:6, 3:6].clone(), v[:, 3:6])
+        skewCoriDiag = torch.matmul(self.mTot[:, 3:6, 0:3].clone(), v[:, 0:3, None]) + \
+                       torch.matmul(self.mTot[:, 3:6, 3:6].clone(), v[:, 3:6, None])
         s22 = - self.skew_sym(skewCoriDiag)
         
         pad3x3 = torch.broadcast_to(self.pad3x3, (k, 3, 3))
