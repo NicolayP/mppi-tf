@@ -2,10 +2,11 @@ import unittest
 import torch
 import pypose as pp
 import numpy as np
-from scripts.utils.utils import tdtype  # Import the required dtype
 
+from scripts.utils.utils import tdtype  # Import the required dtype
 from scripts.costs.cost_base import CostBase
 from scripts.costs.static import Static, StaticPypose
+
 
 
 class TestCostBase(unittest.TestCase):

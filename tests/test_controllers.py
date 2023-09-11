@@ -1,5 +1,6 @@
-import torch
 import unittest
+import torch
+
 from scripts.controllers.mppi_base import ControllerBase, MPPIBase, MPPIPypose, Update
 from scripts.models.rnn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep
 from scripts.models.fossen import AUVFossen
@@ -7,6 +8,7 @@ from scripts.observers.observer_base import ObserverBase
 from scripts.costs.static import Static, StaticPypose
 from scripts.inputs.ControllerInput import ControllerInput, ControllerInputPypose
 from scripts.inputs.ModelInput import ModelInput, ModelInputPypose
+
 
 
 class TestUpdate(unittest.TestCase):
@@ -146,7 +148,6 @@ class TestControllerBase(unittest.TestCase):
         state = ControllerInputPypose(self.steps)  # Replace with your controller input
         with self.assertRaises(NotImplementedError):
             self.controller(state)
-
 
 # Use AUF Fossen Model.
 class TestMPPIBase(unittest.TestCase):
@@ -373,6 +374,7 @@ class TestMPPIPyposeLSTM(unittest.TestCase):
         state = ControllerInputPypose(self.steps)  # Replace with your controller input
         action = self.controller(state)
         self.assertEqual(action.shape, (6, ))
+
 
 
 if __name__ == '__main__':

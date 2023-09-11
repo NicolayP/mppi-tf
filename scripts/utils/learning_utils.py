@@ -1,362 +1,298 @@
 import torch
-#torch.autograd.set_detect_anomaly(True)
 import pypose as pp
 import numpy as np
-from tqdm import tqdm
-from utile import tdtype, npdtype, to_euler, gen_imgs_3D
+import pandas as pd
 import os
 
+from scipy.spatial.transform import Rotation as R
+from utile import tdtype, npdtype, to_euler, gen_imgs_3D
+import random
+
+import matplotlib.pyplot as plt
+
+from tabulate import tabulate
+from tqdm import tqdm
 
 
-###########################################
-#                                         #
-#      NETWORKS AND PROXY DEFINITIONS     #
-#                                         #
-###########################################
 
-'''
-    Proxy for the RNN part of the network. Used to ensure that
-    the integration using PyPose is correct.
-'''
-class AUVRNNDeltaVProxy(torch.nn.Module):
+class ListDataset(torch.utils.data.Dataset):
+    def __init__(self, data_list, steps=1, history=1, rot='rot'):
+        self.data_list = data_list
+        self.s = steps
+        self.h = history
+        if rot == "rot":
+            self.rot = ["r00", "r01", "r02", "r10", "r11", "r12", "r20", "r21", "r22"]
+        elif rot == "quat":
+            self.rot = ["qw", "qx", "qy", "qz"]
+        elif rot == "euler":
+            self.rot = ["roll", "pitch", "yaw"]
+        else:
+            raise TypeError
+        self.pos = ["x", "y", "z"]
+        self.lin_vel = ["u", "v", "w"]
+        self.ang_vel = ["p", "q", "r"]
+        self.x_labels = self.pos + self.rot + self.lin_vel + self.ang_vel
+        self.u_labels = ["Fx", "Fy", "Fz", "Tx", "Ty", "Tz"]
+        self.y_labels = self.x_labels.copy()
+        
+        self.nb_traj = len(data_list)
+        
+        self.samples = [traj.shape[0] - self.h - self.s + 1 for traj in data_list]
+        
+        self.len = sum(self.samples)
+        
+        self.bins = self.create_bins()
+        
+    def create_bins(self):
+        bins = [0]
+        cummul = 0
+        for s in self.samples:
+            cummul += s
+            bins.append(cummul)
+        return bins
+    
+    def __len__(self):
+        return self.len
+    
+    def __getitem__(self, idx):
+        i = (np.digitize([idx], self.bins) -1)[0]
+        traj = self.data_list[i]
+        j = idx - self.bins[i]
+        sub_frame = traj.iloc[j:j+self.s+self.h]
+        s = sub_frame[self.x_labels].to_numpy()
+        u = sub_frame[self.u_labels].to_numpy()
+        x = s[:self.h]
+        u = u[:self.h+self.s-1]
+        y = s[self.h:self.h+self.s]
+        return x, u, y
+
+    def getTrajs(self):
+        traj_list = []
+        action_seq_list = []
+        for data in self.data_list:
+            traj = data[self.x_labels]
+            traj_list.append(traj)
+            action_seq = data[self.u_labels]
+            action_seq_list.append(action_seq)
+        return traj_list, action_seq_list
+
+
+class Dataset(torch.utils.data.Dataset):
     '''
-        Delta veloctiy proxy constructor.
+    Constructor.
+        input:
+        ------
+            - data: trajectories [h, Tau, x]
+                where h is the number of trajectories, 
+                tau is the number of timesteps and x
+                the dimension of the state.
+            - history: int (default: 1) the number 
+                of past timesteps to use
+            - steps: int (default: 1) the number of
+                futur steps to predict.
+    '''
+    def __init__(self, data, steps=1, history=1):
+        self.w = steps
+        self.h = history
+        self.x = data[:, :, :-6]
+        self.u = data[:, :, -6:]
+        self.trajs = self.x.shape[0]
+        self.samples = self.x.shape[1] - self.h - self.w + 1
+
+    def __len__(self):
+        return self.trajs*self.samples
+
+    def __getitem__(self, idx):
+        ij = np.unravel_index([idx], (self.trajs, self.samples))
+        h = ij[0][0]
+        j = ij[1][0]
+        x = self.x[h, j:j+self.h]
+        u = self.u[h, j:j+self.h+self.w-1]
+        y = self.x[h, j+self.h:j+self.h+self.w]
+        return x, u, y
+
+    def getTraj(self, idx):
+        return self.x[idx], self.u[idx] 
+
+    def getTrajs(self):
+        return self.x, self.u
+
+
+def push_to_tensor(tensor, x):
+    return torch.cat((tensor[:, 1:], x.unsqueeze(dim=1)), dim=1)
+
+
+def get_dataloader(filename, params, angleFormat="rot", normalize=False, maxInput=100., steps=1, history=1, split=.7):
+    '''
+        Creates a dataloader from a datafile that contains a set of trajectories.
 
         input:
         ------
-            - dv, pytorch tensor. The ground truth velocity delta.
-            Shape (k, tau, 6)
-    '''
-    def __init__(self, dv):
-        super(AUVRNNDeltaVProxy, self).__init__()
-        self._dv = dv
-        self.i = 0
+            - filename: string pointing to the file containing the trajectories.
+                Format expected to be a csv file.
+            - angleFormat: string: "rot" (Default), "quat" or "euler".
+                Expresses the format to use for the orientation.
+            - normalized: Bool, default: False. If true, the input force vectore
+                and the velocity vectors are normalized.
+            - maxInput: 
+            - step: Int > 0, default: 1. The number of steps to take from the
+                trajectory. If 1 the dataloader will generate single transition,
+                otherwise the dataloader will generate longer sequence.
+            - history: Int > 0, default: 1. The number of previous steps to use
+                for the prediciton.
+            - split: Float \in [0, 1]. The percentage of the dataset to use for
+                training and validation set. The value represents the size of the
+                training set.
 
-    '''
-        Forward function.
-        Returns the next ground truth entry. Inputs are only there
-        to match the function prototype.
-
-        inputs:
+        output:
         -------
-            - x, that state of the vehicle (not used)
-            - v, the velocity of the vehicle (not used)
-            - u, the action applied to the vehicle (not used)
-            - h0, the vecotr representing the last steps (used for rnn but not here)
-
-        outputs:
-        --------
-            - dv[:, current-1:current, ...], the current velocity delta.
-                shape [k, 1, 6]
-            - hNext: set to None.
+            - Pair of training Dataloader and validation dataloader.
     '''
-    def forward(self, x, v, a, h0=None):
-        self.i += 1
-        return self._dv[:, self.i-1:self.i], None
+
+    # load from file
+    trajs = pd.read_csv(filename, index_col=[0,1], skipinitialspace=True)
+    trajs = trajs.astype(np.float32)
+    multiIndex = trajs.index
+    # Create single entries for the multiIndex.
+    trajs_index = multiIndex.get_level_values(0).drop_duplicates()
+
+    features = trajs.columns
+    # number of steps in each trajectories. Is assumed to be constant!
+    steps_index = trajs.loc[trajs_index[0]].index
+
+    # Feature names
+    position_name = ['x (m)', 'y (m)', 'z (m)']
+    euler_name = ['roll (rad)', 'pitch (rad)', 'yaw (rad)']
+    quat_name = ['qx', 'qy', 'qz', 'qw']
+    rot_name = ['r00', 'r01', 'r02', 'r10', 'r11', 'r12', 'r20', 'r21', 'r22']
+    vel_name = ['u (m/s)', 'v (m/s)', 'w (m/s)', 'p (rad/s)', 'q (rad/s)', 'r (rad/s)']
+    in_name = ['Fx (N)', 'Fy (N)', 'Fz (N)', 'Tx (Nm)', 'Ty (Nm)', 'Tz (Nm)']
+
+    if angleFormat == "rot":
+        ang_rep = rot_name
+    elif angleFormat == "quat":
+        ang_rep = quat_name
+    elif angleFormat == "euler":
+        ang_rep = euler_name
+
+    learn_features = position_name + ang_rep + vel_name + in_name
+    learning = trajs[learn_features]
+
+    if normalize:
+        vel_norm = learning[vel_name]
+
+        vel_mean = vel_norm.mean()
+        vel_std = vel_norm.std()
+        vel_norm = (vel_norm-vel_mean)/vel_std
+
+        in_norm = learning[in_name]
+        in_norm = in_norm/maxInput
+
+        learning[vel_name] = (learning[vel_name]-vel_mean)/vel_std
+        learning[in_name] = learning[in_name]/maxInput
+
+    # Spliting data:
+    k = int(split*len(trajs_index))
+    train_index = random.choices(trajs_index, k=k)
+    val_index = trajs_index.drop(train_index)
+    train_index = trajs_index.drop(val_index)
+
+    train = learning.loc[train_index]
+    val = learning.loc[val_index]
+
+    train_data = train.to_numpy().reshape(train_index.size, steps_index.size, train.columns.size)
+    val_data = val.to_numpy().reshape(val_index.size, steps_index.size, train.columns.size)
+
+    Ds = torch.utils.data.DataLoader(
+        Dataset(train_data, steps=steps, history=history),
+        **params)
+
+    DsVal = torch.utils.data.DataLoader(
+        Dataset(val_data, steps=steps, history=history),
+        **params)
+
+    return (Ds, DsVal)
 
 
-'''
-    RNN predictor for $\delta v$.
+def train(dataloader, model, loss, opti, writer=None, epoch=None, device="cpu", verbose=True):
+    torch.autograd.set_detect_anomaly(True)
+    size = len(dataloader.dataset)
+    model.train()
+    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False)
+    for batch, data in t:
 
-    parameters:
-    -----------
-        - rnn:
-            - rnn_layer: int, The number of rnn layers.
-            - rnn_hidden_size: int, Number of hidden units
-            - bias: Whether bool, or not to apply bias to the RNN units. (default False)
-            - activation: string, The activation function used (tanh or relu)
-        - fc:
-            - topology: array of ints, each entry indicates the number of hidden units on that
-                corresponding layer.
-            - bias: bool, Whether or not to apply bias to the FC units. (default False)
-            - batch_norm: bool, Whether or not to apply batch normalization. (default False)
-            - relu_neg_slope: float, the negative slope of the relu activation.
-'''
-class AUVRNNDeltaV(torch.nn.Module):
-    '''
-        RNN network predictinfg the next velocity delta.
+        X, U, Y = data
+        X, U, Y = X.to(device), U.to(device), Y.to(device)
+        X = X[:, :, 3:] # remove all x, y and z.
+        h = X.shape[1]
+        w = Y.shape[1]
+        # TODO: Expand for w > 1
+        pred = model(X.flatten(1), U.flatten(1))[:, -6:]
+        y = Y.flatten(1)[:, -6:]
 
-        inputs:
-        -------
-            params: dict, the parameters that define the topology of the network.
-            see in class definition.
-    '''
-    def __init__(self, params=None):
-        super(AUVRNNDeltaV, self).__init__()
+        opti.zero_grad()
+        l = loss(pred, y)
+        l.backward()
+        opti.step()
 
-        self.input_size = 9 + 6 + 6 # rotation matrix + velocities + action. I.E 21
-        self.output_size = 6
-
-        # RNN part
-        self.rnn_layers = 5
-        self.rnn_hidden_size = 1
-        rnn_bias = False
-        nonlinearity = "tanh"
-
-        # FC part
-        topology = [32, 32]
-        fc_bias = False
-        bn = True
-        relu_neg_slope = 0.1
-
-        if params is not None:
-            if "rnn" in params:
-                if "rnn_layer" in params["rnn"]:
-                    self.rnn_layers = params["rnn"]["rnn_layer"]
-                if "rnn_hidden_size" in params["rnn"]:
-                    self.rnn_hidden_size = params["rnn"]["rnn_hidden_size"]
-                if "bias" in params["rnn"]:
-                    rnn_bias = params["rnn"]["bias"]
-                if "activation" in params["rnn"]:
-                    nonlinearity = params["rnn"]["activation"]
-
-            if "fc" in params:
-                if "topology" in params["fc"]:
-                    topology = params["fc"]["topology"]
-                if "bias" in params["fc"]:
-                    fc_bias = params["fc"]["bias"]
-                if "batch_norm" in params["fc"]:
-                    bn = params["fc"]["batch_norm"]
-                if "relu_neg_slope" in params["fc"]:
-                    relu_neg_slope = params["fc"]["relu_neg_slope"]
-
-        self.rnn = torch.nn.RNN(
-            input_size=self.input_size,
-            hidden_size=self.rnn_hidden_size,
-            num_layers=self.rnn_layers,
-            batch_first=True,
-            bias=rnn_bias,
-            nonlinearity=nonlinearity
-        )
-
-        fc_layers = []
-        for i, s in enumerate(topology):
-            if i == 0:
-                layer = torch.nn.Linear(self.rnn_hidden_size, s, bias=fc_bias)
-            else:
-                layer = torch.nn.Linear(topology[i-1], s, bias=fc_bias)
-            fc_layers.append(layer)
-
-            # TODO try batch norm.
-            if bn:
-                fc_layers.append(torch.nn.BatchNorm1d(s))
-
-            fc_layers.append(torch.nn.LeakyReLU(negative_slope=relu_neg_slope))
-
-        layer = torch.nn.Linear(topology[-1], 6, bias=fc_bias)
-        fc_layers.append(layer)
-
-        self.fc = torch.nn.Sequential(*fc_layers)
-        #self.fc.apply(init_weights)
-
-    '''
-        Forward function of the velocity delta predictor.
-
-        inputs:
-        -------
-            - x, the state of the vehicle. Pypose element. Shape (k, se3_rep)
-            - v, the velocity of the vehicle. Pytorch tensor, Shape (k, 6)
-            - u, the action applied to the vehicle. Pytorch tensor, Shape (k, 6)
-            - h0, the internal state of the rnn unit. Shape (rnn_layers, k, rnn_hiden_size)
-                if None, the object will create a new one.
-
-        outputs:
-        --------
-            - dv, the next velocity delta. Tensor, shape (k, 6, 1)
-            - hN, the next rnn internal state. Shape (rnn_layers, k, rnn_hidden_size)
-    '''
-    def forward(self, x, v, u, h0=None):
-        k = x.shape[0]
-        r = x.rotation().matrix().flatten(start_dim=-2)
-        input_seq = torch.concat([r, v, u], dim=-1)
-
-        if h0 is None:
-            h0 = self.init_hidden(k, x.device)
-
-        out, hN = self.rnn(input_seq, h0)
-        dv = self.fc(out[:, 0])
-        return dv[:, None], hN
-
-    '''
-        Helper function to create the rnn internal layer.
-
-        inputs:
-        -------
-            - k, int, the batch size.
-            - device, the device on which to load the tensor.
-
-        outputs:
-        --------
-            - h0, shape (rnn_layers, k, rnn_hidden_size)
-    '''
-    def init_hidden(self, k, device):
-        return torch.zeros(self.rnn_layers, k, self.rnn_hidden_size, device=device)
+        if writer is not None:
+            for name, param in model.named_parameters():
+                if param.requires_grad:
+                    writer.add_histogram("train/" + name, param, epoch*size + batch)
+            for dim in range(6):
+                lossDim = loss(pred[:, dim], y[:, dim])
+                writer.add_scalar("loss/"+ str(dim), lossDim, epoch*size + batch)
+    return l.item(), batch*len(X)
 
 
-'''
-    Performs a single integration step using pypose and velocity delta.
-
-    parameters:
-    -----------
-        - model: dict, entry that contains the NN model definition. See AUVRNNDeltaV.
-        - dataset_params:
-            - v_frame: string, The frame in which the velocity is expressed, world or body
-                default: body
-            - dv_frame: string, The frame in which the velocity delta is expressed, world or body
-                default: body
-'''
-class AUVStep(torch.nn.Module):
-    '''
-        AUVStep Constructor.
-
-        inputs:
-        -------
-            - params, dict. See object definition above.
-            - dt, the integration time.
-    '''
-    def __init__(self, params=None, dt=0.1):
-        super(AUVStep, self).__init__()
-        if params is not None:
-            self.dv_pred = AUVRNNDeltaV(params["model"])
-
-            if "dataset_params" in params:
-                if "v_frame" in params["dataset_params"]:
-                    self.v_frame = params["dataset_params"]["v_frame"]
-                if "dv_frame" in params["dataset_params"]:
-                    self.dv_frame = params["dataset_params"]["dv_frame"]
-
-        else:
-            self.dv_pred = AUVRNNDeltaV()
-            self.v_frame = "body"
-            self.dv_frame = "body"
-
-        self.dt = dt
-        self.std = 1.
-        self.mean = 0.
-
-    '''
-        Predicts next state (x_next, v_next) from (x, v, a, h0)
-
-        inputs:
-        -------
-            - x, pypose.SE3. The current pose on the SE3 manifold.
-                shape [k, 7] (pypose uses quaternion representation)
-            - v, torch.Tensor \in \mathbb{R}^{6} \simeq pypose.se3.
-                The current velocity. shape [k, 6]
-            - u, torch.Tensor the current applied forces.
-                shape [k, 6]
-            - h0, the hidden state of the RNN network.
-
-        outputs:
-        --------
-            - x_next, pypose.SE3. The next pose on the SE3 manifold.
-                shape [k, 7]
-            - v_next, torch.Tensor \in \mathbb{R}^{6} \simeq pypose.se3.
-                The next velocity. Shape [k, 6]
-            - dv, torch.Tensor The velocity delta. Used for debugging.\
-                Warning. dv is unnormed.
-            - h_next, torch.Tensor. The next internal representation of
-                the RNN.
-    '''
-    def forward(self, x, v, u, h0=None):
-        dv, h_next = self.dv_pred(x, v, u, h0)
-        dv_unnormed = dv*self.std + self.mean
-        v_next = v + dv_unnormed
-        t = pp.se3(self.dt*v_next).Exp()
-        x_next = x * t
-
-        return x_next, v_next, dv, h_next
-
-    '''
-        Set the mean and variance of the input data.
-        This will be used to normalize the input data.
-
-        inputs:
-        -------
-            - mean, tensor, shape (6)
-            - std, tensor, shape (6)
-    '''
-    def set_stats(self, mean, std):
-        self.mean = mean
-        self.std = std
+def learn(dataLoaders, model, loss, opti, writer=None, maxEpochs=1, device="cpu", encoding="lie"):
+    # if encoding == "lie":
+    #     train_fct = train_lie
+    # else:
+    train_fct = train
+    dls = dataLoaders
+    size = len(dls[0].dataset)
+    l = np.nan
+    current = 0
+    t = tqdm(range(maxEpochs), desc="Training", ncols=150, colour="blue", postfix={"loss": f"Loss: {l:>7f} [{current:>5d}/{size:>5d}]"})
+    for e in t:
+        l, current = train_fct(
+            dataloader=dls[0],
+            model=model,
+            loss=loss,
+            opti=opti,
+            writer=writer,
+            epoch=e,
+            device=device)
+        t.set_postfix({"loss": f"Loss: {l:>7f} [{current:>5d}/{size:>5d}]"})
+    print("Done!\n")
 
 
-'''
-    Performs full trajectory integration.
-
-    params:
-    -------
-        - model:
-            - se3: bool, whether or not to use pypose.
-            - for other entries look at AUVStep and AUVRNNDeltaV.
-'''
-class AUVTraj(torch.nn.Module):
-    '''
-        Trajectory generator objects.
-
-        inputs:
-        -------
-            - params: see definnition above.
-    '''
-    def __init__(self, params=None):
-        super(AUVTraj, self).__init__()
-        self.step = AUVStep(params)
-        if params is not None:
-            self.se3 = params["model"]["se3"]
-        else:
-            self.se3 = True
-
-    '''
-        Generates a trajectory using a Inital State (pose + velocity) combined
-        with an action sequence.
-
-        inputs:
-        -------
-            - x, torch.Tensor. The pose of the system with quaternion representation and the velocity.
-                shape [k, 7+6]
-            - U, torch.Tensor. The action sequence appliedto the system.
-                shape [k, Tau, 6]
-
-        outputs:
-        --------
-            - traj, torch.Tensor. The generated trajectory.
-                shape [k, tau, 7]
-            - traj_v, torch.Tensor. The generated velocity profiles.
-                shape [k, tau, 6]
-            - traj_dv, torch.Tensor. The predicted velocity delta. Used for
-                training. shape [k, tau, 6]
-    '''
-    def forward(self, x, U):
-        k = U.shape[0]
-        tau = U.shape[1]
-        h = None
-        p = x[..., :7]
-        v = x[..., 7:]
-        traj = torch.zeros(size=(k, tau, 7)).to(p.device)
-        traj = pp.SE3(traj)
-        traj_v = torch.zeros(size=(k, tau, 6)).to(p.device)
-        traj_dv = torch.zeros(size=(k, tau, 6)).to(p.device)
-        
-        x = pp.SE3(p).to(p.device)
-        for i in range(tau):
-            x_next, v_next, dv, h_next = self.step(x, v, U[:, i:i+1], h)
-            x, v, h = x_next, v_next, h_next
-            traj[:, i:i+1] = x
-            traj_v[:, i:i+1] = v
-            traj_dv[:, i:i+1] = dv
-        return traj, traj_v, traj_dv
+def test(dataLoaders, model, loss, writer=None, step=None, device="cpu"):
+    pass
 
 
-'''
-    Inits the weights of the neural network.
+def val(dataLoader, models, metric, histories=None, device="cpu",
+        plotStateCols=None, plotActionCols=None, horizon=50, dir=".",
+        plot=True):
+    gtTrajs, actionSeqs = dataLoader.dataset.getTrajs()
+    histories.append(1)
+    errs = {}
+    for j, (traj, seq) in enumerate(zip(gtTrajs, actionSeqs)):
+        trajs = {}
+        traj = torch.from_numpy(traj.to_numpy()).to(device)
+        seq = torch.from_numpy(seq.to_numpy()).to(device)
+        for model, h in zip(models, histories):
+            init = traj[0:h][None, ...]
+            pred = rollout(model, init, seq[None, ...], h, device, horizon)
+            trajs[model.name + f"_traj_{j}"] = traj_to_euler(pred.cpu().numpy(), rep="quat")
+            errs[model.name + f"_traj_{j}"] = [metric(pred, traj[h:horizon+h]).cpu().numpy()]
+        trajs["gt"] = traj_to_euler(traj.cpu().numpy(), rep="quat")
+        if plot:
+            plot_traj(trajs, seq[None, ...].cpu(), histories, plotStateCols, plotActionCols, horizon, dir, f"traj_{j}")
+    headers = ["name", "l2"]
+    print(tabulate([[k,] + v for k, v in errs.items()], headers=headers))
 
-    inputs:
-    -------
-        - m the neural network layer.
-'''
-def init_weights(m):
-    if isinstance(m, torch.nn.Linear):
-        torch.nn.init.xavier_uniform(m.weight)
 
 
 ############################################

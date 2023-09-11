@@ -1,11 +1,13 @@
 import unittest
 import torch
-from torch.testing import assert_allclose
+import pypose as pp
+
 from scripts.utils.utils import tdtype  # Import the required dtype
 from scripts.models.fossen import AUVFossen
 from scripts.models.model_base import ModelBase
 from scripts.models.rnn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep
-import pypose as pp
+
+
 
 class TestModelBase(unittest.TestCase):
     def setUp(self):
@@ -188,6 +190,7 @@ class TestAUVStep(unittest.TestCase):
 
         self.assertEqual(x_next.shape, (self.k, 1, 7))
         self.assertEqual(v_next.shape, (self.k, 1, 6))
+
 
 
 if __name__ == '__main__':

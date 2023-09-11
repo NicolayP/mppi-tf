@@ -1,6 +1,7 @@
 import unittest
 import torch
 import pypose as pp
+
 from scripts.utils.utils import tdtype
 from scripts.inputs.ControllerInput import ControllerInput, ControllerInputPypose
 from scripts.inputs.ModelInput import ModelInput, ModelInputPypose
@@ -367,6 +368,7 @@ class TestModelInputPyposeSteps1(unittest.TestCase):
         self.assertTrue(torch.all(torch.eq(self.model_input.poses[:, -1:], new_pose)))
         self.assertTrue(torch.all(torch.eq(self.model_input.vels[:, -1:], new_vel)))
         self.assertTrue(torch.all(torch.eq(self.model_input.actions[:, -1], old_act[:, 0])))
+
 
 
 if __name__ == '__main__':

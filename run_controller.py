@@ -5,7 +5,7 @@ from observers.observer_base import ObserverBase
 from scripts.utils.utils import load_param, get_device
 from getters import get_controller, get_model, get_cost
 
-from scripts.utils.network_utils import load_onnx_model, create_onnx_bound_model
+from scripts.utils.onnx_utils import load_onnx_model, create_onnx_bound_model
 import numpy as np
 
 

@@ -102,7 +102,7 @@ class AUVRNNDeltaV(torch.nn.Module):
         fc_layers.append(layer)
 
         self.fc = torch.nn.Sequential(*fc_layers)
-        #self.fc.apply(init_weights)
+        self.fc.apply(init_weights)
         self.reset()
 
     '''
@@ -522,4 +522,4 @@ class AUVTraj(torch.nn.Module):
 '''
 def init_weights(m):
     if isinstance(m, torch.nn.Linear):
-        torch.nn.init.xavier_uniform(m.weight)
+        torch.nn.init.xavier_uniform_(m.weight)
