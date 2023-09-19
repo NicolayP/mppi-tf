@@ -1,0 +1,39 @@
+---
+data_loader_params:
+  batch_size: 512
+  shuffle: True
+  num_workers: 8
+
+dataset_params:
+  samples: 10
+  steps: 15
+  history: 1
+  dir: "data/tests/"
+  split: 0.7
+  v_frame: "body"
+  dv_frame: "body"
+  act_normed: True
+  out_normed: False
+  se3: True
+
+model:
+  type: "nn"
+  se3: True
+  history: 4
+  fc:
+    topology: [128, 128, 128]
+    activation: "LeakyRelu"
+    bias: True
+    batch_norm: False
+    relu_neg_slope: 0.1
+
+loss:
+  type: "traj"
+  traj: 1.
+  vel: 1.
+  dv: 1.
+
+optim:
+  type: "Adam"
+  lr: 1.e-4
+  epochs: 4

@@ -6,7 +6,7 @@ from scripts.inputs.ControllerInput import ControllerInput, ControllerInputPypos
 
 '''
     Model Input class. This class is responsible to handle the data that will be fed to the 
-    model. Depening on the model it can maintain up to "steps" last states and actions. 
+    model. Depening on the model it can maintain up to "history" last states and actions. 
 '''
 class ModelInput(torch.nn.Module):
     '''
@@ -15,16 +15,16 @@ class ModelInput(torch.nn.Module):
         inputs:
         -------
             - k: the number of samples.
-            - steps: the number of previous states and action to maintain.
+            - history: the number of previous states and action to maintain.
             - pDim: the pose dimension.
             - vDim: the velocity dimension.
             - aDim: the action dimesnion.
     '''
-    def __init__(self, k, steps, pDim=7, vDim=6, aDim=6):
+    def __init__(self, k, history, pDim=7, vDim=6, aDim=6):
         super(ModelInput, self).__init__()
-        self.register_buffer("poses", torch.zeros(k, steps, pDim, dtype=tdtype))
-        self.register_buffer("vels", torch.zeros(k, steps, vDim, dtype=tdtype))
-        self.register_buffer("actions", torch.zeros(k, steps, aDim, dtype=tdtype))
+        self.register_buffer("poses", torch.zeros(k, history, pDim, dtype=tdtype))
+        self.register_buffer("vels", torch.zeros(k, history, vDim, dtype=tdtype))
+        self.register_buffer("actions", torch.zeros(k, history, aDim, dtype=tdtype))
         self.k = k
 
     '''
@@ -33,12 +33,29 @@ class ModelInput(torch.nn.Module):
 
         inputs:
         -------
-            - input: ControllerInput. The input should have the "steps" last 
+            - input: ControllerInput. The input should have the "history" last 
                 states and actions.
     '''
     def init(self, input: ControllerInput):
         poses, vels, actions = input.get(self.k)
         self.poses, self.vels, self.actions[:, :-1] = poses, vels, actions
+
+    '''
+        Init the model input from data immidiatly.
+
+        inputs:
+        -------
+            - poses: torch.tensor. Poses of the vehicle.
+                shape [k, history, 7]
+            - vels: torch.tensor. Velocities of the vehicle.
+                shape [k, history, 6]
+            - actions: torch.tensor. Actions applied on the vehicle.
+
+    '''
+    def init_form_state(self, poses, vels, actions):
+        self.poses = poses
+        self.vels = vels
+        self.actions[:, :-1] = actions
 
     '''
         Given a new action it returns the states and actions that will be applied
@@ -51,9 +68,9 @@ class ModelInput(torch.nn.Module):
 
         output:
         -------
-            - poses, torch.tensor, the poses, shape [k, steps, pDim]
-            - vels, torch.tensor, the velocities, shape [k, steps, vDim]
-            - actions, torch.tensor, the actions, shape [k, steps, aDim]
+            - poses, torch.tensor, the poses, shape [k, history, pDim]
+            - vels, torch.tensor, the velocities, shape [k, history, vDim]
+            - actions, torch.tensor, the actions, shape [k, history, aDim]
     '''
     def forward(self, action: torch.tensor):
         self.actions[:, -1] = action
@@ -83,16 +100,33 @@ class ModelInput(torch.nn.Module):
 
 
 class ModelInputPypose(torch.nn.Module):
-    def __init__(self, k, steps, aDim=6):
+    def __init__(self, k, history, aDim=6):
         super(ModelInputPypose, self).__init__()
-        self.register_buffer("poses", pp.identity_SE3(k, steps, dtype=tdtype))
-        self.register_buffer("vels", torch.zeros(k, steps, 6, dtype=tdtype))
-        self.register_buffer("actions", torch.zeros(k, steps, aDim, dtype=tdtype))
+        self.register_buffer("poses", pp.identity_SE3(k, history, dtype=tdtype))
+        self.register_buffer("vels", torch.zeros(k, history, 6, dtype=tdtype))
+        self.register_buffer("actions", torch.zeros(k, history, aDim, dtype=tdtype))
         self.k = k
 
 
     def init(self, input: ControllerInputPypose):
         self.poses, self.vels, self.actions[:, :-1] = input.get(self.k)
+
+    '''
+        Init the model input from data immidiatly.
+
+        inputs:
+        -------
+            - poses: pypose.SE3. Poses of the vehicle.
+                shape [k, history, 7]
+            - vels: torch.tensor. Velocities of the vehicle.
+                shape [k, history, 6]
+            - actions: torch.tensor. Actions applied on the vehicle.
+
+    '''
+    def init_form_state(self, poses, vels, actions):
+        self.poses = poses
+        self.vels = vels
+        self.actions[:, :-1] = actions
 
 
     def forward(self, action: torch.tensor):

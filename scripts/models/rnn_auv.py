@@ -243,7 +243,7 @@ class AUVNNDeltaV(torch.nn.Module):
         self.output_size = 6
 
         # FC part
-        steps = 4
+        history = 4
         topology = [32, 32]
         fc_bias = False
         bn = True
@@ -258,10 +258,10 @@ class AUVNNDeltaV(torch.nn.Module):
                 bn = params["batch_norm"]
             if "relu_neg_slope" in params:
                 relu_neg_slope = params["relu_neg_slope"]
-            if "steps" in params:
-                steps = params["steps"]
+            if "history" in params:
+                history = params["history"]
 
-        self.input_size *= steps
+        self.input_size *= history
 
         fc_layers = []
         for i, s in enumerate(topology):
@@ -370,7 +370,7 @@ class AUVStep(ModelBase):
             - params, dict. See object definition above.
             - dt, the integration time.
     '''
-    def __init__(self, params=None, dt=0.1):
+    def __init__(self, params=None, dt=0.1, dv_pred=None):
         super(AUVStep, self).__init__()
         if params is not None:
             if params["model"]["type"] == "rnn":

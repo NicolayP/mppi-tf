@@ -1,0 +1,17 @@
+---
+data_loader_params:
+  batch_size: 512
+  shuffle: True
+  num_workers: 8
+
+dataset_params:
+  samples: 10
+  steps: 15
+  history: 1
+  dir: "data/tests/"
+  split: 0.7
+  v_frame: "body"
+  dv_frame: "body"
+  act_normed: True
+  out_normed: False
+  se3: True
