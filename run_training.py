@@ -1,5 +1,5 @@
 import torch
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 import pypose as pp
 import numpy as np
 import pandas as pd
@@ -49,7 +49,9 @@ def training(parameters, gpu):
     stats_file = os.path.join(dp['dir'], "stats", "stats.yaml")
     stats = parse_param(stats_file)
     ds = []
-
+    
+    log_conf = parameters["logging"]
+    
     for mode, files in zip(["train", "val"], [train_files, val_files]):
         dfs = read_files(dp["dir"], files, mode)
         ds.append(torch.utils.data.DataLoader(
@@ -84,7 +86,8 @@ def training(parameters, gpu):
     ##----------------------- TRAIN ----------------------#
     #-----------------------------------------------------#
 
-    writer = SummaryWriter(log_path)
+    wandb.init(config=log_conf)
+    
     device = get_device(True, gpu)
     model = get_model(parameters["model"]).to(device)
     loss = TrajLoss(parameters["loss"]["traj"],
@@ -93,7 +96,17 @@ def training(parameters, gpu):
     optim = torch.optim.Adam(model.parameters(), lr=parameters["optim"]["lr"])
     epochs = parameters["optim"]["epochs"]
 
-    train(ds, model, loss, optim, writer, epochs, device, ckpt_dir, ckpt_steps)
+    wandb.watch(
+        model,
+        criterion=loss,
+        log = "all",
+        log_freq = 1000,
+        log_graph = True
+    )
+
+    train(ds, model, loss, optim, epochs, device, ckpt_dir, ckpt_steps)
+
+    wandb.save(ckpt_dir+"/*chkpt*")
 
 def main():
     args = parse_args()

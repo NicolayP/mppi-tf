@@ -107,12 +107,12 @@ class ControllerBase(torch.nn.Module):
         A_next = torch.roll(A, -1, 0)
 
         # Log the percent of samples contributing to the decision makeing.
-        # self.obs.write_control("state", s)
-        # self.obs.write_control("eta", eta)
-        # self.obs.write_control("action", next)
-        # self.obs.write_control("sample_cost", costs)
+        self.obs.write_control("state", s)
+        self.obs.write_control("eta", eta)
+        self.obs.write_control("action", next)
+        self.obs.write_control("sample_cost", costs)
         # self.obs.write_control("sample_weight", weights)
-        # self.obs.advance()
+        self.obs.advance()
         # return next action and updated action sequence.
 
         return next, A_next.clone()

@@ -1,4 +1,9 @@
 ---
+logging:
+  project: "lstm"
+  notes: ""
+  tags: ["baseline"]
+
 data_loader_params:
   batch_size: 512
   shuffle: True

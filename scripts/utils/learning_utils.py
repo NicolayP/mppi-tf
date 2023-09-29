@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 
 from tabulate import tabulate
 from tqdm import tqdm
+import wandb
 
 
 
@@ -39,7 +40,7 @@ from tqdm import tqdm
         - plot: bool (default: False) if true, plots the first trajectory of the dataset as well as
             the on predicted by the model.
 '''
-def traj_loss(dataset, model, loss, tau, writer, step, device, mode="train", plot=False):
+def traj_loss(dataset, model, loss, tau, step, device, mode="train", plot=False):
     gt_trajs, gt_vels, gt_dv, aciton_seqs = dataset.get_trajs()
     x_init = gt_trajs[:, 0:1].to(device)
     v_init = gt_vels[:, 0:1].to(device)
@@ -63,13 +64,15 @@ def traj_loss(dataset, model, loss, tau, writer, step, device, mode="train", plo
     name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
             ["u", "v", "w", "p", "q", "r"],
             ["du", "dv", "dw", "dp", "dq", "dr"]]
-    if writer is not None:
-        for i, (l, l_split, t) in enumerate(zip(losses, losses_split, tau)):
-            writer.add_scalar(f"{mode}/{t}-multi-step-loss-all", l, step)
-            for d in range(6):
-                for j in range(3):
-                    writer.add_scalar(f"{mode}/{t}-multi-step-loss-{name[j][d]}", l_split[i][j][d], step)
+    
+    log_data = {}
+    for i, (l, l_split, t) in enumerate(zip(losses, losses_split, tau)):
+        log_data[f"{mode}/{t}-multi-step-loss-all"] = l 
+        for d in range(6):
+            for j in range(3):
+                log_data[f"{mode}/{t}-multi-step-loss-{name[j][d]}"] = l_split[i][j][d]
 
+    wandb.log(log_data, step = step)
     if not plot:
         return
 
@@ -91,9 +94,8 @@ def traj_loss(dataset, model, loss, tau, writer, step, device, mode="train", plo
     t_imgs, v_imgs, dv_imgs = gen_imgs_3D(t_dict, v_dict, dv_dict, tau=tau)
 
     for t_img, v_img, dv_img, t in zip(t_imgs, v_imgs, dv_imgs, tau):
-        writer.add_image(f"{mode}/traj-{t}", t_img, step, dataformats="HWC")
-        writer.add_image(f"{mode}/vel-{t}", v_img, step, dataformats="HWC")
-        writer.add_image(f"{mode}/dv-{t}", dv_img, step, dataformats="HWC")
+        images = [wandb.Image(t_img, caption=f"traj-{t}"), wandb.Image(v_img, caption=f"vel-{t}"),wandb.Image(dv_img, caption=f"dv-{t}")]
+        wandb.log({f"{mode}/{t}": images}, step = step)
 
 
 
@@ -114,11 +116,10 @@ def traj_loss(dataset, model, loss, tau, writer, step, device, mode="train", plo
         returns full trajectory contained in the dataset.
         - model: the dynamical model used for predicitons.
         - loss: torch.function, the loss function used to measure the performance of the model.
-        - writer: torch.summarywriter. Writer used to log the data
         - epoch: The current training epoch.
         - device: string, the device to run the model on.
 '''
-def val_step(dataloader, model, loss, writer, epoch, device):
+def val_step(dataloader, model, loss, epoch, device):
     torch.autograd.set_detect_anomaly(True)
     size = len(dataloader.dataset)
     t = tqdm(enumerate(dataloader), desc=f"Val: {epoch}", ncols=200, colour="red", leave=False, disable=disable_tqdm)
@@ -131,12 +132,11 @@ def val_step(dataloader, model, loss, writer, epoch, device):
         pred, pred_vel, pred_dv = model(X, U)
         l = loss(traj, pred, vel, pred_vel, dv, pred_dv)
 
-        if writer is not None:
-            writer.add_scalar("val/loss", l, epoch*size+batch*len(X))
+        wandb.add_scalar("val/loss", l, epoch*size+batch*len(X))
 
     # Trajectories generation for validation
     tau = [50]
-    traj_loss(dataloader.dataset, model, loss, tau, writer, epoch, device, "val", True)
+    traj_loss(dataloader.dataset, model, loss, tau, epoch, device, "val", True)
 
 '''
     Training Step. Update the networks and logs different training metrics.
@@ -148,11 +148,10 @@ def val_step(dataloader, model, loss, writer, epoch, device):
         - model: the dynamical model used for predicitons.
         - loss: torch.function, the loss function used to measure the performance of the model.
         - optim: torch.optimizer, the optimizer used to update the nn weights.
-        - writer: torch.summarywriter. Writer used to log the data
         - epoch: The current training epoch.
         - device: string, the device to run the model on.
 '''
-def train_step(dataloader, model, loss, optim, writer, epoch, device):
+def train_step(dataloader, model, loss, optim, epoch, device):
     #print("\n", "="*5, "Training", "="*5)
     torch.autograd.set_detect_anomaly(True)
     size = len(dataloader.dataset)
@@ -169,18 +168,17 @@ def train_step(dataloader, model, loss, optim, writer, epoch, device):
         l.backward()
         optim.step()
 
-        if writer is not None:
-            # for name, param in model.named_parameters():
-            #     if param.requires_grad:
-            #         writer.add_histogram("train/" + name, param, epoch*size+batch*len(X))
-            l_split = loss(traj, pred, vel, pred_v, dv, pred_dv, split=True)
-            name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
-                ["u", "v", "w", "p", "q", "r"],
-                ["du", "dv", "dw", "dp", "dq", "dr"]]
-            for d in range(6):
-                for i in range(3):
-                    writer.add_scalar("train/split-loss-" + name[i][d], l_split[i][d], epoch*size+batch*len(X))
-            writer.add_scalar("train/loss", l, epoch*size+batch*len(X))
+        # for name, param in model.named_parameters():
+        #     if param.requires_grad:
+        #         writer.add_histogram("train/" + name, param, epoch*size+batch*len(X))
+        l_split = loss(traj, pred, vel, pred_v, dv, pred_dv, split=True)
+        name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
+            ["u", "v", "w", "p", "q", "r"],
+            ["du", "dv", "dw", "dp", "dq", "dr"]]
+        for d in range(6):
+            for i in range(3):
+                wandb.add_scalar("train/split-loss-" + name[i][d], l_split[i][d], epoch*size+batch*len(X))
+        wandb.add_scalar("train/loss", l, epoch*size+batch*len(X))
 
     return l.item(), batch*len(X)
 
@@ -194,18 +192,12 @@ def train_step(dataloader, model, loss, optim, writer, epoch, device):
         - model: the dynamical model used for predicitons.
         - loss: torch.function, the loss function used to measure the performance of the model.
         - optim: torch.optimizer, the optimizer used to update the nn weights.
-        - writer: torch.summarywriter. Writer used to log the data
         - epoch: The current training epoch.
         - device: string, the device to run the model on.
         - ckpt_dir: String, Directory to use to save the Model in.
         - ckpt_check: Int, interval at which to save the model.
 '''
-def train(ds, model, loss_fc, optim, writer, epochs, device, ckpt_dir=None, ckpt_steps=2):
-    if writer is not None:
-        s = torch.Tensor(np.zeros(shape=(1, 1, 13))).to(device)
-        s[..., 6] = 1.
-        A = torch.Tensor(np.zeros(shape=(1, 10, 6))).to(device)
-        writer.add_graph(model, (s, A))
+def train(ds, model, loss_fc, optim, epochs, device, ckpt_dir=None, ckpt_steps=2):
     size = len(ds[0].dataset)
     l = np.nan
     cur = 0
@@ -214,15 +206,12 @@ def train(ds, model, loss_fc, optim, writer, epochs, device, ckpt_dir=None, ckpt
     for e in t:
         if (e % ckpt_steps == 0) and ckpt_dir is not None:
             tau=[50]
-            traj_loss(ds[0].dataset, model, loss_fc, tau, writer, e, device, "train", True)
-            val_step(ds[1], model, loss_fc, writer, e, device)
+            traj_loss(ds[0].dataset, model, loss_fc, tau, e, device, "train", True)
+            val_step(ds[1], model, loss_fc, e, device)
 
             if ckpt_steps > 0:
                 tmp_path = os.path.join(ckpt_dir, f"step_{e}.pth")
                 torch.save(model.state_dict(), tmp_path)
 
-        l, cur = train_step(ds[0], model, loss_fc, optim, writer, e, device)
+        l, cur = train_step(ds[0], model, loss_fc, optim, e, device)
         t.set_postfix({"loss": f"Loss: {l:>7f} [{cur:>5d}/{size:>5d}]"})
-
-        if writer is not None:
-            writer.flush()
