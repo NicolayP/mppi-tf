@@ -24,6 +24,10 @@ class TestModelBase(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             self.model.init_param()
 
+    def test_reset(self):
+        with self.assertRaises(NotImplementedError):
+            self.model.reset()
+
 
 class TestAUVFossen(unittest.TestCase):
     def setUp(self):
@@ -121,6 +125,15 @@ class TestAUVRNNDeltaV(unittest.TestCase):
         h0 = self.auv_rnn.init_hidden(k, device)
         self.assertEqual(h0.shape, (self.auv_rnn.rnn_layers, k, self.auv_rnn.rnn_hidden_size))
 
+    def test_reset(self):
+        k = 2
+        device = torch.device("cpu")
+        h0 = self.auv_rnn.init_hidden(k, device)
+        self.assertNotEqual(None, h0)
+        self.auv_rnn.reset()
+        h0 = self.auv_rnn.hidden
+        self.assertEqual(None, h0)
+
 
 class TestAUVLSTMDeltaV(unittest.TestCase):
     def setUp(self):
@@ -133,6 +146,22 @@ class TestAUVLSTMDeltaV(unittest.TestCase):
         u = torch.randn(k, 1, 6, dtype=tdtype)  # Example action
         dv = self.auv_lstm(x, v, u)
         self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
+
+    def test_init_hidden(self):
+        k = 2
+        device = torch.device("cpu")
+        h0 = self.auv_lstm.init_hidden(k, device)
+        self.assertEqual(h0[0].shape, (self.auv_lstm.lstm_layers, k, self.auv_lstm.lstm_hidden_size))
+        self.assertEqual(h0[1].shape, (self.auv_lstm.lstm_layers, k, self.auv_lstm.lstm_hidden_size))
+
+    def test_reset(self):
+        k = 2
+        device = torch.device("cpu")
+        h0 = self.auv_lstm.init_hidden(k, device)
+        self.assertNotEqual(None, h0)
+        self.auv_lstm.reset()
+        h0 = self.auv_lstm.hidden
+        self.assertEqual(None, h0)
 
 
 class TestAUVNNDeltaV(unittest.TestCase):

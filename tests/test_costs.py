@@ -111,7 +111,7 @@ class TestStaticCostPypose(unittest.TestCase):
         cost = self.static_cost.state_cost(pose, velocity)
         self.assertEqual(cost.shape, torch.Size([2]))  # Scalar output
 
-    def test_state_cost_random_state(self):
+    def test_state_cost_non_random_state(self):
         pose = pp.SE3([[[1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0]],
                        [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]],
                        [[0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0+1e-10]],
