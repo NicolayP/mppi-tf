@@ -52,7 +52,7 @@ class ModelInput(torch.nn.Module):
             - actions: torch.tensor. Actions applied on the vehicle.
 
     '''
-    def init_form_state(self, poses, vels, actions):
+    def init_from_states(self, poses, vels, actions: torch.tensor):
         self.poses = poses
         self.vels = vels
         self.actions[:, :-1] = actions
@@ -123,7 +123,7 @@ class ModelInputPypose(torch.nn.Module):
             - actions: torch.tensor. Actions applied on the vehicle.
 
     '''
-    def init_form_state(self, poses, vels, actions):
+    def init_from_states(self, poses, vels, actions):
         self.poses = poses
         self.vels = vels
         self.actions[:, :-1] = actions

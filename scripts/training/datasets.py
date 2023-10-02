@@ -326,10 +326,7 @@ class DatasetListModelInput(torch.utils.data.Dataset):
         pose_past = pp.SE3(x_past[:, :7])
         vel_past = x_past[:, 7:]
 
-        x = ModelInputPypose(1, self.h, 6)
-        x.init_form_state(pose_past, torch.tensor(vel_past), torch.tensor(u_past))
-
-        return x, u, target_traj, target_vel, target_dv
+        return pose_past, torch.tensor(vel_past), torch.tensor(u_past), u, target_traj, target_vel, target_dv
 
     '''
         internal function that creats bins to compute the number
@@ -342,3 +339,85 @@ class DatasetListModelInput(torch.utils.data.Dataset):
             cummul += s
             bins.append(cummul)
         return bins
+
+    '''
+        Returns the number of trajectories in the dataset.
+    '''
+    @property
+    def nb_trajs(self):
+        return len(self.data_list)
+
+    '''
+        Get the traj at a specific index ind the dataset.
+        Raises IndexError if the index is out of bound.
+        inputs:
+        -------
+            - idx, int, the trajectory index.
+
+        outputs:
+        --------
+            - traj, shape (tau, se3_rep)
+            - vel, shape (tau, 6)
+            - dv, shape (tau, 6)
+            - action_seq, shape (tau, 6)
+    '''
+    def get_traj(self, idx):
+        if idx >= self.nb_trajs:
+            raise IndexError
+        data = self.data_list[idx]
+
+        traj = data[self.traj_labels].to_numpy()
+        vel = data[self.vel_labels].to_numpy()
+        dv = data[self.dv_labels].to_numpy()
+        action_seq = data[self.u_labels].to_numpy()
+        return traj, vel, dv, action_seq
+
+    '''
+        get all the trajectories from the dataset. Only works if all
+        the trajs in the dataset have the same length.
+
+        inputs:
+        -------
+            - None
+
+        outputs:
+        --------
+            - trajs, shape (nb_traj, tau, se3_rep)
+            - vels, shape (nb_traj, tau, 6)
+            - dvs, shape (nb_traj, tau, 6)
+            - actions, shape (nb_traj, tau, 6)
+    '''
+    def get_trajs(self):
+        traj_list = []
+        vel_list = []
+        dv_list = []
+        action_seq_list = []
+        for i in range(self.nb_trajs):
+            traj, vel, dv, action_seq = self.get_traj(i)
+            traj_list.append(traj[None])
+            vel_list.append(vel[None])
+            dv_list.append(dv[None])
+            action_seq_list.append(action_seq[None])
+
+        trajs = torch.Tensor(np.concatenate(traj_list, axis=0))
+        vels = torch.Tensor(np.concatenate(vel_list, axis=0))
+        dvs = torch.Tensor(np.concatenate(dv_list, axis=0))
+        actions = torch.Tensor(np.concatenate(action_seq_list, axis=0))
+
+        dvs = (dvs-self.mean)/self.std
+
+        if self.se3:
+            trajs = pp.SE3(trajs)
+
+        return trajs, vels, dvs, actions
+
+    '''
+        Get the mean and std of the velocity delta.
+
+        outputs:
+        --------
+            - mean, torch.tensor, shape [6]
+            - std, torch.tensor, shape [6]
+    '''
+    def get_stats(self):
+        return self.mean, self.std
