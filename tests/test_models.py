@@ -5,7 +5,8 @@ import pypose as pp
 from scripts.utils.utils import tdtype  # Import the required dtype
 from scripts.models.fossen import AUVFossen
 from scripts.models.model_base import ModelBase
-from scripts.models.rnn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep
+from scripts.models.nn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep, AUVTraj
+from scripts.inputs.ModelInput import ModelInputPypose
 
 
 
@@ -220,6 +221,20 @@ class TestAUVStep(unittest.TestCase):
         self.assertEqual(x_next.shape, (self.k, 1, 7))
         self.assertEqual(v_next.shape, (self.k, 1, 6))
 
+
+class TestAUVTraj(unittest.TestCase):
+    def setUp(self) -> None:
+        self.model = AUVTraj()
+        self.k, h = 3, 2
+        self.model_input = ModelInputPypose(self.k, h)
+        self.tau = 10
+        self.U = torch.randn(self.k, self.tau, 6)
+
+    def test_rollout(self):
+        traj, traj_v, traj_dv = self.model(self.model_input, self.U)
+        self.assertEqual(traj.shape, (self.k, self.tau, 7))
+        self.assertEqual(traj_v.shape, (self.k, self.tau, 6))
+        self.assertEqual(traj_dv.shape, (self.k, self.tau, 6))
 
 
 if __name__ == '__main__':

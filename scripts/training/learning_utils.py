@@ -1,19 +1,44 @@
 import torch
+from torch.utils.data import DataLoader
 import pypose as pp
 import numpy as np
 import pandas as pd
 import os
 
 from scipy.spatial.transform import Rotation as R
-from utile import tdtype, npdtype, to_euler, gen_imgs_3D, disable_tqdm
+from scripts.inputs.ModelInput import ModelInputPypose
+from scripts.utils.utils import read_files, tdtype, npdtype, to_euler, gen_imgs_3D, disable_tqdm
+from scripts.training.datasets import DatasetListModelInput
 import random
 
 import matplotlib.pyplot as plt
 
-from tabulate import tabulate
 from tqdm import tqdm
 
 
+############################################
+#                                          #
+#            DATALOADER UTILS              #
+#                                          #
+############################################
+
+def get_dataloader_model_input(data_dir, nb_files, steps, history, train_params):
+
+    files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+    files = random.sample(files, nb_files)
+    dfs = read_files(data_dir, files)    
+    ds = DatasetListModelInput(
+            data_list=dfs,
+            steps=steps,
+            history=history,
+            v_frame="body",
+            dv_frame="body",
+            act_normed=False,
+            se3=True,
+            out_normed=False,
+            stats=None)
+    dl = DataLoader(ds, **train_params)
+    return dl
 
 ############################################
 #                                          #
@@ -152,37 +177,65 @@ def val_step(dataloader, model, loss, writer, epoch, device):
         - epoch: The current training epoch.
         - device: string, the device to run the model on.
 '''
+# def train_step(dataloader, model, loss, optim, writer, epoch, device):
+#     #print("\n", "="*5, "Training", "="*5)
+#     torch.autograd.set_detect_anomaly(True)
+#     size = len(dataloader.dataset)
+#     t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=200, colour="red", leave=False, disable=disable_tqdm)
+#     model.train()
+#     for batch, data in t:
+#         X, U, traj, vel, dv = data
+#         X, U, traj, vel, dv = X.to(device), U.to(device), traj.to(device), vel.to(device), dv.to(device)
+
+#         pred, pred_v, pred_dv = model(X, U)
+
+#         optim.zero_grad()
+#         l = loss(traj, pred, vel, pred_v, dv, pred_dv)
+#         l.backward()
+#         optim.step()
+
+#         if writer is not None:
+#             # for name, param in model.named_parameters():
+#             #     if param.requires_grad:
+#             #         writer.add_histogram("train/" + name, param, epoch*size+batch*len(X))
+#             l_split = loss(traj, pred, vel, pred_v, dv, pred_dv, split=True)
+#             name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
+#                 ["u", "v", "w", "p", "q", "r"],
+#                 ["du", "dv", "dw", "dp", "dq", "dr"]]
+#             for d in range(6):
+#                 for i in range(3):
+#                     writer.add_scalar("train/split-loss-" + name[i][d], l_split[i][d], epoch*size+batch*len(X))
+#             writer.add_scalar("train/loss", l, epoch*size+batch*len(X))
+
+#     return l.item(), batch*len(X)
+
 def train_step(dataloader, model, loss, optim, writer, epoch, device):
-    #print("\n", "="*5, "Training", "="*5)
     torch.autograd.set_detect_anomaly(True)
-    size = len(dataloader.dataset)
-    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=200, colour="red", leave=False, disable=disable_tqdm)
+    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False, disable=disable_tqdm)
     model.train()
     for batch, data in t:
-        X, U, traj, vel, dv = data
-        X, U, traj, vel, dv = X.to(device), U.to(device), traj.to(device), vel.to(device), dv.to(device)
-
-        pred, pred_v, pred_dv = model(X, U)
+        pose_past, vel_past, action_past, action_seq, target_traj, target_vel, target_dv = data
+        pose_past, vel_past, action_past, action_seq = pose_past.to(device), vel_past.to(device), action_past.to(device), action_seq.to(device)
+        target_traj, target_vel, target_dv = target_traj.to(device), target_vel.to(device), target_dv.to(device)
+        k = pose_past.shape[0]
+        h = pose_past.shape[1]
+        model_input = ModelInputPypose(k, h).to(device)
+        model_input.init_from_states(pose_past, vel_past, action_past)
+        model_input = model_input.to(device)
+        pred_traj, pred_vel, pred_dv = model(model_input, action_seq)
 
         optim.zero_grad()
-        l = loss(traj, pred, vel, pred_v, dv, pred_dv)
-        l.backward()
+        l = loss(target_traj, pred_traj, target_vel, pred_vel, target_dv, pred_dv)
+        l.backward(retain_graph=True)
         optim.step()
 
         if writer is not None:
-            # for name, param in model.named_parameters():
-            #     if param.requires_grad:
-            #         writer.add_histogram("train/" + name, param, epoch*size+batch*len(X))
-            l_split = loss(traj, pred, vel, pred_v, dv, pred_dv, split=True)
-            name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
-                ["u", "v", "w", "p", "q", "r"],
-                ["du", "dv", "dw", "dp", "dq", "dr"]]
-            for d in range(6):
-                for i in range(3):
-                    writer.add_scalar("train/split-loss-" + name[i][d], l_split[i][d], epoch*size+batch*len(X))
-            writer.add_scalar("train/loss", l, epoch*size+batch*len(X))
+            # TODO Write Logging function.
+            pass
+    
+    return l.item()
 
-    return l.item(), batch*len(X)
+
 
 '''
     Train procedure for SE3 Neural Network.

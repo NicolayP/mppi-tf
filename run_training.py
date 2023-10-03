@@ -7,7 +7,7 @@ import pandas as pd
 from scripts.training.loss_fct import TrajLoss
 from scripts.training.datasets import DatasetList3D
 from scripts.utils.utils import parse_param, read_files, save_param, get_device
-from scripts.utils.learning_utils import train
+from scripts.training.learning_utils import train
 
 from scripts.getters import get_model
 

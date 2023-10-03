@@ -2,7 +2,7 @@ import unittest
 import torch
 
 from scripts.controllers.mppi_base import ControllerBase, MPPIBase, MPPIPypose, Update
-from scripts.models.rnn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep
+from scripts.models.nn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep
 from scripts.models.fossen import AUVFossen
 from scripts.observers.observer_base import ObserverBase
 from scripts.costs.static import Static, StaticPypose

@@ -3,7 +3,7 @@ import torch
 import pypose as pp
 from scripts.utils.utils import tdtype, npdtype
 from scripts.models.model_base import ModelBase
-
+from scripts.inputs.ModelInput import ModelInputPypose
 
 ###########################################
 #                                         #
@@ -415,14 +415,15 @@ class AUVStep(ModelBase):
             - v_next, torch.Tensor \in \mathbb{R}^{6} \simeq pypose.se3.
                 The next velocity. Shape [k, 1, 6]
     '''
-    def forward(self, x, v, u):
+    def forward(self, x, v, u, train=False):
         dv = self.dv_pred(x, v, u)
         dv_unnormed = dv*self.std + self.mean
         v_next = v[:, -1:] + dv_unnormed
         t = pp.se3(self.dt*v_next).Exp()
         x_next = x[:, -1:] * t
-
-        return x_next, v_next
+        if not train:
+            return x_next, v_next
+        return x_next, v_next, dv_unnormed
 
     '''
         Set the mean and variance of the input data.
@@ -478,8 +479,7 @@ class AUVTraj(torch.nn.Module):
 
         inputs:
         -------
-            - x, torch.Tensor. The pose of the system with quaternion representation and the velocity.
-                shape [k, 7+6]
+            - x, ModelInputPypose, the model input containing and managing the previous steps.
             - U, torch.Tensor. The action sequence appliedto the system.
                 shape [k, Tau, 6]
 
@@ -492,24 +492,21 @@ class AUVTraj(torch.nn.Module):
             - traj_dv, torch.Tensor. The predicted velocity delta. Used for
                 training. shape [k, tau, 6]
     '''
-    def forward(self, x, U):
+    def forward(self, x: ModelInputPypose, U):
         k = U.shape[0]
         tau = U.shape[1]
-        h = None
-        p = x[..., :7]
-        v = x[..., 7:]
-        traj = torch.zeros(size=(k, tau, 7)).to(p.device)
+        traj = torch.zeros(size=(k, tau, 7)).to(U.device)
         traj = pp.SE3(traj)
-        traj_v = torch.zeros(size=(k, tau, 6)).to(p.device)
-        traj_dv = torch.zeros(size=(k, tau, 6)).to(p.device)
-        
-        x = pp.SE3(p).to(p.device)
+        traj_v = torch.zeros(size=(k, tau, 6)).to(U.device)
+        traj_dv = torch.zeros(size=(k, tau, 6)).to(U.device)
+
         for i in range(tau):
-            x_next, v_next, dv, h_next = self.step(x, v, U[:, i:i+1], h)
-            x, v, h = x_next, v_next, h_next
-            traj[:, i:i+1] = x
-            traj_v[:, i:i+1] = v
-            traj_dv[:, i:i+1] = dv
+            poses, vels, actions = x(U[:, i])
+            next_pose, next_vel, dv = self.step(poses, vels, actions, train=True)
+            traj[:, i:i+1] = next_pose.clone()
+            traj_v[:, i:i+1] = next_vel.clone()
+            traj_dv[:, i:i+1] = dv.clone()
+            x.update(next_pose, next_vel)
         return traj, traj_v, traj_dv
 
 

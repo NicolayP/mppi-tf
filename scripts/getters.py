@@ -1,6 +1,6 @@
 from controllers.mppi_base import ControllerBase
 from models.fossen import AUVFossen
-from models.rnn_auv import AUVStep, AUVTraj, AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV
+from scripts.models.nn_auv import AUVStep, AUVTraj, AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV
 from costs.static import Static
 
 import numpy as np
