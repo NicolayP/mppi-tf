@@ -148,7 +148,7 @@ class AUVFossen(ModelBase):
                 Shape [k, 1, 7]
             - v_next, torch.tensor, the next velocity of the vehicle.
     '''
-    def forward(self, x: torch.tensor, v: torch.tensor, u: torch.tensor, rk: int=2) -> torch.tensor:
+    def forward(self, x: torch.tensor, v: torch.tensor, u: torch.tensor, h0=None, rk: int=2) -> torch.tensor:
         
         x, v, u = x[:, -1], v[:, -1], u[:, -1]
         # Rk2 integration.
@@ -164,7 +164,7 @@ class AUVFossen(ModelBase):
             x_tmp = (self.dt/2.)*(x_k1 + x_k2)
             v_tmp = (self.dt/2.)*(v_k1 + v_k2)
 
-        return self.norm_quat(x+x_tmp)[:, None], (v+v_tmp)[:, None]
+        return self.norm_quat(x+x_tmp)[:, None], (v+v_tmp)[:, None], h0
 
     '''
         Computes x_dot and v_dot that can be used after for integration. Steps should always be equal to

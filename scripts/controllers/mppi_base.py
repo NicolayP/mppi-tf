@@ -154,16 +154,17 @@ class ControllerBase(torch.nn.Module):
                 Shape: [k/1]
     '''
     def rollout_cost(self, s: ModelInput, noise, A) -> torch.Tensor:
-        self.model.reset()
+        h = None
         cost = torch.zeros(self.k, dtype=tdtype).to(noise.device)
         for t in range(self.tau):
             a = A[t]
             n = noise[:, t]
             act = torch.add(a, n)
-            next_p, next_v = self.model(*s(act))
+            next_p, next_v, h_next = self.model(*s(act), h0=h)
             tmp = self.cost(next_p, next_v, a, n)
             cost = torch.add(cost, tmp)
             s.update(next_p, next_v)
+            h = h_next
 
 
 

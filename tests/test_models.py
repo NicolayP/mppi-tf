@@ -117,7 +117,7 @@ class TestAUVRNNDeltaV(unittest.TestCase):
         x = pp.randn_SE3(k, 1, dtype=tdtype)
         v = torch.randn(k, 1, 6, dtype=tdtype)
         u = torch.randn(k, 1, 6, dtype=tdtype)
-        dv = self.auv_rnn(x, v, u)
+        dv, h = self.auv_rnn(x, v, u)
         self.assertEqual(dv.shape, (k, 1, 6))
 
     def test_init_hidden(self):
@@ -126,14 +126,14 @@ class TestAUVRNNDeltaV(unittest.TestCase):
         h0 = self.auv_rnn.init_hidden(k, device)
         self.assertEqual(h0.shape, (self.auv_rnn.rnn_layers, k, self.auv_rnn.rnn_hidden_size))
 
-    def test_reset(self):
-        k = 2
-        device = torch.device("cpu")
-        h0 = self.auv_rnn.init_hidden(k, device)
-        self.assertNotEqual(None, h0)
-        self.auv_rnn.reset()
-        h0 = self.auv_rnn.hidden
-        self.assertEqual(None, h0)
+    # def test_reset(self):
+    #     k = 2
+    #     device = torch.device("cpu")
+    #     h0 = self.auv_rnn.init_hidden(k, device)
+    #     self.assertNotEqual(None, h0)
+    #     self.auv_rnn.reset()
+    #     h0 = self.auv_rnn.hidden
+    #     self.assertEqual(None, h0)
 
 
 class TestAUVLSTMDeltaV(unittest.TestCase):
@@ -145,7 +145,7 @@ class TestAUVLSTMDeltaV(unittest.TestCase):
         x = pp.randn_SE3(k, 1, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
         v = torch.randn(k, 1, 6, dtype=tdtype)  # Example velocity
         u = torch.randn(k, 1, 6, dtype=tdtype)  # Example action
-        dv = self.auv_lstm(x, v, u)
+        dv, h = self.auv_lstm(x, v, u)
         self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
 
     def test_init_hidden(self):
@@ -155,14 +155,14 @@ class TestAUVLSTMDeltaV(unittest.TestCase):
         self.assertEqual(h0[0].shape, (self.auv_lstm.lstm_layers, k, self.auv_lstm.lstm_hidden_size))
         self.assertEqual(h0[1].shape, (self.auv_lstm.lstm_layers, k, self.auv_lstm.lstm_hidden_size))
 
-    def test_reset(self):
-        k = 2
-        device = torch.device("cpu")
-        h0 = self.auv_lstm.init_hidden(k, device)
-        self.assertNotEqual(None, h0)
-        self.auv_lstm.reset()
-        h0 = self.auv_lstm.hidden
-        self.assertEqual(None, h0)
+    # def test_reset(self):
+    #     k = 2
+    #     device = torch.device("cpu")
+    #     h0 = self.auv_lstm.init_hidden(k, device)
+    #     self.assertNotEqual(None, h0)
+    #     self.auv_lstm.reset()
+    #     h0 = self.auv_lstm.hidden
+    #     self.assertEqual(None, h0)
 
 
 class TestAUVNNDeltaV(unittest.TestCase):
@@ -175,7 +175,7 @@ class TestAUVNNDeltaV(unittest.TestCase):
         x = pp.randn_SE3(k, n, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
         v = torch.randn(k, n, 6, dtype=tdtype)  # Example velocity
         u = torch.randn(k, n, 6, dtype=tdtype)  # Example action
-        dv = self.auv_nn(x, v, u)
+        dv, h = self.auv_nn(x, v, u)
         self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
 
 
@@ -191,7 +191,7 @@ class TestAUVStep(unittest.TestCase):
         x = pp.randn_SE3(self.k, 1, dtype=tdtype)
         v = torch.randn(self.k, 1, 6, dtype=tdtype)
         u = torch.randn(self.k, 1, 6, dtype=tdtype)
-        x_next, v_next = self.auv_step(x, v, u)
+        x_next, v_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (self.k, 1, 7))
         self.assertEqual(v_next.shape, (self.k, 1, 6))
@@ -203,7 +203,7 @@ class TestAUVStep(unittest.TestCase):
         x = pp.randn_SE3(self.k, 1,dtype=tdtype)
         v = torch.randn(self.k, 1, 6, dtype=tdtype)
         u = torch.randn(self.k, 1, 6, dtype=tdtype)
-        x_next, v_next = self.auv_step(x, v, u)
+        x_next, v_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (self.k, 1, 7))
         self.assertEqual(v_next.shape, (self.k, 1, 6))
@@ -216,7 +216,7 @@ class TestAUVStep(unittest.TestCase):
         x = pp.randn_SE3(self.k, n, dtype=tdtype)
         v = torch.randn(self.k, n, 6, dtype=tdtype)
         u = torch.randn(self.k, n, 6, dtype=tdtype)
-        x_next, v_next = self.auv_step(x, v, u)
+        x_next, v_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (self.k, 1, 7))
         self.assertEqual(v_next.shape, (self.k, 1, 6))

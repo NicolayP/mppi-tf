@@ -46,6 +46,17 @@ def get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
 #                                          #
 ############################################
 
+def log(mode, writer, loss, target_traj, pred_traj, target_vel, pred_vel, target_dv, pred_dv, step):
+    l = loss(target_traj, pred_traj, target_vel, pred_vel, target_dv, pred_dv)
+    l_split = loss(target_traj, pred_traj, target_vel, pred_vel, target_dv, pred_dv, split=True)
+    name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
+            ["u", "v", "w", "p", "q", "r"],
+            ["du", "dv", "dw", "dp", "dq", "dr"]]
+    for d in range(6):
+        for i in range(3):
+            writer.add_scalar("train/split-loss-" + name[i][d], l_split[i][d], step)
+    writer.add_scalar("train/loss", l, step)
+
 '''
     Computes the loss on an entire trajectory. If plot is true, it also plots the
     predicted trajecotry for different horizons.
@@ -64,7 +75,7 @@ def get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
         - plot: bool (default: False) if true, plots the first trajectory of the dataset as well as
             the on predicted by the model.
 '''
-def traj_loss(dataset, model, loss, tau, writer, step, device, mode="train", plot=False):
+def traj_loss(mode, dataset, model, loss, tau, writer, step, device, plot=False):
     gt_trajs, gt_vels, gt_dv, aciton_seqs = dataset.get_trajs()
     x_init = gt_trajs[:, 0:1].to(device)
     v_init = gt_vels[:, 0:1].to(device)
@@ -129,54 +140,26 @@ def traj_loss(dataset, model, loss, tau, writer, step, device, mode="train", plo
 ############################################
 
 
-'''
-    Validation Step. Computes and logs different metrics to validate
-    the performances of the network.
+# def val_step(dataloader, model, loss, writer, epoch, device):
+#     torch.autograd.set_detect_anomaly(True)
+#     size = len(dataloader.dataset)
+#     t = tqdm(enumerate(dataloader), desc=f"Val: {epoch}", ncols=200, colour="red", leave=False, disable=disable_tqdm)
+#     model.eval()
+#     for batch, data in t:
+#         X, U, traj, vel, dv = data
+#         X, U = X.to(device), U.to(device)
+#         traj, vel, dv = traj.to(device), vel.to(device), dv.to(device)
 
-    input:
-    ------
-        - dataset: torch.utils.data.Dataset with a methods called get_trajs() that
-        returns full trajectory contained in the dataset.
-        - model: the dynamical model used for predicitons.
-        - loss: torch.function, the loss function used to measure the performance of the model.
-        - writer: torch.summarywriter. Writer used to log the data
-        - epoch: The current training epoch.
-        - device: string, the device to run the model on.
-'''
-def val_step(dataloader, model, loss, writer, epoch, device):
-    torch.autograd.set_detect_anomaly(True)
-    size = len(dataloader.dataset)
-    t = tqdm(enumerate(dataloader), desc=f"Val: {epoch}", ncols=200, colour="red", leave=False, disable=disable_tqdm)
-    model.eval()
-    for batch, data in t:
-        X, U, traj, vel, dv = data
-        X, U = X.to(device), U.to(device)
-        traj, vel, dv = traj.to(device), vel.to(device), dv.to(device)
+#         pred, pred_vel, pred_dv = model(X, U)
+#         l = loss(traj, pred, vel, pred_vel, dv, pred_dv)
 
-        pred, pred_vel, pred_dv = model(X, U)
-        l = loss(traj, pred, vel, pred_vel, dv, pred_dv)
+#         if writer is not None:
+#             writer.add_scalar("val/loss", l, epoch*size+batch*len(X))
 
-        if writer is not None:
-            writer.add_scalar("val/loss", l, epoch*size+batch*len(X))
+#     # Trajectories generation for validation
+#     tau = [50]
+#     traj_loss(dataloader.dataset, model, loss, tau, writer, epoch, device, "val", True)
 
-    # Trajectories generation for validation
-    tau = [50]
-    traj_loss(dataloader.dataset, model, loss, tau, writer, epoch, device, "val", True)
-
-'''
-    Training Step. Update the networks and logs different training metrics.
-
-    input:
-    ------
-        - dataset: torch.utils.data.Dataset with a methods called get_trajs() that
-        returns full trajectory contained in the dataset.
-        - model: the dynamical model used for predicitons.
-        - loss: torch.function, the loss function used to measure the performance of the model.
-        - optim: torch.optimizer, the optimizer used to update the nn weights.
-        - writer: torch.summarywriter. Writer used to log the data
-        - epoch: The current training epoch.
-        - device: string, the device to run the model on.
-'''
 # def train_step(dataloader, model, loss, optim, writer, epoch, device):
 #     #print("\n", "="*5, "Training", "="*5)
 #     torch.autograd.set_detect_anomaly(True)
@@ -193,7 +176,6 @@ def val_step(dataloader, model, loss, writer, epoch, device):
 #         l = loss(traj, pred, vel, pred_v, dv, pred_dv)
 #         l.backward()
 #         optim.step()
-
 #         if writer is not None:
 #             # for name, param in model.named_parameters():
 #             #     if param.requires_grad:
@@ -206,13 +188,29 @@ def val_step(dataloader, model, loss, writer, epoch, device):
 #                 for i in range(3):
 #                     writer.add_scalar("train/split-loss-" + name[i][d], l_split[i][d], epoch*size+batch*len(X))
 #             writer.add_scalar("train/loss", l, epoch*size+batch*len(X))
-
 #     return l.item(), batch*len(X)
 
+
+'''
+    Training Step. Update the networks and logs different training metrics.
+
+    input:
+    ------
+        - dataset: torch.utils.data.Dataset with a methods called get_trajs() that
+        returns full trajectory contained in the dataset.
+        - model: the dynamical model used for predicitons.
+        - loss: torch.function, the loss function used to measure the performance of the model.
+        - optim: torch.optimizer, the optimizer used to update the nn weights.
+        - writer: torch.summarywriter. Writer used to log the data
+        - epoch: The current training epoch.
+        - device: string, the device to run the model on.
+'''
 def train_step(dataloader, model, loss, optim, writer, epoch, device):
     torch.autograd.set_detect_anomaly(True)
-    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False, disable=disable_tqdm)
     model.train()
+    
+    t = tqdm(enumerate(dataloader), desc=f"Epoch: {epoch}", ncols=150, colour="red", leave=False, disable=disable_tqdm)
+    
     for batch, data in t:
         pose_past, vel_past, action_past, action_seq, target_traj, target_vel, target_dv = data
         pose_past, vel_past, action_past, action_seq = pose_past.to(device), vel_past.to(device), action_past.to(device), action_seq.to(device)
@@ -230,11 +228,48 @@ def train_step(dataloader, model, loss, optim, writer, epoch, device):
         optim.step()
 
         if writer is not None:
-            # TODO Write Logging function.
+            # step = epoch*size+batch*len(X)
+            # log("train", writer, loss, target_traj, pred_traj, target_vel, pred_vel, target_dv, pred_dv, step)
             pass
     
     return l.item()
 
+'''
+    Validation Step. Computes and logs different metrics to validate
+    the performances of the network.
+
+    input:
+    ------
+        - dataset: torch.utils.data.Dataset with a methods called get_trajs() that
+        returns full trajectory contained in the dataset.
+        - model: the dynamical model used for predicitons.
+        - loss: torch.function, the loss function used to measure the performance of the model.
+        - writer: torch.summarywriter. Writer used to log the data
+        - epoch: The current training epoch.
+        - device: string, the device to run the model on.
+'''
+def val_step(dataloader, model, loss, writer, epoch, device):
+    torch.autograd.set_detect_anomaly(True)
+    t = tqdm(enumerate(dataloader), desc=f"Val: {epoch}", ncols=150, colour="red", leave=False, disable=disable_tqdm)
+    model.eval()
+
+    for batch, data in t:
+        pose_past, vel_past, action_past, action_seq, target_traj, target_vel, target_dv = data
+        pose_past, vel_past, action_past, action_seq = pose_past.to(device), vel_past.to(device), action_past.to(device), action_seq.to(device)
+        target_traj, target_vel, target_dv = target_traj.to(device), target_vel.to(device), target_dv.to(device)
+        k = pose_past.shape[0]
+        h = pose_past.shape[1]
+        model_input = ModelInputPypose(k, h).to(device)
+        model_input.init_from_states(pose_past, vel_past, action_past)
+        model_input = model_input.to(device)
+        pred_traj, pred_vel, pred_dv = model(model_input, action_seq)
+
+        if writer is not None:
+            # log("val", writer, loss, target_traj, pred_traj, target_vel, pred_vel, target_dv, pred_dv)
+            pass
+    # Trajectory evaluaton:
+    #tau = 50
+    #traj_loss("val", dataloader.dataset, model, loss, tau, writer, epoch, device, True)
 
 
 '''

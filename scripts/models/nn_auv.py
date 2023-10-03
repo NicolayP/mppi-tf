@@ -103,7 +103,6 @@ class AUVRNNDeltaV(torch.nn.Module):
 
         self.fc = torch.nn.Sequential(*fc_layers)
         self.fc.apply(init_weights)
-        self.reset()
 
     '''
         Forward function of the velocity delta predictor.
@@ -121,17 +120,17 @@ class AUVRNNDeltaV(torch.nn.Module):
             - dv, the next velocity delta. Tensor, shape (k, 6, 1)
             - hN, the next rnn internal state. Shape (rnn_layers, k, rnn_hidden_size)
     '''
-    def forward(self, x, v, u):
+    def forward(self, x, v, u, hidden=None):
         k = x.shape[0]
         r = x.rotation().matrix().flatten(start_dim=-2)
         input_seq = torch.concat([r, v, u], dim=-1)
 
-        if self.hidden is None:
-            self.hidden = self.init_hidden(k, x.device)
+        if hidden is None:
+            hidden = self.init_hidden(k, x.device)
 
-        out, self.hidden = self.rnn(input_seq, self.hidden)
+        out, h = self.rnn(input_seq, hidden)
         dv = self.fc(out[:, 0])
-        return dv[:, None]
+        return dv[:, None], h
 
     '''
         Helper function to create the rnn internal layer.
@@ -147,10 +146,6 @@ class AUVRNNDeltaV(torch.nn.Module):
     '''
     def init_hidden(self, k, device):
         return torch.zeros(self.rnn_layers, k, self.rnn_hidden_size, device=device)
-
-
-    def reset(self):
-        self.hidden = None
 
 
 class AUVLSTMDeltaV(torch.nn.Module):
@@ -213,26 +208,23 @@ class AUVLSTMDeltaV(torch.nn.Module):
         fc_layers.append(layer)
 
         self.fc = torch.nn.Sequential(*fc_layers)
-        self.reset()
 
-    def forward(self, x, v, u):
+    def forward(self, x, v, u, hidden=None):
         k = x.shape[0]
         r = x.rotation().matrix().flatten(start_dim=-2)
         input_seq = torch.cat([r, v, u], dim=-1)
 
-        if self.hidden is None:
-            self.hidden = self.init_hidden(k, x.device)
+        if hidden is None:
+            hidden = self.init_hidden(k, x.device)
 
-        out, self.hidden = self.lstm(input_seq, self.hidden)
+        out, h = self.lstm(input_seq, hidden)
         dv = self.fc(out[:, 0])
-        return dv[:, None]
+
+        return dv[:, None], h
 
     def init_hidden(self, k, device):
         return (torch.zeros(self.lstm_layers, k, self.lstm_hidden_size, device=device),
                 torch.zeros(self.lstm_layers, k, self.lstm_hidden_size, device=device))
-
-    def reset(self):
-        self.hidden = None
 
 
 class AUVNNDeltaV(torch.nn.Module):
@@ -281,7 +273,6 @@ class AUVNNDeltaV(torch.nn.Module):
         fc_layers.append(layer)
 
         self.fc = torch.nn.Sequential(*fc_layers)
-        self.reset()
 
     '''
         Forward function of the velocity delta predictor.
@@ -291,21 +282,19 @@ class AUVNNDeltaV(torch.nn.Module):
             - x, the state of the vehicle. Pypose element. Shape (k, steps, se3_rep)
             - v, the velocity of the vehicle. Pytorch tensor, Shape (k, steps, 6)
             - u, the action applied to the vehicle. Pytorch tensor, Shape (k, steps, 6)
+            - h, fake hidden to match prototype of RNN and LSTM networks
 
         outputs:
         --------
             - dv, the next velocity delta. Tensor, shape (k, 6, 1)
     '''
-    def forward(self, x, v, u):
+    def forward(self, x, v, u, h=None):
         k = x.shape[0]
         r = x.rotation().matrix().flatten(-2) # shape [k, steps, 9]
         input_seq = torch.concat([r, v, u], dim=-1).view(k, -1)
 
         dv = self.fc(input_seq)
-        return dv[:, None]
-
-    def reset(self):
-        pass
+        return dv[:, None], None
 
 
 '''
@@ -415,15 +404,15 @@ class AUVStep(ModelBase):
             - v_next, torch.Tensor \in \mathbb{R}^{6} \simeq pypose.se3.
                 The next velocity. Shape [k, 1, 6]
     '''
-    def forward(self, x, v, u, train=False):
-        dv = self.dv_pred(x, v, u)
+    def forward(self, x, v, u, h0=None, train=False):
+        dv, h = self.dv_pred(x, v, u, h0)
         dv_unnormed = dv*self.std + self.mean
         v_next = v[:, -1:] + dv_unnormed
         t = pp.se3(self.dt*v_next).Exp()
         x_next = x[:, -1:] * t
         if not train:
-            return x_next, v_next
-        return x_next, v_next, dv_unnormed
+            return x_next, v_next, h
+        return x_next, v_next, dv_unnormed, h
 
     '''
         Set the mean and variance of the input data.
@@ -444,9 +433,6 @@ class AUVStep(ModelBase):
     def update_model(self, dv_pred):
         self.dv_pred = dv_pred
 
-
-    def reset(self):
-        self.dv_pred.reset()
 
 '''
     Performs full trajectory integration.
@@ -495,6 +481,7 @@ class AUVTraj(torch.nn.Module):
     def forward(self, x: ModelInputPypose, U):
         k = U.shape[0]
         tau = U.shape[1]
+        h = None
         traj = torch.zeros(size=(k, tau, 7)).to(U.device)
         traj = pp.SE3(traj)
         traj_v = torch.zeros(size=(k, tau, 6)).to(U.device)
@@ -502,10 +489,11 @@ class AUVTraj(torch.nn.Module):
 
         for i in range(tau):
             poses, vels, actions = x(U[:, i])
-            next_pose, next_vel, dv = self.step(poses, vels, actions, train=True)
+            next_pose, next_vel, dv, h_next = self.step(poses, vels, actions, h, train=True)
             traj[:, i:i+1] = next_pose.clone()
             traj_v[:, i:i+1] = next_vel.clone()
             traj_dv[:, i:i+1] = dv.clone()
+            h = h_next
             x.update(next_pose, next_vel)
         return traj, traj_v, traj_dv
 
