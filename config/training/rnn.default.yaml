@@ -1,24 +1,25 @@
 ---
-data_loader_params:
-  batch_size: 512
-  shuffle: True
-  num_workers: 8
-
 dataset_params:
   samples: 10
   steps: 15
-  history: 1
+  history: 4
   dir: "data/tests/"
   split: 0.7
   v_frame: "body"
   dv_frame: "body"
+  frame: "body"
   act_normed: True
   out_normed: False
   se3: True
+  batch_size: 512
+  shuffle: True
+  num_workers: 8
 
 model:
-  type: "rnn"
+  type: "auv_rnn"
+  training: True
   se3: True
+  history: 1
   rnn:
     rnn_layer: 1
     rnn_hidden_size : 64
@@ -40,4 +41,9 @@ loss:
 optim:
   type: "Adam"
   lr: 1.e-4
-  epochs: 4
+  epochs: 2
+
+log:
+  path: trained_models/debug
+  stamped: True
+  ckpt_steps: 2

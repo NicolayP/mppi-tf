@@ -1,7 +1,7 @@
-from controllers.mppi_base import ControllerBase
-from models.fossen import AUVFossen
-from scripts.models.nn_auv import AUVStep, AUVTraj, AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV
-from costs.static import Static
+from scripts.controllers.mppi_base import ControllerBase
+from scripts.models.fossen import AUVFossen
+from scripts.models.nn_auv import AUVStep, AUVTraj
+from scripts.costs.static import Static
 
 import numpy as np
 
@@ -34,21 +34,17 @@ def get_controller(cont_dict, model, cost, observer,
 def fossen(model_dict, dt, limMax, limMin, training=False):
     return AUVFossen(model_dict, dt)
 
-def rnn(model_dict, dt, limMax, limMin, training=False):
-    pass
-
-def lstm(model_dict, dt, limMax, limMin, training=False):
-    pass
-
-def nn(model_dict, dt, limMax, limMin, training=False):
-    pass
+def ml_model(model_dict, dt, limMax, limMin, training=False):
+    if training:
+        return AUVTraj(model_dict)
+    return AUVStep(model_dict, dt)
 
 def get_model(model_dict, dt, limMax, limMin):
     switcher = {
         "auv_fossen": fossen,
-        "auv_rnn": rnn,
-        "auv_lstm": lstm,
-        "auv_nn": nn,
+        "auv_rnn": ml_model,
+        "auv_lstm": ml_model,
+        "auv_nn": ml_model,
     }
     model_type = model_dict["type"]
     # if training is true we need to return a AUV trajectory.
@@ -56,7 +52,7 @@ def get_model(model_dict, dt, limMax, limMin):
     training = model_dict["training"]
 
     getter = switcher.get(model_type, lambda: "invalid model type, \
-                          check spelling. Supported are: auv_fossen|auv_rnn")
+                          check spelling. Supported are: auv_fossen|auv_rnn|auv_lstm|auv_nn")
 
     return getter(
         model_dict=model_dict, dt=dt,

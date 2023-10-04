@@ -7,7 +7,7 @@ import os
 
 from scipy.spatial.transform import Rotation as R
 from scripts.inputs.ModelInput import ModelInputPypose
-from scripts.utils.utils import read_files, tdtype, npdtype, to_euler, gen_imgs_3D, disable_tqdm
+from scripts.utils.utils import read_files, tdtype, npdtype, to_euler, gen_imgs_3D, disable_tqdm, parse_param
 from scripts.training.datasets import DatasetListModelInput
 import random
 
@@ -21,23 +21,46 @@ from tqdm import tqdm
 #            DATALOADER UTILS              #
 #                                          #
 ############################################
+def get_datasets(parameters):
+    files = [f for f in os.listdir(parameters["dir"]) if os.path.isfile(os.path.join(parameters["dir"], f))]
+    nb_files = min(len(files), parameters["samples"])
 
-def get_dataloader_model_input(data_dir, nb_files, steps, history, train_params):
-
-    files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+    random.shuffle(files)
     files = random.sample(files, nb_files)
-    dfs = read_files(data_dir, files)    
+    train_size = int(parameters["split"]*len(files))
+
+    train_files = files[:train_size]
+    val_files = files[train_size:]
+
+    stats_file = os.path.join(parameters['dir'], "stats", "stats.yaml")
+    stats = parse_param(stats_file)
+    ds = []
+
+    for mode, files in zip(["train", "val"], [train_files, val_files]):
+        dfs = read_files(parameters["dir"], files, mode)
+        ds.append(get_dataloader_model_input(dfs, parameters["steps"], parameters["history"],
+                                             frame=parameters["frame"], 
+                                             stats=stats,
+                                             batch_size=parameters["batch_size"],
+                                             shuffle=parameters["shuffle"],
+                                             num_workers=parameters["num_workers"]))
+    return ds
+
+
+def get_dataloader_model_input(datafiles, steps, history, frame,
+                               act_normed=True, se3=True, out_normed=True, stats=None,
+                               batch_size=512, shuffle=True, num_workers=8):
     ds = DatasetListModelInput(
-            data_list=dfs,
+            data_list=datafiles,
             steps=steps,
             history=history,
-            v_frame="body",
-            dv_frame="body",
-            act_normed=False,
-            se3=True,
-            out_normed=False,
-            stats=None)
-    dl = DataLoader(ds, **train_params)
+            v_frame=frame,
+            dv_frame=frame,
+            act_normed=act_normed,
+            se3=se3,
+            out_normed=out_normed,
+            stats=stats)
+    dl = DataLoader(ds, shuffle=shuffle, batch_size=batch_size, num_workers=num_workers)
     return dl
 
 ############################################
@@ -254,7 +277,7 @@ def train(ds, model, loss_fc, optim, writer, epochs, device, ckpt_dir=None, ckpt
         # Saving checkpoint and perform validation step.
         if (e % ckpt_steps == 0) and ckpt_dir is not None:
             tau=50
-            traj_loss(ds[0].dataset, model, loss_fc, tau, writer, e, device, "train", True)
+            traj_loss("train", ds[0].dataset, model, loss_fc, tau, writer, e, device, True)
             val_step(ds[1], model, loss_fc, writer, e, device)
 
             if ckpt_steps > 0:

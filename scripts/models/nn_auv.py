@@ -362,12 +362,12 @@ class AUVStep(ModelBase):
     def __init__(self, params=None, dt=0.1, dv_pred=None):
         super(AUVStep, self).__init__()
         if params is not None:
-            if params["model"]["type"] == "rnn":
-                self.dv_pred = AUVRNNDeltaV(params["model"])
-            elif params["model"]["type"] == "lstm":
-                self.dv_pred = AUVLSTMDeltaV(params["model"])
-            elif params["model"]["type"] == "nn":
-                self.dv_pred = AUVNNDeltaV(params["model"])
+            if params["type"] == "auv_rnn":
+                self.dv_pred = AUVRNNDeltaV(params)
+            elif params["type"] == "auv_lstm":
+                self.dv_pred = AUVLSTMDeltaV(params)
+            elif params["type"] == "auv_nn":
+                self.dv_pred = AUVNNDeltaV(params)
 
             if "dataset_params" in params:
                 if "v_frame" in params["dataset_params"]:
@@ -455,7 +455,7 @@ class AUVTraj(torch.nn.Module):
         super(AUVTraj, self).__init__()
         self.step = AUVStep(params)
         if params is not None:
-            self.se3 = params["model"]["se3"]
+            self.se3 = params["se3"]
         else:
             self.se3 = True
 
