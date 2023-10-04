@@ -8,18 +8,26 @@ from torch.utils.tensorboard import SummaryWriter
 from scripts.utils.utils import get_device
 from scripts.training.loss_fct import TrajLoss
 from scripts.models.nn_auv import AUVTraj
-from scripts.training.learning_utils import get_dataloader_model_input, train_step, val_step, train
+from scripts.training.learning_utils import get_datasets, train_step, val_step, train
 
 
 class TestTrainStepNN_CPU(unittest.TestCase):
     def setUp(self):
         data_dir = "data/tests"
-        nb_files, steps, history = 1, 20, 2
-        train_params = {"batch_size": 10, "shuffle": True, "num_workers": 8}
-        self.dl_train = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dl_val = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dls = [self.dl_train, self.dl_val]
-        model_param = {"model": {"type": "nn", "se3": True, "history": history}}
+        history = 2
+        parameter = {"dir": data_dir,
+                     "samples": 2,
+                     "split": 0.5,
+                     "frame": "body",
+                     "steps": 20,
+                     "history": history,
+                     "batch_size": 10,
+                     "shuffle": True,
+                     "num_workers": 8}
+        self.dls = get_datasets(parameter)
+        self.dl_train = self.dls[0]
+        self.dl_val = self.dls[1]
+        model_param = {"type": "auv_nn", "se3": True, "history": history}
         self.device = get_device(cpu=True)
         self.model = AUVTraj(model_param).to(self.device)
         self.loss = TrajLoss().to(self.device)
@@ -51,12 +59,20 @@ class TestTrainStepNN_CPU(unittest.TestCase):
 class TestTrainStepNN_GPU(unittest.TestCase):
     def setUp(self):
         data_dir = "data/tests"
-        nb_files, steps, history = 1, 3, 2
-        train_params = {"batch_size": 10, "shuffle": True, "num_workers": 8}
-        self.dl_train = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dl_val = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dls = [self.dl_train, self.dl_val]
-        model_param = {"model": {"type": "nn", "se3": True, "history": history}}
+        history = 2
+        parameter = {"dir": data_dir,
+                     "samples": 2,
+                     "split": 0.5,
+                     "frame": "body",
+                     "steps": 20,
+                     "history": history,
+                     "batch_size": 10,
+                     "shuffle": True,
+                     "num_workers": 8}
+        self.dls = get_datasets(parameter)
+        self.dl_train = self.dls[0]
+        self.dl_val = self.dls[1]
+        model_param = {"type": "auv_nn", "se3": True, "history": history}
         self.device = get_device(0)
         self.model = AUVTraj(model_param).to(self.device)
         self.loss = TrajLoss().to(self.device)
@@ -88,12 +104,20 @@ class TestTrainStepNN_GPU(unittest.TestCase):
 class TestTrainStepRNN_CPU(unittest.TestCase):
     def setUp(self):
         data_dir = "data/tests"
-        nb_files, steps, history = 1, 3, 1
-        train_params = {"batch_size": 10, "shuffle": True, "num_workers": 8}
-        self.dl_train = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dl_val = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dls = [self.dl_train, self.dl_val]
-        model_param = {"model": {"type": "rnn", "se3": True}}
+        history = 2
+        parameter = {"dir": data_dir,
+                     "samples": 2,
+                     "split": 0.5,
+                     "frame": "body",
+                     "steps": 20,
+                     "history": history,
+                     "batch_size": 10,
+                     "shuffle": True,
+                     "num_workers": 8}
+        self.dls = get_datasets(parameter)
+        self.dl_train = self.dls[0]
+        self.dl_val = self.dls[1]
+        model_param = {"type": "auv_rnn", "se3": True}
         self.device = get_device(cpu=True)
         self.model = AUVTraj(model_param).to(self.device)
         self.loss = TrajLoss().to(self.device)
@@ -125,12 +149,20 @@ class TestTrainStepRNN_CPU(unittest.TestCase):
 class TestTrainStepRNN_GPU(unittest.TestCase):
     def setUp(self):
         data_dir = "data/tests"
-        nb_files, steps, history = 1, 3, 2
-        train_params = {"batch_size": 10, "shuffle": True, "num_workers": 8}
-        self.dl_train = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dl_val = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dls = [self.dl_train, self.dl_val]
-        model_param = {"model": {"type": "rnn", "se3": True}}
+        history = 2
+        parameter = {"dir": data_dir,
+                     "samples": 2,
+                     "split": 0.5,
+                     "frame": "body",
+                     "steps": 20,
+                     "history": history,
+                     "batch_size": 10,
+                     "shuffle": True,
+                     "num_workers": 8}
+        self.dls = get_datasets(parameter)
+        self.dl_train = self.dls[0]
+        self.dl_val = self.dls[1]
+        model_param = {"type": "auv_rnn", "se3": True}
         self.device = get_device(0)
         self.model = AUVTraj(model_param).to(self.device)
         self.loss = TrajLoss().to(self.device)
@@ -162,12 +194,20 @@ class TestTrainStepRNN_GPU(unittest.TestCase):
 class TestTrainStepLSTM_GPU(unittest.TestCase):
     def setUp(self):
         data_dir = "data/tests"
-        nb_files, steps, history = 1, 3, 2
-        train_params = {"batch_size": 10, "shuffle": True, "num_workers": 8}
-        self.dl_train = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dl_val = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dls = [self.dl_train, self.dl_val]
-        model_param = {"model": {"type": "lstm", "se3": True}}
+        history = 2
+        parameter = {"dir": data_dir,
+                     "samples": 2,
+                     "split": 0.5,
+                     "frame": "body",
+                     "steps": 20,
+                     "history": history,
+                     "batch_size": 10,
+                     "shuffle": True,
+                     "num_workers": 8}
+        self.dls = get_datasets(parameter)
+        self.dl_train = self.dls[0]
+        self.dl_val = self.dls[1]
+        model_param = {"type": "auv_lstm", "se3": True}
         self.device = get_device(0)
         self.model = AUVTraj(model_param).to(self.device)
         self.loss = TrajLoss().to(self.device)
@@ -199,12 +239,20 @@ class TestTrainStepLSTM_GPU(unittest.TestCase):
 class TestTrainStepLSTM_GPU(unittest.TestCase):
     def setUp(self):
         data_dir = "data/tests"
-        nb_files, steps, history = 1, 3, 2
-        train_params = {"batch_size": 10, "shuffle": True, "num_workers": 8}
-        self.dl_train = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dl_val = get_dataloader_model_input(data_dir, nb_files, steps, history, train_params)
-        self.dls = [self.dl_train, self.dl_val]
-        model_param = {"model": {"type": "lstm", "se3": True}}
+        history = 2
+        parameter = {"dir": data_dir,
+                     "samples": 2,
+                     "split": 0.5,
+                     "frame": "body",
+                     "steps": 20,
+                     "history": history,
+                     "batch_size": 10,
+                     "shuffle": True,
+                     "num_workers": 8}
+        self.dls = get_datasets(parameter)
+        self.dl_train = self.dls[0]
+        self.dl_val = self.dls[1]
+        model_param = {"type": "auv_lstm", "se3": True}
         self.device = get_device(0)
         self.model = AUVTraj(model_param).to(self.device)
         self.loss = TrajLoss().to(self.device)
