@@ -366,11 +366,14 @@ class DatasetListModelInput(torch.utils.data.Dataset):
             raise IndexError
         data = self.data_list[idx]
 
-        traj = data[self.traj_labels].to_numpy()
+        traj = pp.SE3(data[self.traj_labels].to_numpy())
         vel = data[self.vel_labels].to_numpy()
         dv = data[self.dv_labels].to_numpy()
         action_seq = data[self.u_labels].to_numpy()
-        return traj, vel, dv, action_seq
+        pose_init = traj[:self.h]
+        vel_init = vel[:self.h]
+        act_init = action_seq[:self.h-1]
+        return pp.SE3(pose_init), vel_init, act_init, traj, vel, dv, action_seq
 
     '''
         get all the trajectories from the dataset. Only works if all
@@ -388,15 +391,21 @@ class DatasetListModelInput(torch.utils.data.Dataset):
             - actions, shape (nb_traj, tau, 6)
     '''
     def get_trajs(self):
+        pose_init_list = []
+        vel_init_list = []
+        act_init_list = []
         traj_list = []
         vel_list = []
         dv_list = []
         action_seq_list = []
         for i in range(self.nb_trajs):
-            traj, vel, dv, action_seq = self.get_traj(i)
+            pose_init, vel_init, act_init, traj, vel, dv, action_seq = self.get_traj(i)
             traj_list.append(traj[None])
             vel_list.append(vel[None])
             dv_list.append(dv[None])
+            pose_init_list.append(pose_init[None])
+            vel_init_list.append(vel_init[None])
+            act_init_list.append(act_init[None])
             action_seq_list.append(action_seq[None])
 
         trajs = torch.Tensor(np.concatenate(traj_list, axis=0))
@@ -404,12 +413,16 @@ class DatasetListModelInput(torch.utils.data.Dataset):
         dvs = torch.Tensor(np.concatenate(dv_list, axis=0))
         actions = torch.Tensor(np.concatenate(action_seq_list, axis=0))
 
+        poses_init = torch.Tensor(np.concatenate(pose_init_list, axis=0))
+        vels_init = torch.Tensor(np.concatenate(vel_init_list, axis=0))
+        acts_init = torch.Tensor(np.concatenate(act_init_list, axis=0))
+
         dvs = (dvs-self.mean)/self.std
 
-        if self.se3:
-            trajs = pp.SE3(trajs)
+        trajs = pp.SE3(trajs)
+        poses_init = pp.SE3(poses_init)
 
-        return trajs, vels, dvs, actions
+        return poses_init, vels_init, acts_init, trajs, vels, dvs, actions
 
     '''
         Get the mean and std of the velocity delta.

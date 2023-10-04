@@ -486,7 +486,6 @@ class AUVTraj(torch.nn.Module):
         traj = pp.SE3(traj)
         traj_v = torch.zeros(size=(k, tau, 6)).to(U.device)
         traj_dv = torch.zeros(size=(k, tau, 6)).to(U.device)
-
         for i in range(tau):
             poses, vels, actions = x(U[:, i])
             next_pose, next_vel, dv, h_next = self.step(poses, vels, actions, h, train=True)

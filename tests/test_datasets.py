@@ -122,14 +122,20 @@ class TestDatasetModelInput(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.ds.get_traj(4)
 
-        traj, vel, dv, action = self.ds.get_traj(2)
+        pose_init, vel_init, act_int, traj, vel, dv, action = self.ds.get_traj(2)
+        self.assertEqual(pose_init.shape, (self.history, 7))
+        self.assertEqual(vel_init.shape, (self.history, 6))
+        self.assertEqual(act_int.shape, (self.history-1, 6))
         self.assertEqual(traj.shape, (500, 7))
         self.assertEqual(vel.shape, (500, 6))
         self.assertEqual(dv.shape, (500, 6))
         self.assertEqual(action.shape, (500, 6))
 
     def test_get_trajs(self):
-        trajs, vels, dvs, actions = self.ds.get_trajs()
+        poses_init, vels_init, acts_init, trajs, vels, dvs, actions = self.ds.get_trajs()
+        self.assertEqual(poses_init.shape, (3, self.history, 7))
+        self.assertEqual(vels_init.shape, (3, self.history, 6))
+        self.assertEqual(acts_init.shape, (3, self.history-1, 6))
         self.assertEqual(trajs.shape, (3, 500, 7))
         self.assertEqual(vels.shape, (3, 500, 6))
         self.assertEqual(dvs.shape, (3, 500, 6))

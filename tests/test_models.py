@@ -112,12 +112,26 @@ class TestAUVRNNDeltaV(unittest.TestCase):
     def setUp(self):
         self.auv_rnn = AUVRNNDeltaV()
 
-    def test_forward(self):
-        k = 2
+    def test_forward_k1(self):
+        k = 1
         x = pp.randn_SE3(k, 1, dtype=tdtype)
         v = torch.randn(k, 1, 6, dtype=tdtype)
         u = torch.randn(k, 1, 6, dtype=tdtype)
+
+        self.auv_rnn.eval()
         dv, h = self.auv_rnn(x, v, u)
+
+        self.assertEqual(dv.shape, (k, 1, 6))
+
+    def test_forward_k5(self):
+        k = 5
+        x = pp.randn_SE3(k, 1, dtype=tdtype)
+        v = torch.randn(k, 1, 6, dtype=tdtype)
+        u = torch.randn(k, 1, 6, dtype=tdtype)
+
+        self.auv_rnn.eval()
+        dv, h = self.auv_rnn(x, v, u)
+
         self.assertEqual(dv.shape, (k, 1, 6))
 
     def test_init_hidden(self):
@@ -140,12 +154,26 @@ class TestAUVLSTMDeltaV(unittest.TestCase):
     def setUp(self):
         self.auv_lstm = AUVLSTMDeltaV()
 
-    def test_forward(self):
-        k = 2
+    def test_forward_k1(self):
+        k = 1
         x = pp.randn_SE3(k, 1, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
         v = torch.randn(k, 1, 6, dtype=tdtype)  # Example velocity
         u = torch.randn(k, 1, 6, dtype=tdtype)  # Example action
+
+        self.auv_lstm.eval()
         dv, h = self.auv_lstm(x, v, u)
+
+        self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
+
+    def test_forward_k5(self):
+        k = 5
+        x = pp.randn_SE3(k, 1, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
+        v = torch.randn(k, 1, 6, dtype=tdtype)  # Example velocity
+        u = torch.randn(k, 1, 6, dtype=tdtype)  # Example action
+
+        self.auv_lstm.eval()
+        dv, h = self.auv_lstm(x, v, u)
+
         self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
 
     def test_init_hidden(self):
@@ -169,72 +197,151 @@ class TestAUVNNDeltaV(unittest.TestCase):
     def setUp(self):
         self.auv_nn = AUVNNDeltaV()
 
-    def test_forward(self):
-        k = 2
+    def test_forward_k1(self):
+        k = 1
         n = 4
         x = pp.randn_SE3(k, n, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
         v = torch.randn(k, n, 6, dtype=tdtype)  # Example velocity
         u = torch.randn(k, n, 6, dtype=tdtype)  # Example action
+
+        self.auv_nn.eval()
         dv, h = self.auv_nn(x, v, u)
+
+        self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
+
+    def test_forward_k5(self):
+        k = 5
+        n = 4
+        x = pp.randn_SE3(k, n, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
+        v = torch.randn(k, n, 6, dtype=tdtype)  # Example velocity
+        u = torch.randn(k, n, 6, dtype=tdtype)  # Example action
+
+        self.auv_nn.eval()
+        dv, h = self.auv_nn(x, v, u)
+
         self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
 
 
 class TestAUVStep(unittest.TestCase):
     def setUp(self):
-        self.k = 5
         self.auv_step = AUVStep()
 
-    def test_forward_with_AUVRNNDeltaV(self):
+    def test_forward_with_AUVRNNDeltaV_k1(self):
         model = AUVRNNDeltaV()
+        k = 1
         self.auv_step.update_model(model)
+        x = pp.randn_SE3(k, 1, dtype=tdtype)
+        v = torch.randn(k, 1, 6, dtype=tdtype)
+        u = torch.randn(k, 1, 6, dtype=tdtype)
 
-        x = pp.randn_SE3(self.k, 1, dtype=tdtype)
-        v = torch.randn(self.k, 1, 6, dtype=tdtype)
-        u = torch.randn(self.k, 1, 6, dtype=tdtype)
+        self.auv_step.eval()
         x_next, v_next, h = self.auv_step(x, v, u)
 
-        self.assertEqual(x_next.shape, (self.k, 1, 7))
-        self.assertEqual(v_next.shape, (self.k, 1, 6))
+        self.assertEqual(x_next.shape, (k, 1, 7))
+        self.assertEqual(v_next.shape, (k, 1, 6))
 
-    def test_forward_with_AUVLSTMDeltaV(self):
+    def test_forward_with_AUVRNNDeltaV_k5(self):
+        model = AUVRNNDeltaV()
+        k = 5
+        self.auv_step.update_model(model)
+        x = pp.randn_SE3(k, 1, dtype=tdtype)
+        v = torch.randn(k, 1, 6, dtype=tdtype)
+        u = torch.randn(k, 1, 6, dtype=tdtype)
+
+        self.auv_step.eval()
+        x_next, v_next, h = self.auv_step(x, v, u)
+
+        self.assertEqual(x_next.shape, (k, 1, 7))
+        self.assertEqual(v_next.shape, (k, 1, 6))
+
+    def test_forward_with_AUVLSTMDeltaV_k1(self):
         model = AUVLSTMDeltaV()
+        k = 1
         self.auv_step.update_model(model)
 
-        x = pp.randn_SE3(self.k, 1,dtype=tdtype)
-        v = torch.randn(self.k, 1, 6, dtype=tdtype)
-        u = torch.randn(self.k, 1, 6, dtype=tdtype)
+        x = pp.randn_SE3(k, 1,dtype=tdtype)
+        v = torch.randn(k, 1, 6, dtype=tdtype)
+        u = torch.randn(k, 1, 6, dtype=tdtype)
+
+        self.auv_step.eval()
         x_next, v_next, h = self.auv_step(x, v, u)
 
-        self.assertEqual(x_next.shape, (self.k, 1, 7))
-        self.assertEqual(v_next.shape, (self.k, 1, 6))
+        self.assertEqual(x_next.shape, (k, 1, 7))
+        self.assertEqual(v_next.shape, (k, 1, 6))
 
-    def test_forward_with_AUVNNDeltaV(self):
+    def test_forward_with_AUVLSTMDeltaV_k5(self):
+        model = AUVLSTMDeltaV()
+        k = 5
+        self.auv_step.update_model(model)
+
+        x = pp.randn_SE3(k, 1,dtype=tdtype)
+        v = torch.randn(k, 1, 6, dtype=tdtype)
+        u = torch.randn(k, 1, 6, dtype=tdtype)
+
+        self.auv_step.eval()
+        x_next, v_next, h = self.auv_step(x, v, u)
+
+        self.assertEqual(x_next.shape, (k, 1, 7))
+        self.assertEqual(v_next.shape, (k, 1, 6))
+
+    def test_forward_with_AUVNNDeltaV_k1(self):
         model = AUVNNDeltaV()
+        k = 1
         n = 4
         self.auv_step.update_model(model)
 
-        x = pp.randn_SE3(self.k, n, dtype=tdtype)
-        v = torch.randn(self.k, n, 6, dtype=tdtype)
-        u = torch.randn(self.k, n, 6, dtype=tdtype)
+        x = pp.randn_SE3(k, n, dtype=tdtype)
+        v = torch.randn(k, n, 6, dtype=tdtype)
+        u = torch.randn(k, n, 6, dtype=tdtype)
+
+        self.auv_step.eval()
         x_next, v_next, h = self.auv_step(x, v, u)
 
-        self.assertEqual(x_next.shape, (self.k, 1, 7))
-        self.assertEqual(v_next.shape, (self.k, 1, 6))
+        self.assertEqual(x_next.shape, (k, 1, 7))
+        self.assertEqual(v_next.shape, (k, 1, 6))
+
+    def test_forward_with_AUVNNDeltaV_k5(self):
+        model = AUVNNDeltaV()
+        k = 5
+        n = 4
+        self.auv_step.update_model(model)
+
+        x = pp.randn_SE3(k, n, dtype=tdtype)
+        v = torch.randn(k, n, 6, dtype=tdtype)
+        u = torch.randn(k, n, 6, dtype=tdtype)
+
+        self.auv_step.eval()
+        x_next, v_next, h = self.auv_step(x, v, u)
+
+        self.assertEqual(x_next.shape, (k, 1, 7))
+        self.assertEqual(v_next.shape, (k, 1, 6))
 
 
 class TestAUVTraj(unittest.TestCase):
     def setUp(self) -> None:
         self.model = AUVTraj()
-        self.k, h = 3, 2
-        self.model_input = ModelInputPypose(self.k, h)
-        self.tau = 10
-        self.U = torch.randn(self.k, self.tau, 6)
 
-    def test_rollout(self):
-        traj, traj_v, traj_dv = self.model(self.model_input, self.U)
-        self.assertEqual(traj.shape, (self.k, self.tau, 7))
-        self.assertEqual(traj_v.shape, (self.k, self.tau, 6))
-        self.assertEqual(traj_dv.shape, (self.k, self.tau, 6))
+    def test_rollout_k1(self):
+        k, h = 1, 2
+        model_input = ModelInputPypose(k, h)
+        tau = 10
+        U = torch.randn(k, tau, 6)
+        self.model.eval()
+        traj, traj_v, traj_dv = self.model(model_input, U)
+        self.assertEqual(traj.shape, (k, tau, 7))
+        self.assertEqual(traj_v.shape, (k, tau, 6))
+        self.assertEqual(traj_dv.shape, (k, tau, 6))
+
+    def test_rollout_k3(self):
+        k, h = 3, 2
+        model_input = ModelInputPypose(k, h)
+        tau = 10
+        U = torch.randn(k, tau, 6)
+        self.model.eval()
+        traj, traj_v, traj_dv = self.model(model_input, U)
+        self.assertEqual(traj.shape, (k, tau, 7))
+        self.assertEqual(traj_v.shape, (k, tau, 6))
+        self.assertEqual(traj_dv.shape, (k, tau, 6))
 
 
 if __name__ == '__main__':

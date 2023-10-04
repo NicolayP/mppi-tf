@@ -7,8 +7,10 @@ import os
 
 import warnings
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
-
+from scipy.spatial.transform import Rotation as R
 # tdtype = torch.double
 # npdtype = np.double
 
@@ -136,11 +138,11 @@ def gen_imgs_3D(t_dict, v_dict, dv_dict=None, tau=100):
     v_imgs = []
     if dv_dict is not None:
         dv_imgs = []
-    for t in tau:
-        t_imgs.append(plot_traj(t_dict, plotState, t, title="State evolution"))
-        v_imgs.append(plot_traj(v_dict, plotVels, t, title="Velcoity Profiles"))
-        if dv_dict is not None:
-            dv_imgs.append(plot_traj(dv_dict, plotDVels, t, title="Delta V"))
+
+    t_imgs.append(plot_traj(t_dict, plotState, tau, title="State evolution"))
+    v_imgs.append(plot_traj(v_dict, plotVels, tau, title="Velcoity Profiles"))
+    if dv_dict is not None:
+        dv_imgs.append(plot_traj(dv_dict, plotDVels, tau, title="Delta V"))
 
     if dv_dict is not None:
         return t_imgs, v_imgs, dv_imgs
@@ -211,58 +213,58 @@ def plot_traj(traj_dict, plot_cols, tau, fig=False, title="State Evolution", sav
     return img
 
 
-def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCols=None, horizon=50, dir=".", file_name="foo"):
-    '''
-        Plot trajectories and action sequence.
-        inputs:
-        -------
-            - trajs: dict with model name as key and trajectories entry. If key is "gt" then it is assumed to be
-                the ground truth trajectory.
-            - seq: Action Sequence associated to the generated trajectoires. If not None, plots the 
-                action seqence.
-            - h: list of history used for the different models, ignored when model entry is "gt".
-            - plotStateCols: Dict containing the state axis name as key and index as entry
-            - plotAcitonCols: Dict containing the action axis name as key and index as entry.
-            - horizon: The horizon of the trajectory to plot.
-            - dir: The saving directory for the generated images.
-    '''
-    maxS = len(plotStateCols)
-    maxA = len(plotActionCols)
-    fig_state = plt.figure(figsize=(50, 50))
-    for k, h in zip(trajs, histories):
-        t = trajs[k]
-        for i, name in enumerate(plotStateCols):
-            m, n = np.unravel_index(i, (2, 6))
-            idx = 1*m + 2*n + 1
-            plt.subplot(6, 2, idx)
-            plt.ylabel(f'{name}')
-            if k == "gt":
-                plt.plot(t[:horizon, i], marker='.', zorder=-10)
-            else:
-                plt.scatter(
-                    np.arange(h, horizon+h), t[:, plotStateCols[name]],
-                    marker='X', edgecolors='k', s=64
-                )
-    #plt.tight_layout()
-    if dir is not None:
-        name = os.path.join(dir, f"{file_name}.png")
-        plt.savefig(name)
-        plt.close()
+# def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCols=None, horizon=50, dir=".", file_name="foo"):
+#     '''
+#         Plot trajectories and action sequence.
+#         inputs:
+#         -------
+#             - trajs: dict with model name as key and trajectories entry. If key is "gt" then it is assumed to be
+#                 the ground truth trajectory.
+#             - seq: Action Sequence associated to the generated trajectoires. If not None, plots the 
+#                 action seqence.
+#             - h: list of history used for the different models, ignored when model entry is "gt".
+#             - plotStateCols: Dict containing the state axis name as key and index as entry
+#             - plotAcitonCols: Dict containing the action axis name as key and index as entry.
+#             - horizon: The horizon of the trajectory to plot.
+#             - dir: The saving directory for the generated images.
+#     '''
+#     maxS = len(plotStateCols)
+#     maxA = len(plotActionCols)
+#     fig_state = plt.figure(figsize=(50, 50))
+#     for k, h in zip(trajs, histories):
+#         t = trajs[k]
+#         for i, name in enumerate(plotStateCols):
+#             m, n = np.unravel_index(i, (2, 6))
+#             idx = 1*m + 2*n + 1
+#             plt.subplot(6, 2, idx)
+#             plt.ylabel(f'{name}')
+#             if k == "gt":
+#                 plt.plot(t[:horizon, i], marker='.', zorder=-10)
+#             else:
+#                 plt.scatter(
+#                     np.arange(h, horizon+h), t[:, plotStateCols[name]],
+#                     marker='X', edgecolors='k', s=64
+#                 )
+#     #plt.tight_layout()
+#     if dir is not None:
+#         name = os.path.join(dir, f"{file_name}.png")
+#         plt.savefig(name)
+#         plt.close()
 
-    if seq is not None:
-        fig_act = plt.figure(figsize=(30, 30))
-        for i, name in enumerate(plotActionCols):
-            plt.subplot(maxA, 1, i+1)
-            plt.ylabel(f'{name}')
-            plt.plot(seq[0, :horizon+h, plotActionCols[name]])
+#     if seq is not None:
+#         fig_act = plt.figure(figsize=(30, 30))
+#         for i, name in enumerate(plotActionCols):
+#             plt.subplot(maxA, 1, i+1)
+#             plt.ylabel(f'{name}')
+#             plt.plot(seq[0, :horizon+h, plotActionCols[name]])
 
-        #plt.tight_layout()
-        if dir is not None:
-            name = os.path.join(dir, f"{file_name}-actions.png")
-            plt.savefig(name)
-            plt.close()
+#         #plt.tight_layout()
+#         if dir is not None:
+#             name = os.path.join(dir, f"{file_name}-actions.png")
+#             plt.savefig(name)
+#             plt.close()
     
-    plt.show()
+#     plt.show()
 
 '''
     Converts a trajectory using quaternion representation to euler 'xyz' angle representation.
