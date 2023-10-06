@@ -2,7 +2,7 @@
 dataset_params:
   samples: 10
   steps: 15
-  history: 4
+  history: 1
   dir: "data/tests/"
   split: 0.7
   v_frame: "body"
@@ -20,13 +20,13 @@ model:
   training: True
   type: "auv_lstm"
   se3: True
-  history: 4
+  history: 1
   lstm:
     lstm_layer: 1
     lstm_hidden_size: 64
     bias: True
   fc:
-    topology: [128, 128, 128]
+    topology: [128, 128]
     activation: "LeakyRelu"
     bias: True
     batch_norm: False

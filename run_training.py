@@ -26,7 +26,7 @@ def parse_args():
                         default=None)
     parser.add_argument("-g", "--gpu", type=int,
                         help="Choose gpu number. Automatically uses a GPU if available",
-                        default=0)
+                        default=None)
 
     args = parser.parse_args()
     return args
@@ -57,7 +57,12 @@ def training(parameters, gpu):
 
     datasets = get_datasets(dp)
     writer = SummaryWriter(log_path)
-    device = get_device(gpu, True)
+
+    if gpu is not None:
+        device = get_device(gpu=gpu)
+    else:
+        device = get_device(cpu=True)
+
     model = get_model(parameters["model"], dt=0.1, limMax=None, limMin=None).to(device)
     loss = TrajLoss(parameters["loss"]["traj"],
                     parameters["loss"]["vel"],
