@@ -240,7 +240,7 @@ def compute_inertial_vels(dataframe):
 def compute_delta_vels(dataframe):
     inertial_vel = dataframe.loc[:, ['Iu', 'Iv', 'Iw', 'Ip', 'Iq', 'Ir']].to_numpy()
     inertial_dv = np.zeros(shape=(inertial_vel.shape))
-    inertial_dv[0:-1] = inertial_vel[1:] - inertial_vel[:-1]
+    inertial_dv[1:] = inertial_vel[1:] - inertial_vel[:-1]
 
     dataframe['Idu'] = inertial_dv[:, 0]
     dataframe['Idv'] = inertial_dv[:, 1]
@@ -252,7 +252,7 @@ def compute_delta_vels(dataframe):
 
     body_vel = dataframe.loc[:, ['Bu', 'Bv', 'Bw', 'Bp', 'Bq', 'Br']].to_numpy()
     body_dv = np.zeros(shape=(body_vel.shape))
-    body_dv[0:-1] = body_vel[1:] - body_vel[:-1]
+    body_dv[1:] = body_vel[1:] - body_vel[:-1]
 
     dataframe['Bdu'] = body_dv[:, 0]
     dataframe['Bdv'] = body_dv[:, 1]

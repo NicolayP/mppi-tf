@@ -313,7 +313,7 @@ class AUVDeltaVProxy(torch.nn.Module):
     def __init__(self, dv):
         super(AUVDeltaVProxy, self).__init__()
         self._dv = dv
-        self.i = 0
+        self.i = 1
 
     '''
         Forward function.
