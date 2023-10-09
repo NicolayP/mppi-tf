@@ -18,6 +18,10 @@ train_configs/dataset/*
 train_configs/optimizer/*
 train_configs/topologies/*
 
+trained_models/*
+data/bags/*
+data/csv/*
+
 !train_configs/dataset/*.default.yaml
 !train_configs/optimizer/*.default.yaml
 !train_configs/topologies/*.default.yaml
