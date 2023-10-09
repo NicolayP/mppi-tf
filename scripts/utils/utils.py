@@ -182,17 +182,17 @@ def plot_traj(traj_dict, plot_cols, tau, fig=False, title="State Evolution", sav
             axs_states[name].set_ylabel(f'{name}', fontsize=10)
             if k == 'gt':
                 if i == 0:
-                    axs_states[name].plot(t[:tau+1, i], marker='.', zorder=-10, label=k)
+                    axs_states[name].plot(t[:tau, i], marker='.', zorder=-10, label=k)
                 else:
-                    axs_states[name].plot(t[:tau+1, i], marker='.', zorder=-10)
+                    axs_states[name].plot(t[:tau, i], marker='.', zorder=-10)
                 axs_states[name].set_xlim([0, tau+1])
             
             else:
                 if i == 0:
-                    axs_states[name].plot(np.arange(0, tau), t[:tau, plot_cols[name]],
+                    axs_states[name].plot(np.arange(0, tau-1), t[:tau, plot_cols[name]],
                         marker='.', label=k)
                 else:
-                    axs_states[name].plot(np.arange(0, tau), t[:tau, plot_cols[name]],
+                    axs_states[name].plot(np.arange(0, tau-1), t[:tau, plot_cols[name]],
                         marker='.')
     fig_state.text(x=0.5, y=0.03, s="steps", fontsize=10)
     fig_state.suptitle(title, fontsize=10)
@@ -212,59 +212,6 @@ def plot_traj(traj_dict, plot_cols, tau, fig=False, title="State Evolution", sav
     plt.close('all')
     return img
 
-
-# def plot_traj(trajs, seq=None, histories=None, plotStateCols=None, plotActionCols=None, horizon=50, dir=".", file_name="foo"):
-#     '''
-#         Plot trajectories and action sequence.
-#         inputs:
-#         -------
-#             - trajs: dict with model name as key and trajectories entry. If key is "gt" then it is assumed to be
-#                 the ground truth trajectory.
-#             - seq: Action Sequence associated to the generated trajectoires. If not None, plots the 
-#                 action seqence.
-#             - h: list of history used for the different models, ignored when model entry is "gt".
-#             - plotStateCols: Dict containing the state axis name as key and index as entry
-#             - plotAcitonCols: Dict containing the action axis name as key and index as entry.
-#             - horizon: The horizon of the trajectory to plot.
-#             - dir: The saving directory for the generated images.
-#     '''
-#     maxS = len(plotStateCols)
-#     maxA = len(plotActionCols)
-#     fig_state = plt.figure(figsize=(50, 50))
-#     for k, h in zip(trajs, histories):
-#         t = trajs[k]
-#         for i, name in enumerate(plotStateCols):
-#             m, n = np.unravel_index(i, (2, 6))
-#             idx = 1*m + 2*n + 1
-#             plt.subplot(6, 2, idx)
-#             plt.ylabel(f'{name}')
-#             if k == "gt":
-#                 plt.plot(t[:horizon, i], marker='.', zorder=-10)
-#             else:
-#                 plt.scatter(
-#                     np.arange(h, horizon+h), t[:, plotStateCols[name]],
-#                     marker='X', edgecolors='k', s=64
-#                 )
-#     #plt.tight_layout()
-#     if dir is not None:
-#         name = os.path.join(dir, f"{file_name}.png")
-#         plt.savefig(name)
-#         plt.close()
-
-#     if seq is not None:
-#         fig_act = plt.figure(figsize=(30, 30))
-#         for i, name in enumerate(plotActionCols):
-#             plt.subplot(maxA, 1, i+1)
-#             plt.ylabel(f'{name}')
-#             plt.plot(seq[0, :horizon+h, plotActionCols[name]])
-
-#         #plt.tight_layout()
-#         if dir is not None:
-#             name = os.path.join(dir, f"{file_name}-actions.png")
-#             plt.savefig(name)
-#             plt.close()
-    
-#     plt.show()
 
 '''
     Converts a trajectory using quaternion representation to euler 'xyz' angle representation.
@@ -313,3 +260,4 @@ def parse_param(file):
 def save_param(path, params):
     with open(path, "w") as stream:
         yaml.dump(params, stream)
+

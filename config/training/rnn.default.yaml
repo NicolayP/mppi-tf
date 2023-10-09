@@ -3,7 +3,7 @@ dataset_params:
   samples: 10
   steps: 15
   history: 4
-  dir: "data/tests/"
+  dir: "data/csv/tests"
   split: 0.7
   v_frame: "body"
   dv_frame: "body"

@@ -301,7 +301,7 @@ class AUVNNDeltaV(torch.nn.Module):
     Proxy for the RNN part of the network. Used to ensure that
     the integration using PyPose is correct.
 '''
-class AUVRNNDeltaVProxy(torch.nn.Module):
+class AUVDeltaVProxy(torch.nn.Module):
     '''
         Delta veloctiy proxy constructor.
 
@@ -311,7 +311,7 @@ class AUVRNNDeltaVProxy(torch.nn.Module):
             Shape (k, tau, 6)
     '''
     def __init__(self, dv):
-        super(AUVRNNDeltaVProxy, self).__init__()
+        super(AUVDeltaVProxy, self).__init__()
         self._dv = dv
         self.i = 0
 
