@@ -31,6 +31,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
 def training(parameters, gpu):
     #-----------------------------------------------------#
     #----------------------- SETUP -----------------------#
@@ -71,6 +72,7 @@ def training(parameters, gpu):
     epochs = parameters["optim"]["epochs"]
 
     train(datasets, model, loss, optim, writer, epochs, device, ckpt_dir, ckpt_steps)
+
 
 def main():
     args = parse_args()
