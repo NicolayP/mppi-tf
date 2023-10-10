@@ -19,7 +19,7 @@ if __name__ == '__main__':
     args = parse_args()
 
     if args.integrate:
-        integrate("data/csv/tests2")
+        integrate("data/csv/tests")
         exit()
 
     test_loader = unittest.TestLoader()
