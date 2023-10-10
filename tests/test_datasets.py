@@ -12,7 +12,7 @@ from scripts.utils.utils import tdtype, read_files
 class TestDatasetList3D(unittest.TestCase):
     def setUp(self) -> None:
         # data in this directory should be of used for testing, 3 trajectories with 500 steps.
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         self.nb_files = 3
         self.steps = 10
         files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
@@ -79,7 +79,7 @@ class TestDatasetList3D(unittest.TestCase):
 class TestDatasetModelInput(unittest.TestCase):
     def setUp(self) -> None:
         # data in this directory should be of used for testing, 3 trajectories with 500 steps.
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         self.nb_files = 3
         self.steps = 3
         self.history = 2
@@ -155,6 +155,7 @@ class TestDatasetModelInput(unittest.TestCase):
         self.assertEqual(sub_traj.shape, (self.batch_size, self.steps, 7))
         self.assertEqual(sub_vel.shape, (self.batch_size, self.steps, 6))
         self.assertEqual(sub_dv.shape, (self.batch_size, self.steps, 6))
+
 
 if __name__ == '__main__':
     unittest.main()

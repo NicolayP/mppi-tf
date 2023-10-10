@@ -115,12 +115,12 @@ def traj_loss(mode, dataset, model, loss, tau, writer, step, device, plot=False)
     model_input.init_from_states(pose_init.to(device), vel_init.to(device), act_init.to(device))
     A = aciton_seqs[:, h:tau+h].to(device)
 
-    pred_trajs, pred_vels, pred_dvs = model(model_input, A)
+    pred_trajs, pred_vels, pred_dvs = model(model_input, A[:, :tau-1])
 
     log(mode, writer, loss, 
-        gt_trajs, pred_trajs.detach().cpu(),
-        gt_vels, pred_vels.detach().cpu(),
-        gt_dvs, pred_dvs.detach().cpu(),
+        gt_trajs[:, 1:tau], pred_trajs.detach().cpu(),
+        gt_vels[:, 1:tau], pred_vels.detach().cpu(),
+        gt_dvs[:, 1:tau], pred_dvs.detach().cpu(),
         step, tau)
 
     if not plot:
@@ -128,17 +128,17 @@ def traj_loss(mode, dataset, model, loss, tau, writer, step, device, plot=False)
 
     t_dict = {
         "model": to_euler(pred_trajs[0].detach().cpu().data),
-        "gt": to_euler(gt_trajs[0].data)
+        "gt": to_euler(gt_trajs[0, 1:tau].data)
     }
 
     v_dict = {
         "model": pred_vels[0].detach().cpu(),
-        "gt": gt_vels[0]
+        "gt": gt_vels[0, 1:tau]
     }
 
     dv_dict = {
         "model": pred_dvs[0].detach().cpu(),
-        "gt": gt_dvs[0]
+        "gt": gt_dvs[0, 1:tau]
     }
 
     t_imgs, v_imgs, dv_imgs = gen_imgs_3D(t_dict, v_dict, dv_dict, tau=tau)

@@ -14,7 +14,7 @@ import time
 import matplotlib.pyplot as plt
 
 
-def integrate(data_dir, tau=450, visu=True):
+def integrate(data_dir, tau=50, visu=True):
     tau = tau
     device = get_device(gpu=0)
     files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
@@ -50,7 +50,7 @@ def integrate(data_dir, tau=450, visu=True):
     loss_fc = TrajLoss().to(device)
     l = loss_fc(trajs[:, 1:tau], pred_trajs,
                 Bvels[:, 1:tau], pred_vs,
-                Bdvs[:, 0:tau-1], pred_dvs)
+                Bdvs[:, 1:tau], pred_dvs)
     print(f"Loss: {l}, {l.shape}")
 
     pred_trajs = pred_trajs.detach().cpu()
@@ -68,5 +68,5 @@ def integrate(data_dir, tau=450, visu=True):
         v_col = {"u": 0, "v": 1, "w": 2, "p": 3, "q": 4, "r": 5}
         plot_traj({"pred": pred_vs[0], "gt": Bvels[0, 1:tau]}, v_col, tau, True, title="Velocities")
         dv_col = {"Bdu": 0, "Bdv": 1, "Bdw": 2, "Bdp": 3, "Bdq": 4, "Bdr": 5}
-        plot_traj({"pred": pred_dvs[0], "gt": Bdvs[0, :tau-1]}, dv_col, tau, True, title="Velocities Deltas")
+        plot_traj({"pred": pred_dvs[0], "gt": Bdvs[0, 1:tau]}, dv_col, tau, True, title="Velocities Deltas")
         plt.show()

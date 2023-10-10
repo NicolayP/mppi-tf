@@ -13,7 +13,7 @@ from scripts.training.learning_utils import get_datasets, train_step, val_step, 
 
 class TestTrainStepNN_CPU(unittest.TestCase):
     def setUp(self):
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         history = 2
         parameter = {"dir": data_dir,
                      "samples": 2,
@@ -58,7 +58,7 @@ class TestTrainStepNN_CPU(unittest.TestCase):
 
 class TestTrainStepNN_GPU(unittest.TestCase):
     def setUp(self):
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         history = 2
         parameter = {"dir": data_dir,
                      "samples": 2,
@@ -103,7 +103,7 @@ class TestTrainStepNN_GPU(unittest.TestCase):
 
 class TestTrainStepRNN_CPU(unittest.TestCase):
     def setUp(self):
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         history = 2
         parameter = {"dir": data_dir,
                      "samples": 2,
@@ -148,7 +148,7 @@ class TestTrainStepRNN_CPU(unittest.TestCase):
 
 class TestTrainStepRNN_GPU(unittest.TestCase):
     def setUp(self):
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         history = 2
         parameter = {"dir": data_dir,
                      "samples": 2,
@@ -193,7 +193,7 @@ class TestTrainStepRNN_GPU(unittest.TestCase):
 
 class TestTrainStepLSTM_GPU(unittest.TestCase):
     def setUp(self):
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         history = 2
         parameter = {"dir": data_dir,
                      "samples": 2,
@@ -238,7 +238,7 @@ class TestTrainStepLSTM_GPU(unittest.TestCase):
 
 class TestTrainStepLSTM_GPU(unittest.TestCase):
     def setUp(self):
-        data_dir = "data/tests"
+        data_dir = "data/csv/tests"
         history = 2
         parameter = {"dir": data_dir,
                      "samples": 2,
