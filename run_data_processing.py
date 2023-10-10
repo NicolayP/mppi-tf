@@ -92,6 +92,7 @@ def clean_bags(data_dir, out_dir, steps=500, frequency=10, norm=None):
             action_data = compute_norm_actions(action_data, norm)
 
             cleaned_data = pd.concat([state_data, action_data], axis=1)
+            cleaned_data = cleaned_data.set_index(np.arange(len(cleaned_data)))
             if (steps is not None) and steps < len(cleaned_data):
                 cleaned_data = cleaned_data[:steps]
             columns = cleaned_data.columns
