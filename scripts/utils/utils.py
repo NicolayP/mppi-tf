@@ -212,7 +212,6 @@ def plot_traj(traj_dict, plot_cols, tau, fig=False, title="State Evolution", sav
     plt.close('all')
     return img
 
-
 '''
     Converts a trajectory using quaternion representation to euler 'xyz' angle representation.
     
@@ -261,3 +260,62 @@ def save_param(path, params):
     with open(path, "w") as stream:
         yaml.dump(params, stream)
 
+
+##########################
+###     V2 SECTION     ###
+##########################
+
+def gen_img_3D_v2(t_dict, v_dict, dv_dict=None, tau=100):
+    plotState={"x(m)":0, "y(m)": 1, "z(m)": 2, "roll(rad)": 3, "pitch(rad)":4, "yaw(rad)": 5}
+    plotVels={"u(m/s)":0, "v(m/s)": 1, "w(m/s)": 2, "p(rad/s)": 3, "q(rad/s)": 4, "r(rad/s)": 5}
+    plotDVels={"du(m/s)":0, "dv(m/s)": 1, "dw(m/s)": 2, "dp(rad/s)": 3, "dq(rad/s)": 4, "dr(rad/s)": 5}
+
+    t_img =plot_traj_v2(t_dict, plotState, tau, title="State evolution")
+    v_img =plot_traj_v2(v_dict, plotVels, tau, title="Velcoity Profiles")
+    dv_img =plot_traj_v2(dv_dict, plotDVels, tau, title="Delta V")
+
+    return t_img, v_img, dv_img
+
+def plot_traj_v2(traj_dict, plot_cols, tau, fig=False, title="State Evolution", save=False):
+    fig_state = plt.figure(figsize=(10, 10))
+    axs_states = {}
+    for i, name in enumerate(plot_cols):
+        m, n = np.unravel_index(i, (2, 3))
+        idx = 1*m + 2*n + 1
+        axs_states[name] = fig_state.add_subplot(3, 2, idx)
+    
+    for k in traj_dict:
+        t = traj_dict[k]
+        for i, name in enumerate(plot_cols):
+            axs_states[name].set_ylabel(f'{name}', fontsize=10)
+            if k == 'gt':
+                if i == 0:
+                    axs_states[name].plot(t[:, i], marker='.', zorder=-10, label=k)
+                else:
+                    axs_states[name].plot(t[:, i], marker='.', zorder=-10)
+                axs_states[name].set_xlim([0, tau])
+            
+            else:
+                if i == 0:
+                    axs_states[name].plot(np.arange(0, tau), t[:, plot_cols[name]],
+                        marker='.', label=k)
+                else:
+                    axs_states[name].plot(np.arange(0, tau), t[:, plot_cols[name]],
+                        marker='.')
+    fig_state.text(x=0.5, y=0.03, s="steps", fontsize=10)
+    fig_state.suptitle(title, fontsize=10)
+    fig_state.legend(fontsize=5)
+    fig_state.tight_layout(rect=[0, 0.05, 1, 0.98])
+
+    if save:
+        fig_state.savefig("img/" + title + ".png")
+
+    if fig:
+        return fig_state
+
+    canvas = FigureCanvas(fig_state)
+    canvas.draw()
+    img = np.frombuffer(canvas.tostring_rgb(), dtype='uint8')
+    img = img.reshape(fig_state.canvas.get_width_height()[::-1] + (3,))
+    plt.close('all')
+    return img
