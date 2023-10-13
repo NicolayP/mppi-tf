@@ -208,6 +208,7 @@ class AUVLSTMDeltaV(torch.nn.Module):
         fc_layers.append(layer)
 
         self.fc = torch.nn.Sequential(*fc_layers)
+        self.fc.apply(init_weights)
 
     def forward(self, x, v, u, hidden=None):
         k = x.shape[0]
