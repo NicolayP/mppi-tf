@@ -40,9 +40,7 @@ class DatasetTensor(torch.utils.data.Dataset):
         self.act_seqs = torch.tensor(action_sequences)
 
         self.nb_trajs = len(data_list)
-        self.samples_per_traj = len(data_list[0] - tau)
-
-        pass
+        self.samples_per_traj = len(data_list[0]) - tau
 
     def extract_trajs(self, dataframe_list, pose_labels, vel_labels, dv_labels, act_labels):
         pose_trajs = []
@@ -65,7 +63,7 @@ class DatasetTensor(torch.utils.data.Dataset):
 
     def get_traj(self, idx, tau=None):
         if tau is None:
-            tau = len(self.se3_trajs.shape[1]) - 1
+            tau = self.se3_trajs.shape[1] - 1
         pose_init = self.se3_trajs[idx, 0:1].clone()[None]
         vel_init = self.vel_trajs[idx, 0:1].clone()[None]
         seq = self.act_seqs[idx, :tau].clone()[None]
@@ -80,7 +78,7 @@ class DatasetTensor(torch.utils.data.Dataset):
 
     def get_trajs(self, tau=None):
         if tau is None:
-            tau = len(self.se3_trajs.shape[1]) - 1
+            tau = self.se3_trajs.shape[1] - 1
         pose_init = self.se3_trajs[:, 0:1].clone()
         vel_init = self.vel_trajs[:, 0:1].clone()
         seq = self.act_seqs[:, :tau].clone()
@@ -98,22 +96,20 @@ class DatasetTensor(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         i, j = np.unravel_index(idx, (self.nb_trajs, self.samples_per_traj))
-
         # Get the designed trajectory
         se3_traj = self.se3_trajs[i]
         vel_traj = self.vel_trajs[i]
         dv_traj = self.dv_trajs[i]
-        act_seq = self.act_seq[i]
-
+        act_seq = self.act_seqs[i]
         # Get the inputs
         pose_input = se3_traj[j:j+1]
         vel_input = vel_traj[j:j+1]
         action_seq = act_seq[j:j+self.prediction_steps]
-
         # Get the target
-        pose_target = se3_traj[j+1, j+self.prediction_steps+1]
-        vel_target = vel_traj[j+1, j+self.prediction_steps+1]
-        dv_target = dv_traj[j+1, j+self.prediction_steps+1]
+        pose_target = se3_traj[(j+1):(j+self.prediction_steps+1)]
+        vel_target = vel_traj[(j+1):(j+self.prediction_steps+1)]
+        dv_target = dv_traj[(j+1):(j+self.prediction_steps+1)]
+
         X = (pose_input, vel_input, action_seq)
         Y = (pose_target, vel_target, dv_target)
 

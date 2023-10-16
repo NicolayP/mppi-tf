@@ -6,6 +6,7 @@ import os
 
 import random
 from scripts.training.datasets import DatasetList3D, DatasetListModelInput
+from scripts.training_v2.datasets import DatasetTensor
 from scripts.utils.utils import tdtype, read_files
 
 
@@ -155,6 +156,99 @@ class TestDatasetModelInput(unittest.TestCase):
         self.assertEqual(sub_traj.shape, (self.batch_size, self.steps, 7))
         self.assertEqual(sub_vel.shape, (self.batch_size, self.steps, 6))
         self.assertEqual(sub_dv.shape, (self.batch_size, self.steps, 6))
+
+
+class TestDatasetTensor(unittest.TestCase):
+    def setUp(self) -> None:
+        # data in this directory should be of used for testing, 3 trajectories with 500 steps.
+        data_dir = "data/csv/tests"
+        self.nb_files = 3
+        self.tau = 3
+        files = [f for f in os.listdir(data_dir) if os.path.isfile(os.path.join(data_dir, f))]
+        files = random.sample(files, self.nb_files)
+        dfs = read_files(data_dir, files)
+        self.batch_size = 10
+        train_params = {"batch_size": self.batch_size, "shuffle": True, "num_workers": 8}
+        self.ds = DatasetTensor(
+                data_list=dfs,
+                tau=self.tau,
+                frame="body",
+                act_normed=False,
+                out_normed=False,
+                stats=None)
+
+        self.dl = DataLoader(self.ds, **train_params)
+
+    def test_len(self):
+        self.assertEqual(len(self.ds), self.nb_files * (500 - self.tau))
+
+    def test_get_item(self):
+        X, Y = self.ds[1]
+        self.assertEqual(X[0].shape, (1, 7))
+        self.assertEqual(X[1].shape, (1, 6))
+        self.assertEqual(X[2].shape, (self.tau, 6))
+        self.assertEqual(Y[0].shape, (self.tau, 7))
+        self.assertEqual(Y[1].shape, (self.tau, 6))
+        self.assertEqual(Y[2].shape, (self.tau, 6))
+
+    def test_nb_trajs(self):
+        self.assertEqual(self.ds.nb_trajs, 3)
+
+    def test_get_traj(self):
+        with self.assertRaises(IndexError):
+            self.ds.get_traj(4)
+
+        (pose_init, vel_init, act_sequence), (traj, vel, dv) = self.ds.get_traj(2)
+        self.assertEqual(pose_init.shape, (1, 1, 7))
+        self.assertEqual(vel_init.shape, (1, 1, 6))
+        self.assertEqual(act_sequence.shape, (1, 499, 6))
+        self.assertEqual(traj.shape, (1, 499, 7))
+        self.assertEqual(vel.shape, (1, 499, 6))
+        self.assertEqual(dv.shape, (1, 499, 6))
+
+    def test_get_traj_tau(self):
+        with self.assertRaises(IndexError):
+            self.ds.get_traj(4)
+
+        (pose_init, vel_init, act_sequence), (traj, vel, dv) = self.ds.get_traj(2, 50)
+        self.assertEqual(pose_init.shape, (1, 1, 7))
+        self.assertEqual(vel_init.shape, (1, 1, 6))
+        self.assertEqual(act_sequence.shape, (1, 50, 6))
+        self.assertEqual(traj.shape, (1, 50, 7))
+        self.assertEqual(vel.shape, (1, 50, 6))
+        self.assertEqual(dv.shape, (1, 50, 6))
+
+    def test_get_trajs(self):
+        (pose_init, vel_init, act_sequence), (traj, vel, dv) = self.ds.get_trajs()
+        self.assertEqual(pose_init.shape, (3, 1, 7))
+        self.assertEqual(vel_init.shape, (3, 1, 6))
+        self.assertEqual(act_sequence.shape, (3, 499, 6))
+        self.assertEqual(traj.shape, (3, 499, 7))
+        self.assertEqual(vel.shape, (3, 499, 6))
+        self.assertEqual(dv.shape, (3, 499, 6))
+
+    def test_get_traj_tau(self):
+        (pose_init, vel_init, act_sequence), (traj, vel, dv) = self.ds.get_trajs(50)
+        self.assertEqual(pose_init.shape, (3, 1, 7))
+        self.assertEqual(vel_init.shape, (3, 1, 6))
+        self.assertEqual(act_sequence.shape, (3, 50, 6))
+        self.assertEqual(traj.shape, (3, 50, 7))
+        self.assertEqual(vel.shape, (3, 50, 6))
+        self.assertEqual(dv.shape, (3, 50, 6))
+
+    def test_get_stats(self):
+        pass
+
+    def test_get_batch(self):
+        it = iter(self.dl)
+        data = next(it)
+        X, Y = data
+        self.assertEqual(X[0].shape, (self.batch_size, 1, 7))
+        self.assertEqual(X[1].shape, (self.batch_size, 1, 6))
+        self.assertEqual(X[2].shape, (self.batch_size, self.tau, 6))
+        self.assertEqual(Y[0].shape, (self.batch_size, self.tau, 7))
+        self.assertEqual(Y[1].shape, (self.batch_size, self.tau, 6))
+        self.assertEqual(Y[2].shape, (self.batch_size, self.tau, 6))
 
 
 if __name__ == '__main__':

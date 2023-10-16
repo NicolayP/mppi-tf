@@ -1,68 +1,19 @@
 import torch
-from torch.utils.data import DataLoader
 import pypose as pp
 import numpy as np
 import pandas as pd
 import os
 
 from scipy.spatial.transform import Rotation as R
-from scripts.utils.utils import tdtype, npdtype, to_euler, gen_imgs_3D, disable_tqdm, parse_param, read_files
-from scripts.training.datasets import DatasetListModelInput
-from scripts.inputs.ModelInput import ModelInputPypose
+from utile import tdtype, npdtype, to_euler, gen_imgs_3D, disable_tqdm
 import random
 
 import matplotlib.pyplot as plt
 
+from tabulate import tabulate
 from tqdm import tqdm
 import wandb
 
-
-############################################
-#                                          #
-#            DATALOADER UTILS              #
-#                                          #
-############################################
-def get_datasets(parameters):
-    files = [f for f in os.listdir(parameters["dir"]) if os.path.isfile(os.path.join(parameters["dir"], f))]
-    nb_files = min(len(files), parameters["samples"])
-
-    random.shuffle(files)
-    files = random.sample(files, nb_files)
-    train_size = int(parameters["split"]*len(files))
-
-    train_files = files[:train_size]
-    val_files = files[train_size:]
-
-    stats_file = os.path.join(parameters['dir'], "stats", "stats.yaml")
-    stats = parse_param(stats_file)
-    ds = []
-
-    for mode, files in zip(["train", "val"], [train_files, val_files]):
-        dfs = read_files(parameters["dir"], files, mode)
-        ds.append(get_dataloader_model_input(dfs, parameters["steps"], parameters["history"],
-                                             frame=parameters["frame"], 
-                                             stats=stats,
-                                             batch_size=parameters["batch_size"],
-                                             shuffle=parameters["shuffle"],
-                                             num_workers=parameters["num_workers"]))
-    return ds
-
-
-def get_dataloader_model_input(datafiles, steps, history, frame,
-                               act_normed=True, se3=True, out_normed=True, stats=None,
-                               batch_size=512, shuffle=True, num_workers=8):
-    ds = DatasetListModelInput(
-            data_list=datafiles,
-            steps=steps,
-            history=history,
-            v_frame=frame,
-            dv_frame=frame,
-            act_normed=act_normed,
-            se3=se3,
-            out_normed=out_normed,
-            stats=stats)
-    dl = DataLoader(ds, shuffle=shuffle, batch_size=batch_size, num_workers=num_workers)
-    return dl
 
 
 ############################################
@@ -90,31 +41,25 @@ def get_dataloader_model_input(datafiles, steps, history, frame,
             the on predicted by the model.
 '''
 def traj_loss(dataset, model, loss, tau, step, device, mode="train", plot=False):
-    pose_init, vel_init, act_init, gt_trajs, gt_vels, gt_dvs, aciton_seqs = dataset.get_trajs()
+    gt_trajs, gt_vels, gt_dv, aciton_seqs = dataset.get_trajs()
+    x_init = gt_trajs[:, 0:1].to(device)
+    v_init = gt_vels[:, 0:1].to(device)
+    A = aciton_seqs[:, :tau[-1]].to(device)
+    init = torch.concat([x_init.data, v_init], dim=-1)
 
-    k = pose_init.shape[0]
-    h = pose_init.shape[1]
-    # Crop traj to desired size
-    gt_trajs = gt_trajs[:, h:tau+h]
-    gt_vels = gt_vels[:, h:tau+h]
-    gt_dvs = gt_dvs[:, h:tau+h]
+    pred_trajs, pred_vels, pred_dvs = model(init, aciton_seqs.to(device))
 
-    model_input = ModelInputPypose(k, h).to(device)
-    model_input.init_from_states(pose_init.to(device), vel_init.to(device), act_init.to(device))
-    A = aciton_seqs[:, h:tau+h].to(device)
 
-    pred_trajs, pred_vels, pred_dvs = model(model_input, A[:, :tau])
-
-    losses = loss(
-            pred_trajs[:, :tau], gt_trajs[:, :tau].to(device),
-            pred_vels[:, :tau], gt_vels[:, :tau].to(device),
-            pred_dvs[:, :tau], gt_dvs[:, :tau].to(device)
-        )
-    losses_split = [loss(
-            pred_trajs[:, :tau], gt_trajs[:, :tau].to(device),
-            pred_vels[:, :tau], gt_vels[:, :tau].to(device),
-            pred_dvs[:, :tau], gt_dvs[:, :tau].to(device), split=True
-        )]
+    losses = [loss(
+            pred_trajs[:, :h], gt_trajs[:, :h].to(device),
+            pred_vels[:, :h], gt_vels[:, :h].to(device),
+            pred_dvs[:, :h], gt_dv[:, :h].to(device)
+        ) for h in tau]
+    losses_split = [[loss(
+            pred_trajs[:, :h], gt_trajs[:, :h].to(device),
+            pred_vels[:, :h], gt_vels[:, :h].to(device),
+            pred_dvs[:, :h], gt_dv[:, :h].to(device), split=True
+        )] for h in tau]
 
     name = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
             ["u", "v", "w", "p", "q", "r"],
@@ -143,7 +88,7 @@ def traj_loss(dataset, model, loss, tau, step, device, mode="train", plot=False)
 
     dv_dict = {
         "model": pred_dvs[0].detach().cpu(),
-        "gt": gt_dvs[0]
+        "gt": gt_dv[0]
     }
 
     t_imgs, v_imgs, dv_imgs = gen_imgs_3D(t_dict, v_dict, dv_dict, tau=tau)
@@ -152,11 +97,15 @@ def traj_loss(dataset, model, loss, tau, step, device, mode="train", plot=False)
         images = [wandb.Image(t_img, caption=f"traj-{t}"), wandb.Image(v_img, caption=f"vel-{t}"),wandb.Image(dv_img, caption=f"dv-{t}")]
         wandb.log({f"{mode}/{t}": images}, step = step)
 
+
+
 ############################################
 #                                          #
 #        TRAINING AND VALIDATION           #
 #                                          #
 ############################################
+
+
 '''
     Validation Step. Computes and logs different metrics to validate
     the performances of the network.
@@ -256,7 +205,7 @@ def train(ds, model, loss_fc, optim, epochs, device, ckpt_dir=None, ckpt_steps=2
      postfix={"loss": f"Loss: {l:>7f} [{cur:>5d}/{size:>5d}]"}, disable=disable_tqdm)
     for e in t:
         if (e % ckpt_steps == 0) and ckpt_dir is not None:
-            tau=50
+            tau=[50]
             traj_loss(ds[0].dataset, model, loss_fc, tau, e, device, "train", True)
             val_step(ds[1], model, loss_fc, e, device)
 

@@ -1,13 +1,10 @@
 import torch
-from torch.utils.tensorboard import SummaryWriter
-import pypose as pp
-import numpy as np
-import pandas as pd
+import wandb
 
 from scripts.utils.utils import parse_param, save_param, get_device
-from scripts.models.nn_auv_v2 import AUVTrajV2, AUVPROXYDeltaV
+from scripts.models.nn_auv_v2 import AUVTraj
 from scripts.training.loss_fct import TrajLoss
-from scripts.training_v2.training_utils import get_datasets, traj_eval, train_v2
+from scripts.training_v2.training_utils import get_datasets, train_v2
 
 
 import os
@@ -42,20 +39,23 @@ def training(parameters, gpu):
         os.makedirs(ckpt_dir)
     ckpt_steps = parameters["log"]["ckpt_steps"]
 
+    log_conf = parameters["logging"]
     datasets = get_datasets(parameters["dataset_params"])
-    writer = SummaryWriter(log_path)
+
+    wandb.init(config=log_conf)
 
     device = get_device(cpu=True)
     if gpu is not None:
         device = get_device(gpu=gpu)
 
-    model = AUVTrajV2(parameters["model"], dt=0.1, limMax=None, limMin=None).to(device)
+    model = AUVTraj(parameters["model"], dt=0.1, limMax=None, limMin=None).to(device)
     loss = TrajLoss(parameters["loss"]["traj"],
                     parameters["loss"]["vel"],
                     parameters["loss"]["dv"]).to(device)
     optim = torch.optim.Adam(model.parameters(), lr=parameters["optim"]["lr"])
     epochs = parameters["optim"]["epochs"]
 
+    wandb.watch(model, criterion=loss, log="all", log_freq=1000, log_graph=True)
     # dv = model.auv_step.dv_pred
 
     # writer.add_graph(dv, [pose, vel, seq[:, 0:1]], verbose=True)
@@ -75,8 +75,8 @@ def training(parameters, gpu):
     # print("poses:   ", type(pose_pred), " ", pose_pred.shape)
     # print("vels:    ", type(vel_pred), " ", vel_pred.shape)
     # print("Dvs:     ", type(dv_pred), " ", dv_pred.shape)
-
-    train_v2(datasets, model, loss, optim, writer, epochs, device, ckpt_dir, ckpt_steps)
+    train_v2(datasets, model, loss, optim, epochs, device, ckpt_dir, ckpt_steps)
+    wandb.save(ckpt_dir+"/chkpt*")
     pass
 
 def main():

@@ -180,6 +180,7 @@ class AUVTraj(torch.nn.Module):
             pose, velocity = next_pose, next_vel
         return pose_traj, vel_traj, dv_traj
 
+
 class AUVTrajV2(torch.nn.Module):
     def __init__(self, params=None, dt=0.1, limMax=None, limMin=None):
         super(AUVTrajV2, self).__init__()
