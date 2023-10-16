@@ -1,4 +1,14 @@
 ---
+logging:
+  project: "nn"
+  notes: ""
+  tags: ["baseline"]
+
+data_loader_params:
+  batch_size: 512
+  shuffle: True
+  num_workers: 8
+
 dataset_params:
   samples: 10
   steps: 15

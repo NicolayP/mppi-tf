@@ -1,5 +1,5 @@
 import torch
-from torch.utils.tensorboard import SummaryWriter
+import wandb
 import pypose as pp
 import numpy as np
 import pandas as pd
@@ -54,10 +54,10 @@ def training(parameters, gpu):
     #-----------------------------------------------------#
     ##----------------------- TRAIN ----------------------#
     #-----------------------------------------------------#
+    log_conf = parameters["logging"]
     dp = parameters["dataset_params"]
-
+    wandb.init(config=log_conf)
     datasets = get_datasets(dp)
-    writer = SummaryWriter(log_path)
 
     if gpu is not None:
         device = get_device(gpu=gpu)
@@ -71,8 +71,17 @@ def training(parameters, gpu):
     optim = torch.optim.Adam(model.parameters(), lr=parameters["optim"]["lr"])
     epochs = parameters["optim"]["epochs"]
 
-    train(datasets, model, loss, optim, writer, epochs, device, ckpt_dir, ckpt_steps)
+    wandb.watch(
+        model,
+        criterion=loss,
+        log = "all",
+        log_freq = 1000,
+        log_graph = True
+    )
 
+    train(datasets, model, loss, optim, epochs, device, ckpt_dir, ckpt_steps)
+
+    wandb.save(ckpt_dir+"/*chkpt*")
 
 def main():
     args = parse_args()

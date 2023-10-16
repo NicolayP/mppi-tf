@@ -4,6 +4,7 @@ import yaml
 from datetime import datetime
 import os
 
+import wandb
 
 class ObserverBase(object):
     def __init__(self,
@@ -48,7 +49,6 @@ class ObserverBase(object):
             stamp = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
             self.logdir = os.path.join(logpath, stamp, "controller")
             os.makedirs(self.logdir)
-            self.writer = SummaryWriter(self.logdir)
 
             if configDict is not None:
                 confDest = os.path.join(self.logdir, "config.yaml")
@@ -74,7 +74,7 @@ class ObserverBase(object):
         data = torch.zeros(self.sDim)
         oldk = function.k
         function.k = 1
-        self.writer.add_graph(function, input_to_model=data, verbose=False)
+        wandb.add_graph(function, input_to_model=data, verbose=False)
         function.k = oldk
 
     def write_control(self, name, tensor):
@@ -82,7 +82,7 @@ class ObserverBase(object):
             return
 
         if name == "nabla":
-            self.writer.add_scalar("Controller/Nabla_percent",
+            wandb.add_scalar("Controller/Nabla_percent",
                                    tensor/self.k, self.step)
 
         elif name == "state":
@@ -94,22 +94,22 @@ class ObserverBase(object):
             #        angs = tensor[self.angId:self.angId+9]
 
             for i, n in enumerate(self.sName):
-                self.writer.add_scalar(f"State/{n}",
+                wandb.add_scalar(f"State/{n}",
                                        torch.squeeze(tensor[i]), self.step)
 
         elif name == "action":
             for i, n in enumerate(self.aName):
-                self.writer.add_scalar(f"Action/{n}",
+                wandb.add_scalar(f"Action/{n}",
                                        torch.squeeze(tensor[i]), self.step)
 
         elif name == "sample_cost":
-            self.writer.add_histogram("Cost/sample_cost",
+            wandb.add_histogram("Cost/sample_cost",
                                       tensor, self.step)
-            self.writer.add_scalar("Cost/mean_cost",
+            wandb.add_scalar("Cost/mean_cost",
                                    torch.mean(tensor), self.step)
         
         elif name == "sample_weight":
-            self.writer.add_histogram("Cost/samples_weights",
+            wandb.add_histogram("Cost/samples_weights",
                                       tensor, self.step)
 
     def write_predict(self, name, tensor):
