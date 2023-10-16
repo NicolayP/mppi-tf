@@ -66,7 +66,7 @@ def log(mode, loss, targets, predictions, step, horizon):
     split = loss(target_p, pred_p, target_v, pred_v, target_dv, pred_dv, split=True)
     axis = [["x", "y", "z", "vec_x", "vec_y", "vec_z"],
             ["u", "v", "w", "p", "q", "r"],
-            ["du", "dv", "dv", "dp", "dq", "dr"]]
+            ["du", "dv", "dw", "dp", "dq", "dr"]]
     split_name = [f"{mode}/{entry}/{horizon}-steps-" for entry in ["pose", "vel", "deltaV"]]
     entry_name = f"{mode}/{horizon}-steps_loss"
     log_data = {}
@@ -74,7 +74,7 @@ def log(mode, loss, targets, predictions, step, horizon):
     for d in range(6):
         for i in range(3):
             log_data[split_name[i] + axis[i][d]] = split[i][d]
-    wandb.log(log_data, step=step)
+    wandb.log(log_data)
 
 def traj_eval(mode, dataset, model, loss, tau, step, device, plot=False):
     X, Y = dataset.get_trajs(tau)
@@ -111,7 +111,7 @@ def traj_eval(mode, dataset, model, loss, tau, step, device, plot=False):
 
     p_img, v_img, dv_img = gen_img_3D_v2(p_dict, v_dict, dv_dict, tau=tau)
     images = [wandb.Image(p_img, caption=f"traj-{tau}"), wandb.Image(v_img, caption=f"vel-{tau}"),wandb.Image(dv_img, caption=f"dv-{tau}")]
-    wandb.log({f"{mode}/{tau}": images}, step = step)
+    wandb.log({f"{mode}/{tau}": images})
 
 ##########################
 ### TRAIN & VALIDATION ###
@@ -125,9 +125,8 @@ def train_step(dataloader, model, loss, optim, epoch, device):
         X, Y = data
         k = X[0].shape[0]
         pose, vel, seq = X[0].to(device), X[1].to(device), X[2].to(device)
-        preds = model(pose, vel, seq)
-
         optim.zero_grad()
+        preds = model(pose, vel, seq)
         l = loss(Y[0].to(device), preds[0], Y[1].to(device), preds[1], Y[2].to(device), preds[2])
         l.backward()
         optim.step()
@@ -171,4 +170,5 @@ def train_v2(dataloaders, model, loss, optim, epochs, device, ckpt_dir=None, ckp
                 tmp_path = os.path.join(ckpt_dir, f"step_{e}.pth")
                 torch.save(model.state_dict(), tmp_path)
         l, current_step = train_step(dataloaders[0], model, loss, optim, e, device)
+        print(f"[{e+1}/{epochs}] Loss: {l}")
         t.set_postfix({"loss": f"Loss: {l:>7f} [{current_step:>5d}/{size:>5d}]"})

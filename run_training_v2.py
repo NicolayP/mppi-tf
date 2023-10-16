@@ -25,6 +25,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
 def training(parameters, gpu):
     log_path = parameters["log"]["path"]
     if parameters["log"]["stamped"]:
@@ -56,28 +57,10 @@ def training(parameters, gpu):
     epochs = parameters["optim"]["epochs"]
 
     wandb.watch(model, criterion=loss, log="all", log_freq=1000, log_graph=True)
-    # dv = model.auv_step.dv_pred
 
-    # writer.add_graph(dv, [pose, vel, seq[:, 0:1]], verbose=True)
-
-    #model.auv_step.dv_pred = proxy
-
-    # print("Pose:    ", type(pose), " ", pose.shape)
-    # print("Vel:     ", type(vel), " ", vel.shape)
-    # print("Actions: ", type(seq), " ", seq.shape)
-
-    # print("poses:   ", type(pose_target), " ", pose_target.shape)
-    # print("vels:    ", type(vel_target), " ", vel_target.shape)
-    # print("Dvs:     ", type(dv_target), " ", dv_target.shape)
-
-    # pose_pred, vel_pred, dv_pred = model(pose, vel, seq)
-
-    # print("poses:   ", type(pose_pred), " ", pose_pred.shape)
-    # print("vels:    ", type(vel_pred), " ", vel_pred.shape)
-    # print("Dvs:     ", type(dv_pred), " ", dv_pred.shape)
     train_v2(datasets, model, loss, optim, epochs, device, ckpt_dir, ckpt_steps)
     wandb.save(ckpt_dir+"/chkpt*")
-    pass
+
 
 def main():
     args = parse_args()
@@ -86,6 +69,7 @@ def main():
     training(params, args.gpu)
 
     pass
+
 
 if __name__ == "__main__":
     main()
