@@ -122,17 +122,20 @@ def train_step(dataloader, model, loss, optim, epoch, device):
     dataset_size = len(dataloader.dataset)
     t = tqdm(enumerate(dataloader), desc=f"Train: {epoch}", ncols=120, colour="green", leave=False, disable=disable_tqdm)
     for batch, data in t:
-        X, Y = data
-        k = X[0].shape[0]
-        pose, vel, seq = X[0].to(device), X[1].to(device), X[2].to(device)
+        (pose, vel, seq), (poses_t, vels_t, dvs_t) = data
+        k = pose.shape[0]
+        pose, vel, seq = pose.to(device), vel.to(device), seq.to(device)
+        poses_t, vels_t, dvs_t = poses_t.to(device), vels_t.to(device), dvs_t.to(device)
+        targets = (poses_t, vels_t, dvs_t)
+
         optim.zero_grad()
         preds = model(pose, vel, seq)
-        l = loss(Y[0].to(device), preds[0], Y[1].to(device), preds[1], Y[2].to(device), preds[2])
+        l = loss(poses_t, preds[0], vels_t, preds[1], dvs_t, preds[2])
         l.backward()
         optim.step()
 
         step = epoch*dataset_size + dataloader.batch_size*batch + k
-        log("train", loss, Y, preds, step, dataloader.dataset.prediction_steps)
+        log("train", loss, targets, preds, step, dataloader.dataset.prediction_steps)
     return l.item(), step
 
 
@@ -142,13 +145,16 @@ def val_step(dataloader, model, loss, epoch, device):
     t = tqdm(enumerate(dataloader), desc=f"Val: {epoch}", ncols=200, colour="red", leave=False, disable=disable_tqdm)
     model.eval()
     for batch, data in t:
-        X, Y = data
-        k = X[0].shape[0]
-        pose, vel, seq = X[0].to(device), X[1].to(device), X[2].to(device)
+        (pose, vel, seq), (poses_t, vels_t, dvs_t) = data
+        k = pose.shape[0]
+        pose, vel, seq = pose.to(device), vel.to(device), seq.to(device)
+        poses_t, vels_t, dvs_t = poses_t.to(device), vels_t.to(device), dvs_t.to(device)
+        targets = (poses_t, vels_t, dvs_t)
+
         predicitons = model(pose, vel, seq)
 
         step = epoch*dataset_size + dataloader.batch_size*batch + k
-        log("val", loss, Y, predicitons, step, dataloader.dataset.prediction_steps)
+        log("val", loss, targets, predicitons, step, dataloader.dataset.prediction_steps)
     tau = 150
     traj_eval("val", dataloader.dataset, model, loss, tau, epoch, device, True)
 

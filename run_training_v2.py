@@ -44,6 +44,7 @@ def training(parameters, gpu):
     datasets = get_datasets(parameters["dataset_params"])
 
     wandb.init(config=log_conf)
+    #wandb.init(config=log_conf, mode="disabled")
 
     device = get_device(cpu=True)
     if gpu is not None:
