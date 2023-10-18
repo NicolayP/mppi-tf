@@ -1,0 +1,99 @@
+---
+program: run_sweep_agent.py
+name: "AUV_NN"
+description: "Sweep description to find the best network configuration and hyperparameters"
+project: "AUV_NN"
+method: "random"
+metric:
+  goal: "minimize"
+  name: "traj-val/50-steps-loss"
+parameters:
+  dataset_params:
+    parameters:
+      frame:
+        value: "body"
+      dir: 
+        value: data/csv/tests
+      shuffle:
+        value: True
+      num_workers:
+        value: 8
+      split:
+        value: 0.7
+      samples:
+        value: 3
+      batch_size:
+        values: [32, 64, 128, 256, 512, 1024, 2048]
+      steps:
+        values: [15, 25, 40, 50, 70]
+      act_normed:
+        values: [True, False]
+      out_normed:
+        values: [True, False]
+  loss:
+    parameters:
+      type:
+        value: "traj"
+      pose:
+        min: 0.1
+        max: 10.
+      vel:
+        min: 0.1
+        max: 10.
+      dv:
+        min: 0.1
+        max: 10.
+  optim:
+    parameters:
+      type:
+        value: "Adam"
+      epochs:
+        value: 10
+      lr:
+        min: 1e-6
+        max: 1e-2
+  model:
+    parameters:
+      type:
+        values: ["lstm", "rnn"]
+      lstm:
+        parameters:
+          lstm_layer:
+            values: [1, 2, 4]
+          lstm_hidden_size:
+            values: [32, 64, 128]
+          bias:
+            values: [True, False]
+      rnn:
+        parameters:
+          rnn_layer:
+            values: [1, 2, 4]
+          rnn_hidden_size:
+            values: [32, 64, 128]
+          bias:
+            values: [True, False]
+      fc:
+        parameters:
+          topology:
+            values: [[32, 32],
+                    [64, 64],
+                    [128, 128, 128],
+                    [32, 32, 32],
+                    [64, 64, 64],
+                    [128, 128, 128]]
+          activation:
+            value: "LeakyRelu"
+          bias:
+            values: [True, False]
+          batch_norm:
+            value: False
+          relu_neg_slope:
+            values: [0.01, 0.05, 0.1, 0.5]
+  log:
+    parameters:
+      path:
+        value: "trained_models/debug"
+      stamped:
+        value: True
+      ckpt_steps:
+        value: 5

@@ -34,7 +34,7 @@ def get_datasets(parameters):
 
     for mode, files in zip(["train", "val"], [train_files, val_files]):
         dfs = read_files(parameters["dir"], files, mode)
-        ds.append(get_dataloader_model_input(datafiles=dfs,
+        ds.append(get_dataloader_tensor(datafiles=dfs,
                                              tau=parameters["steps"],
                                              frame=parameters["frame"],
                                              stats=stats,
@@ -43,7 +43,7 @@ def get_datasets(parameters):
                                              num_workers=parameters["num_workers"]))
     return ds
 
-def get_dataloader_model_input(datafiles, tau, frame,
+def get_dataloader_tensor(datafiles, tau, frame,
                                act_normed=True, out_normed=True, stats=None,
                                batch_size=512, shuffle=True, num_workers=8):
     ds = DatasetTensor(
@@ -55,6 +55,7 @@ def get_dataloader_model_input(datafiles, tau, frame,
             stats=stats)
     dl = DataLoader(ds, shuffle=shuffle, batch_size=batch_size, num_workers=num_workers)
     return dl
+
 
 ##########################
 ###       LOGGING      ###
@@ -68,7 +69,7 @@ def log(mode, loss, targets, predictions, step, horizon):
             ["u", "v", "w", "p", "q", "r"],
             ["du", "dv", "dw", "dp", "dq", "dr"]]
     split_name = [f"{mode}/{entry}/{horizon}-steps-" for entry in ["pose", "vel", "deltaV"]]
-    entry_name = f"{mode}/{horizon}-steps_loss"
+    entry_name = f"{mode}/{horizon}-steps-loss"
     log_data = {}
     log_data[entry_name] = l
     for d in range(6):
@@ -113,6 +114,7 @@ def traj_eval(mode, dataset, model, loss, tau, step, device, plot=False):
     images = [wandb.Image(p_img, caption=f"traj-{tau}"), wandb.Image(v_img, caption=f"vel-{tau}"),wandb.Image(dv_img, caption=f"dv-{tau}")]
     wandb.log({f"{mode}/{tau}": images})
 
+
 ##########################
 ### TRAIN & VALIDATION ###
 ##########################
@@ -138,7 +140,6 @@ def train_step(dataloader, model, loss, optim, epoch, device):
         log("train", loss, targets, preds, step, dataloader.dataset.prediction_steps)
     return l.item(), step
 
-
 def val_step(dataloader, model, loss, epoch, device):
     torch.autograd.set_detect_anomaly(True)
     dataset_size = len(dataloader.dataset)
@@ -155,11 +156,12 @@ def val_step(dataloader, model, loss, epoch, device):
 
         step = epoch*dataset_size + dataloader.batch_size*batch + k
         log("val", loss, targets, predicitons, step, dataloader.dataset.prediction_steps)
-    tau = 150
-    traj_eval("val", dataloader.dataset, model, loss, tau, epoch, device, True)
+    tau = 50
+    traj_eval("traj-val", dataloader.dataset, model, loss, tau, epoch, device, True)
 
-
-def train_v2(dataloaders, model, loss, optim, epochs, device, ckpt_dir=None, ckpt_steps=2):
+def train_v2(dataloaders, model, loss, optim, epochs, device, ckpt_dir=None, ckpt_steps=2, val_loss=None):
+    if val_loss is None:
+        val_loss = loss
     size = len(dataloaders[0].dataset)*epochs
     l = np.nan
     current_step = 0
@@ -170,11 +172,11 @@ def train_v2(dataloaders, model, loss, optim, epochs, device, ckpt_dir=None, ckp
         if (e % ckpt_steps == 0) and ckpt_dir is not None:
             tau = 150
             traj_eval("train-test", dataloaders[0].dataset, model, loss, tau, val_epoch, device, True)
-            val_step(dataloaders[1], model, loss, val_epoch, device)
-
+            val_step(dataloaders[1], model, val_loss, val_epoch, device)
             if ckpt_steps > 0:
                 tmp_path = os.path.join(ckpt_dir, f"step_{e}.pth")
                 torch.save(model.state_dict(), tmp_path)
+
         l, current_step = train_step(dataloaders[0], model, loss, optim, e, device)
         print(f"[{e+1}/{epochs}] Loss: {l}")
         t.set_postfix({"loss": f"Loss: {l:>7f} [{current_step:>5d}/{size:>5d}]"})

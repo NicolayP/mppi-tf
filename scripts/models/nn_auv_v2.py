@@ -217,7 +217,6 @@ def build_rnn(input_size, layers, hidden_size, bias=False):
                         bias=bias,
                         nonlinearity="tanh")
 
-
 def build_lstm(input_size, layers, hidden_size, bias=False):
     return torch.nn.LSTM(
         input_size=input_size,
@@ -226,7 +225,6 @@ def build_lstm(input_size, layers, hidden_size, bias=False):
         batch_first=True,
         bias=bias
     )
-
 
 def build_fc(input_size, output_size, topology, bias=False, batch_norm=False, relu_slope=0.1):
     fc_layers = []
@@ -244,7 +242,6 @@ def build_fc(input_size, output_size, topology, bias=False, batch_norm=False, re
     fc = torch.nn.Sequential(*fc_layers)
     fc.apply(init_weights)
     return fc
-
 
 def init_weights(m):
     if isinstance(m, torch.nn.Linear):
