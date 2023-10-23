@@ -1,10 +1,8 @@
-import yaml
 import torch
 import numpy as np
 
-from scripts.utils.utils import tdtype, diag, diag_embed
+from scripts.utils.utils import tdtype, diag_embed
 from scripts.models.model_base import ModelBase
-from scripts.inputs.ModelInput import ModelInput
 
 
 class AUVFossen(ModelBase):
@@ -85,7 +83,10 @@ class AUVFossen(ModelBase):
         lower = torch.concat([massLower, self.inertial], dim=1)
         self.rbMass = torch.concat([upper, lower], dim=0)
 
-        self.mTot = torch.unsqueeze(self.rbMass + self.addedMass, dim=0)
+        self.mTot = torch.nn.Parameter(
+            torch.unsqueeze(self.rbMass + self.addedMass, dim=0),
+            requires_grad=False
+        )
         self.invMtot = torch.nn.Parameter(
             torch.linalg.inv(self.mTot),
             requires_grad=False
@@ -149,7 +150,6 @@ class AUVFossen(ModelBase):
             - v_next, torch.tensor, the next velocity of the vehicle.
     '''
     def forward(self, x: torch.tensor, v: torch.tensor, u: torch.tensor, h0=None, rk: int=2) -> torch.tensor:
-        
         x, v, u = x[:, -1], v[:, -1], u[:, -1]
         # Rk2 integration.
         # self.k = x.shape[0]
@@ -164,7 +164,7 @@ class AUVFossen(ModelBase):
             x_tmp = (self.dt/2.)*(x_k1 + x_k2)
             v_tmp = (self.dt/2.)*(v_k1 + v_k2)
 
-        return self.norm_quat(x+x_tmp)[:, None], (v+v_tmp)[:, None], h0
+        return self.norm_quat(x+x_tmp)[:, None], (v+v_tmp)[:, None], None, h0
 
     '''
         Computes x_dot and v_dot that can be used after for integration. Steps should always be equal to

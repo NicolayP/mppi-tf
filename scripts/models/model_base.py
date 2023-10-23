@@ -27,7 +27,6 @@ class ModelBase(torch.nn.Module):
         else:
             self.config = {}
             self.config['name'] = 'default'
-        self.name = self.config["name"]
 
 
     '''
@@ -35,14 +34,15 @@ class ModelBase(torch.nn.Module):
 
         inputs:
         -------
-            - x, the pose of the model. shape [k, steps, poseDim]
-            - v, the velocity of the model. [k, steps, velDim]
-            - u, the aciton applied to the system. [k, steps, actDim]
+            - x, the pose of the model. shape [k, poseDim]
+            - v, the velocity of the model. [k, velDim]
+            - u, the aciton applied to the system. [k, actDim]
 
         output:
         -------
-            - next_x, the next pose of the model. shape [k, 1, poseDim] 
-            - next_v, the next velocity of the model. shape [k, 1, velDim]
+            - next_x, the next pose of the model. shape [k, poseDim] 
+            - next_v, the next velocity of the model. shape [k, velDim]
+            - next_dv, the next velocity delta. shape [k, velDim] -> useful only for ML models
     '''
     def forward(self, x, v, u: torch.tensor) -> torch.tensor:
         raise NotImplementedError

@@ -1,7 +1,6 @@
 import torch
+import pypose as pp
 from scripts.utils.utils import tdtype
-from scripts.inputs.ControllerInput import ControllerInput, ControllerInputPypose
-from scripts.inputs.ModelInput import ModelInput, ModelInputPypose
 
 
 class ControllerBase(torch.nn.Module):
@@ -75,7 +74,7 @@ class ControllerBase(torch.nn.Module):
             - action: the next optimal aciton.
                 shape: [ActionDim]
     '''    
-    def forward(self, state: ControllerInput) -> torch.Tensor:
+    def forward(self, pose, vel) -> torch.Tensor:
         raise NotImplementedError
 
     '''
@@ -84,17 +83,19 @@ class ControllerBase(torch.nn.Module):
         input:
         ------
             - k: the number of samples to use.
-            - s: the state of the system.
-                shape: [StateDim]
+            - p: the pose of the system.
+                shape: [k, 1, poseDim]
+            - v: the pose of the system.
+                shape: [k, 1, velDim]
             - A: the action sequence to optimize.
                 shape: [tau, ActionDim]
     '''
-    def control(self, s: ModelInput, A):
+    def control(self, p, v, A):
         # Compute random noise.
         noises = self.noise()
 
         # Rollout the model and compute the cost of every sample.
-        costs = self.rollout_cost(s, noises, A)
+        costs = self.rollout_cost(p, v, noises, A)
         # Compute the update of the action sequence.
         weighted_noises, eta = self.update(costs, noises)
         A = torch.add(A, weighted_noises)
@@ -107,12 +108,13 @@ class ControllerBase(torch.nn.Module):
         A_next = torch.roll(A, -1, 0)
 
         # Log the percent of samples contributing to the decision makeing.
-        self.obs.write_control("state", s)
-        self.obs.write_control("eta", eta)
-        self.obs.write_control("action", next)
-        self.obs.write_control("sample_cost", costs)
-        # self.obs.write_control("sample_weight", weights)
-        self.obs.advance()
+        # self.obs.write_control("pose", p)
+        # self.obs.write_control("vel", v)
+        # self.obs.write_control("eta", eta)
+        # self.obs.write_control("action", next)
+        # self.obs.write_control("sample_cost", costs)
+        # # self.obs.write_control("sample_weight", weights)
+        # self.obs.advance()
         # return next action and updated action sequence.
 
         return next, A_next.clone()
@@ -153,17 +155,17 @@ class ControllerBase(torch.nn.Module):
             - costs: Cost tensor of each rollout. 
                 Shape: [k/1]
     '''
-    def rollout_cost(self, s: ModelInput, noise, A) -> torch.Tensor:
+    def rollout_cost(self, p, v, noise, A) -> torch.Tensor:
         h = None
         cost = torch.zeros(self.k, dtype=tdtype).to(noise.device)
         for t in range(self.tau):
             a = A[t]
-            n = noise[:, t]
+            n = noise[:, t:t+1]
             act = torch.add(a, n)
-            next_p, next_v, h_next = self.model(*s(act), h0=h)
+            next_p, next_v, _, h_next = self.model(p, v, act, h0=h)
             tmp = self.cost(next_p, next_v, a, n)
             cost = torch.add(cost, tmp)
-            s.update(next_p, next_v)
+            p, v = next_p, next_v
             h = h_next
 
 
@@ -328,27 +330,26 @@ class Update(torch.nn.Module):
         return torch.sum(torch.mul(w, noise), 0)
 
 
-class MPPIBase(ControllerBase):
-    def __init__(self, model, cost, observer,
-                 k=1, tau=1, lam=1, upsilon=1, sigma=0):
-        super(MPPIBase, self).__init__(model=model, cost=cost, observer=observer,
-                                       k=k, tau=tau, lam=lam, upsilon=upsilon, sigma=sigma)
-
-    def forward(self, state: ControllerInput) -> torch.Tensor:
-        model_input = ModelInput(self.k, state.steps)
-        model_input.init(state)
-        action, self.act_sequence = self.control(model_input, self.act_sequence)
-        return action
-
-
 class MPPIPypose(ControllerBase):
-    def __init__(self, model, cost, observer,
-                 k=1, tau=1, lam=1, upsilon=1, sigma=0):
+    def __init__(self, model, cost, observer, k, tau, lam, upsilon, sigma):
         super(MPPIPypose, self).__init__(model=model, cost=cost, observer=observer,
                                          k=k, tau=tau, lam=lam, upsilon=upsilon, sigma=sigma)
 
-    def forward(self, state: ControllerInputPypose) -> torch.Tensor:
-        model_input = ModelInputPypose(self.k, state.steps)
-        model_input.init(state)
-        action, self.act_sequence = self.control(model_input, self.act_sequence)
+    def forward(self, pose: pp.SE3, vel: torch.Tensor) -> torch.Tensor:
+        i = pp.identity_SE3(self.k, 1, dtype=tdtype).to(pose.device)
+        poses = i + pose.clone()
+        vels = torch.broadcast_to(vel.clone(), (self.k, 1, 6))
+        action, self.act_sequence = self.control(poses, vels, self.act_sequence)
+        return action
+
+
+class MPPIBase(ControllerBase):
+    def __init__(self, model, cost, observer, k, tau, lam, upsilon, sigma):
+        super(MPPIBase, self).__init__(model=model, cost=cost, observer=observer,
+                                         k=k, tau=tau, lam=lam, upsilon=upsilon, sigma=sigma)
+
+    def forward(self, pose: torch.tensor, vel: torch.Tensor) -> torch.Tensor:
+        poses = torch.broadcast_to(pose.clone(), (self.k, 1, 7))
+        vels = torch.broadcast_to(vel.clone(), (self.k, 1, 6))
+        action, self.act_sequence = self.control(poses, vels, self.act_sequence)
         return action

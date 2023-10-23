@@ -5,9 +5,9 @@ from datetime import datetime
 
 
 from scripts.utils.utils import parse_param, save_param, get_device
-from scripts.models.nn_auv_v2 import AUVTraj
+from scripts.models.nn_auv import AUVTraj
 from scripts.training.loss_fct import TrajLoss
-from scripts.training_v2.training_utils import get_datasets, train_v2
+from scripts.training.training_utils import get_datasets, train
 
 
 def training():
@@ -46,7 +46,7 @@ def training():
 
     wandb.watch(model, criterion=loss, log="all", log_freq=1000, log_graph=True)
 
-    train_v2(datasets, model, loss, optim, epochs, device, ckpt_dir, ckpt_steps, val_loss)
+    train(datasets, model, loss, optim, epochs, device, ckpt_dir, ckpt_steps, val_loss)
     wandb.save(ckpt_dir+"/chkpt*")
 
 

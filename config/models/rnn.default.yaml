@@ -1,0 +1,14 @@
+---
+type: "auv_rnn"
+training: False
+rnn:
+  rnn_layer: 1
+  rnn_hidden_size : 64
+  bias: True
+  activation: "tanh" # rnn supports 'relu' and 'tanh' (default)
+fc:
+  topology: [128, 128]
+  activation: "LeakyRelu"
+  bias: True
+  batch_norm: False
+  relu_neg_slope: 0.1
