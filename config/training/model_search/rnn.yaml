@@ -1,0 +1,54 @@
+---
+logging:
+  project: "lstm"
+  notes: ""
+  tags: ["baseline"]
+
+dataset_params:
+  samples: 5000
+  steps: 50
+  history: 1
+  dir: "data/csv/training_csv/"
+  split: 0.7
+  v_frame: "body"
+  dv_frame: "body"
+  frame: "body"
+  act_normed: True
+  out_normed: False
+  se3: True
+  batch_size: 512
+  shuffle: True
+  num_workers: 8
+
+model:
+  type: "auv_rnn"
+  training: True
+  se3: True
+  history: 1
+  rnn:
+    rnn_layer: 1
+    rnn_hidden_size : 64
+    bias: True
+    activation: "tanh" # rnn supports 'relu' and 'tanh' (default)
+  fc:
+    topology: [128, 128]
+    activation: "LeakyRelu"
+    bias: True
+    batch_norm: False
+    relu_neg_slope: 0.1
+
+loss:
+  type: "traj"
+  traj: 1.
+  vel: 1.
+  dv: 1.
+
+optim:
+  type: "Adam"
+  lr: 1.e-4
+  epochs: 100
+
+log:
+  path: trained_models/rnn
+  stamped: True
+  ckpt_steps: 5

@@ -13,7 +13,7 @@ parameters:
       frame:
         value: "body"
       dir: 
-        value: data/csv/tests
+        value: data/csv/training_csv
       shuffle:
         value: True
       num_workers:
@@ -21,11 +21,11 @@ parameters:
       split:
         value: 0.7
       samples:
-        value: 3
+        value: 5000
       batch_size:
         values: [32, 64, 128, 256, 512, 1024, 2048]
       steps:
-        values: [15, 25, 40, 50, 70]
+        values: [15, 25, 40, 50, 70, 100]
       act_normed:
         values: [True, False]
       out_normed:
@@ -48,7 +48,7 @@ parameters:
       type:
         value: "Adam"
       epochs:
-        value: 10
+        value: 50
       lr:
         min: 1e-6
         max: 1e-2
