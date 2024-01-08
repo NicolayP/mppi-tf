@@ -18,11 +18,11 @@ class Static(CostBase):
             - goal_vel: target goal velocity. shape [vDim].
             - Q: weight matrix for the different part of the cost function. shape: [sDim, sDim]
     '''
-    def __init__(self, lam, gamma, upsilon, sigma, goal_pose, goal_vel, Q, diag=False):
+    def __init__(self, lam, gamma, upsilon, sigma, goal, Q, diag=False):
         super(Static, self).__init__(lam, gamma, upsilon, sigma)
         # TODO register buffer for those parameters.)
         self.register_buffer("Q", torch.diag(torch.tensor(Q, dtype=tdtype)))
-        self.register_buffer("goal", torch.tensor(goal_pose + goal_vel, dtype=tdtype))
+        self.register_buffer("goal", torch.tensor(goal, dtype=tdtype))
 
     '''
         Set the goals of the cost function.
@@ -41,15 +41,15 @@ class Static(CostBase):
 
         - input:
         --------
-            - pose: current pose. Shape: [k/1, 1, pDim]
-            - velocity: current velocity. Shape: [k/1, 1, vDim]
+            - pose: current pose. Shape: [k/1, pDim]
+            - velocity: current velocity. Shape: [k/1, vDim]
 
         - output:
         ---------
-            - (state-goal)^T Q (state-goal)
+            - (state-goal)^T Q (state-goal): scalar
     '''
     def state_cost(self, pose, velocity):
-        state = torch.concat([pose[:, 0], velocity[:, 0]], dim=-1)
+        state = torch.concat([pose, velocity], dim=-1)
         diff = torch.subtract(state, self.goal)[..., None]
         stateCost = torch.matmul(torch.transpose(diff, -1, -2), torch.matmul(self.Q, diff))[:, 0, 0]
         return stateCost
@@ -78,7 +78,8 @@ class StaticPypose(CostBase):
             - gamma: decoupling parameter between action and noise.
             - upsilon: covariance augmentation for noise generation.
             - sigma: the noise covariance matrix. shape [aDim, aDim].
-            - goal: target goal (psition; speed). shape [sDim, 1].
+            - goal_pose: target goal pose. pypose.SE3 shape [pDim].
+            - goal_vel: target goal velocity. shape [vDim].
             - Q: weight matrix for the different part of the cost function. shape: [sDim, sDim]
     '''
     def __init__(self, lam, gamma, upsilon, sigma, goal_pose: pp.SE3, goal_vel: torch.tensor, Q, diag=False):
@@ -98,14 +99,14 @@ class StaticPypose(CostBase):
 
         - input:
         --------
-            - state: current state. Shape: [k/1, 1, sDim]
+            - state: current state. Shape: [k/1, sDim]
 
         - output:
         ---------
-            - (state-goal)^T Q (state-goal)
+            - (state-goal)^T Q (state-goal): scalar
     '''
     def state_cost(self, pose, velocity):
-        dist = self.dist(pose[:, 0], velocity[:, 0])
+        dist = self.dist(pose, velocity)
         c = torch.sqrt(torch.matmul(torch.transpose(dist, -1, -2), torch.matmul(self.Q, dist)))[..., 0, 0]
         return c
 

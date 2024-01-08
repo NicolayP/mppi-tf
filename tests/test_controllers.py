@@ -1,13 +1,12 @@
 import unittest
 import torch
+import pypose as pp
 
-from scripts.controllers.mppi_base import ControllerBase, MPPIBase, MPPIPypose, Update
-from scripts.models.nn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep
+from scripts.controllers.mppi_base import ControllerBase, MPPIPypose, MPPIBase, Update
+from scripts.models.nn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVStep
 from scripts.models.fossen import AUVFossen
 from scripts.observers.observer_base import ObserverBase
 from scripts.costs.static import Static, StaticPypose
-from scripts.inputs.ControllerInput import ControllerInput, ControllerInputPypose
-from scripts.inputs.ModelInput import ModelInput, ModelInputPypose
 
 
 
@@ -127,27 +126,26 @@ class TestControllerBase(unittest.TestCase):
         self.assertEqual(n.shape, (self.k, self.tau, 6))
 
     def test_rollout_cost(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
+        p = pp.randn_SE3(self.k, 1)
+        v = torch.randn(self.k, 1, 6)
         n = self.controller.noise()
         A = self.controller.act_sequence.clone()
-        cost = self.controller.rollout_cost(model_input, n, A)
+        cost = self.controller.rollout_cost(p, v, n, A)
         self.assertEqual(cost.shape, (self.k, ))
 
     def test_control(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
+        p = pp.randn_SE3(self.k, 1)
+        v = torch.randn(self.k, 1, 6)
         A = self.controller.act_sequence.clone()
-        next_a, next_A = self.controller.control(model_input, A)
+        next_a, next_A = self.controller.control(p, v, A)
         self.assertEqual(next_a.shape, (6, ))
         self.assertEqual(next_A.shape, (self.tau, 6))
 
     def test_forward(self):        
-        state = ControllerInputPypose(self.steps)  # Replace with your controller input
+        p = pp.randn_SE3(1)
+        v = torch.randn(1, 6)
         with self.assertRaises(NotImplementedError):
-            self.controller(state)
+            self.controller(p, v)
 
 # Use AUF Fossen Model.
 class TestMPPIBase(unittest.TestCase):
@@ -167,11 +165,12 @@ class TestMPPIBase(unittest.TestCase):
 
         self.goal_pose = [1.0, 2.0, -1.0, 0.0, 0.0, 0.0, 1.0]
         self.goal_vel = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Example goal vector
+        self.goal = self.goal_pose + self.goal_vel
         self.Q = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
                   1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Example weight vector
 
         self.cost = Static(lam=self.lam, gamma=self.gamma, upsilon=self.upsilon, sigma=self.sigma,
-                           goal_pose=self.goal_pose, goal_vel=self.goal_vel, Q=self.Q)
+                           goal=self.goal, Q=self.Q)
         self.model = AUVFossen()
 
         self.observer = ObserverBase(False)  # Replace with your observer class
@@ -183,26 +182,28 @@ class TestMPPIBase(unittest.TestCase):
         self.assertEqual(n.shape, (self.k, self.tau, 6))
 
     def test_rollout_cost(self):
-        state = ControllerInput(self.steps)
-        model_input = ModelInput(self.k, self.steps)
-        model_input.init(state)
+        p = torch.zeros(self.k, 1, 7)
+        p[..., -1] = 1.
+        v = torch.randn(self.k, 1, 6)
         n = self.controller.noise()
         A = self.controller.act_sequence.clone()
-        cost = self.controller.rollout_cost(model_input, n, A)
+        cost = self.controller.rollout_cost(p, v, n, A)
         self.assertEqual(cost.shape, (self.k, ))
 
     def test_control(self):
-        state = ControllerInput(self.steps)
-        model_input = ModelInput(self.k, self.steps)
-        model_input.init(state)
+        p = torch.zeros(self.k, 1, 7)
+        p[..., -1] = 1.
+        v = torch.randn(self.k, 1, 6)
         A = self.controller.act_sequence.clone()
-        next_a, next_A = self.controller.control(model_input, A)
+        next_a, next_A = self.controller.control(p, v, A)
         self.assertEqual(next_a.shape, (6, ))
         self.assertEqual(next_A.shape, (self.tau, 6))
 
     def test_forward(self):
-        state = ControllerInput(self.steps)  # Replace with your controller input
-        action = self.controller(state)
+        p = torch.zeros(7)
+        p[-1] = 1.
+        v = torch.randn(6)
+        action = self.controller(p, v)
         self.assertEqual(action.shape, (6, ))
 
 
@@ -239,83 +240,25 @@ class TestMPPIPyposeRNN(unittest.TestCase):
         self.assertEqual(n.shape, (self.k, self.tau, 6))
 
     def test_rollout_cost(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
+        p = pp.randn_SE3(self.k, 1)
+        v = torch.randn(self.k, 1, 6)
         n = self.controller.noise()
         A = self.controller.act_sequence.clone()
-        cost = self.controller.rollout_cost(model_input, n, A)
+        cost = self.controller.rollout_cost(p, v, n, A)
         self.assertEqual(cost.shape, (self.k, ))
 
     def test_control(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
+        p = pp.randn_SE3(self.k, 1)
+        v = torch.randn(self.k, 1, 6)
         A = self.controller.act_sequence.clone()
-        next_a, next_A = self.controller.control(model_input, A)
+        next_a, next_A = self.controller.control(p, v, A)
         self.assertEqual(next_a.shape, (6, ))
         self.assertEqual(next_A.shape, (self.tau, 6))
 
     def test_forward(self):
-        state = ControllerInputPypose(self.steps)  # Replace with your controller input
-        action = self.controller(state)
-        self.assertEqual(action.shape, (6, ))
-
-
-class TestMPPIPyposeNN(unittest.TestCase):
-    def setUp(self) -> None:
-        self.k = 10
-        self.steps = 4
-        self.tau = 50
-        self.lam = 0.5
-        self.gamma = 0.2
-        self.upsilon = 2.0
-        self.sigma = [[1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                      [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
-                      [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
-                      [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
-                      [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
-                      [0.0, 0.0, 0.0, 0.0, 0.0, 1.0]]
-
-        self.goal_pose = [1.0, 2.0, -1.0, 0.0, 0.0, 0.0, 1.0]
-        self.goal_vel = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # Example goal vector
-        self.Q = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-                  1.0, 1.0, 1.0, 1.0, 1.0, 1.0]  # Example weight vector
-
-        self.cost = StaticPypose(self.lam, self.gamma, self.upsilon, self.sigma,
-                                 self.goal_pose, self.goal_vel, self.Q)
-        self.model = AUVStep()
-        self.model.update_model(AUVNNDeltaV())
-
-        self.observer = ObserverBase(False)  # Replace with your observer class
-        self.controller = MPPIPypose(self.model, self.cost, self.observer, self.k, self.tau, self.lam,
-                                   self.upsilon, self.sigma)
-
-    def test_noise(self):
-        n = self.controller.noise()
-        self.assertEqual(n.shape, (self.k, self.tau, 6))
-
-    def test_rollout_cost(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
-        n = self.controller.noise()
-        A = self.controller.act_sequence.clone()
-        cost = self.controller.rollout_cost(model_input, n, A)
-        self.assertEqual(cost.shape, (self.k, ))
-
-    def test_control(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
-        A = self.controller.act_sequence.clone()
-        next_a, next_A = self.controller.control(model_input, A)
-        self.assertEqual(next_a.shape, (6, ))
-        self.assertEqual(next_A.shape, (self.tau, 6))
-
-    def test_forward(self):
-        state = ControllerInputPypose(self.steps)  # Replace with your controller input
-        action = self.controller(state)
+        p = pp.randn_SE3(1)
+        v = torch.randn(6)
+        action = self.controller(p, v)
         self.assertEqual(action.shape, (6, ))
 
 
@@ -342,7 +285,7 @@ class TestMPPIPyposeLSTM(unittest.TestCase):
         self.cost = StaticPypose(self.lam, self.gamma, self.upsilon, self.sigma,
                                  self.goal_pose, self.goal_vel, self.Q)
         self.model = AUVStep()
-        self.model.update_model(AUVLSTMDeltaV())
+        self.model.dv_pred = AUVLSTMDeltaV()
 
         self.observer = ObserverBase(False)  # Replace with your observer class
         self.controller = MPPIPypose(self.model, self.cost, self.observer, self.k, self.tau, self.lam,
@@ -353,26 +296,25 @@ class TestMPPIPyposeLSTM(unittest.TestCase):
         self.assertEqual(n.shape, (self.k, self.tau, 6))
 
     def test_rollout_cost(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
+        p = pp.randn_SE3(self.k, 1)
+        v = torch.randn(self.k, 1, 6)
         n = self.controller.noise()
         A = self.controller.act_sequence.clone()
-        cost = self.controller.rollout_cost(model_input, n, A)
+        cost = self.controller.rollout_cost(p, v, n, A)
         self.assertEqual(cost.shape, (self.k, ))
 
     def test_control(self):
-        state = ControllerInputPypose(self.steps)
-        model_input = ModelInputPypose(self.k, self.steps)
-        model_input.init(state)
+        p = pp.randn_SE3(self.k, 1)
+        v = torch.randn(self.k, 1, 6)
         A = self.controller.act_sequence.clone()
-        next_a, next_A = self.controller.control(model_input, A)
+        next_a, next_A = self.controller.control(p, v, A)
         self.assertEqual(next_a.shape, (6, ))
         self.assertEqual(next_A.shape, (self.tau, 6))
 
     def test_forward(self):
-        state = ControllerInputPypose(self.steps)  # Replace with your controller input
-        action = self.controller(state)
+        p = pp.randn_SE3(1)
+        v = torch.randn(6)
+        action = self.controller(p, v)
         self.assertEqual(action.shape, (6, ))
 
 

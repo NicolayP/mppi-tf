@@ -5,8 +5,7 @@ import pypose as pp
 from scripts.utils.utils import tdtype  # Import the required dtype
 from scripts.models.fossen import AUVFossen
 from scripts.models.model_base import ModelBase
-from scripts.models.nn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVNNDeltaV, AUVStep, AUVTraj
-from scripts.inputs.ModelInput import ModelInputPypose
+from scripts.models.nn_auv import AUVRNNDeltaV, AUVLSTMDeltaV, AUVStep, AUVTraj
 
 
 
@@ -183,44 +182,6 @@ class TestAUVLSTMDeltaV(unittest.TestCase):
         self.assertEqual(h0[0].shape, (self.auv_lstm.lstm_layers, k, self.auv_lstm.lstm_hidden_size))
         self.assertEqual(h0[1].shape, (self.auv_lstm.lstm_layers, k, self.auv_lstm.lstm_hidden_size))
 
-    # def test_reset(self):
-    #     k = 2
-    #     device = torch.device("cpu")
-    #     h0 = self.auv_lstm.init_hidden(k, device)
-    #     self.assertNotEqual(None, h0)
-    #     self.auv_lstm.reset()
-    #     h0 = self.auv_lstm.hidden
-    #     self.assertEqual(None, h0)
-
-
-class TestAUVNNDeltaV(unittest.TestCase):
-    def setUp(self):
-        self.auv_nn = AUVNNDeltaV()
-
-    def test_forward_k1(self):
-        k = 1
-        n = 4
-        x = pp.randn_SE3(k, n, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
-        v = torch.randn(k, n, 6, dtype=tdtype)  # Example velocity
-        u = torch.randn(k, n, 6, dtype=tdtype)  # Example action
-
-        self.auv_nn.eval()
-        dv, h = self.auv_nn(x, v, u)
-
-        self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
-
-    def test_forward_k5(self):
-        k = 5
-        n = 4
-        x = pp.randn_SE3(k, n, dtype=tdtype)  # Example SE3 state (batch size, sequence length)
-        v = torch.randn(k, n, 6, dtype=tdtype)  # Example velocity
-        u = torch.randn(k, n, 6, dtype=tdtype)  # Example action
-
-        self.auv_nn.eval()
-        dv, h = self.auv_nn(x, v, u)
-
-        self.assertEqual(dv.shape, (k, 1, 6))  # Output shape
-
 
 class TestAUVStep(unittest.TestCase):
     def setUp(self):
@@ -229,92 +190,64 @@ class TestAUVStep(unittest.TestCase):
     def test_forward_with_AUVRNNDeltaV_k1(self):
         model = AUVRNNDeltaV()
         k = 1
-        self.auv_step.update_model(model)
+        self.auv_step.dv_pred = model
         x = pp.randn_SE3(k, 1, dtype=tdtype)
         v = torch.randn(k, 1, 6, dtype=tdtype)
         u = torch.randn(k, 1, 6, dtype=tdtype)
 
         self.auv_step.eval()
-        x_next, v_next, h = self.auv_step(x, v, u)
+        x_next, v_next, dv_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (k, 1, 7))
         self.assertEqual(v_next.shape, (k, 1, 6))
+        self.assertEqual(dv_next.shape, (k, 1, 6))
 
     def test_forward_with_AUVRNNDeltaV_k5(self):
         model = AUVRNNDeltaV()
         k = 5
-        self.auv_step.update_model(model)
+        self.auv_step.dv_pred = model
         x = pp.randn_SE3(k, 1, dtype=tdtype)
         v = torch.randn(k, 1, 6, dtype=tdtype)
         u = torch.randn(k, 1, 6, dtype=tdtype)
 
         self.auv_step.eval()
-        x_next, v_next, h = self.auv_step(x, v, u)
+        x_next, v_next, dv_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (k, 1, 7))
         self.assertEqual(v_next.shape, (k, 1, 6))
+        self.assertEqual(dv_next.shape, (k, 1, 6))
 
     def test_forward_with_AUVLSTMDeltaV_k1(self):
         model = AUVLSTMDeltaV()
         k = 1
-        self.auv_step.update_model(model)
+        self.auv_step.dv_pred = model
 
         x = pp.randn_SE3(k, 1,dtype=tdtype)
         v = torch.randn(k, 1, 6, dtype=tdtype)
         u = torch.randn(k, 1, 6, dtype=tdtype)
 
         self.auv_step.eval()
-        x_next, v_next, h = self.auv_step(x, v, u)
+        x_next, v_next, dv_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (k, 1, 7))
         self.assertEqual(v_next.shape, (k, 1, 6))
+        self.assertEqual(dv_next.shape, (k, 1, 6))
 
     def test_forward_with_AUVLSTMDeltaV_k5(self):
         model = AUVLSTMDeltaV()
         k = 5
-        self.auv_step.update_model(model)
+        self.auv_step.dv_pred = model
 
         x = pp.randn_SE3(k, 1,dtype=tdtype)
         v = torch.randn(k, 1, 6, dtype=tdtype)
         u = torch.randn(k, 1, 6, dtype=tdtype)
 
         self.auv_step.eval()
-        x_next, v_next, h = self.auv_step(x, v, u)
+        x_next, v_next, dv_next, h = self.auv_step(x, v, u)
 
         self.assertEqual(x_next.shape, (k, 1, 7))
         self.assertEqual(v_next.shape, (k, 1, 6))
-
-    def test_forward_with_AUVNNDeltaV_k1(self):
-        model = AUVNNDeltaV()
-        k = 1
-        n = 4
-        self.auv_step.update_model(model)
-
-        x = pp.randn_SE3(k, n, dtype=tdtype)
-        v = torch.randn(k, n, 6, dtype=tdtype)
-        u = torch.randn(k, n, 6, dtype=tdtype)
-
-        self.auv_step.eval()
-        x_next, v_next, h = self.auv_step(x, v, u)
-
-        self.assertEqual(x_next.shape, (k, 1, 7))
-        self.assertEqual(v_next.shape, (k, 1, 6))
-
-    def test_forward_with_AUVNNDeltaV_k5(self):
-        model = AUVNNDeltaV()
-        k = 5
-        n = 4
-        self.auv_step.update_model(model)
-
-        x = pp.randn_SE3(k, n, dtype=tdtype)
-        v = torch.randn(k, n, 6, dtype=tdtype)
-        u = torch.randn(k, n, 6, dtype=tdtype)
-
-        self.auv_step.eval()
-        x_next, v_next, h = self.auv_step(x, v, u)
-
-        self.assertEqual(x_next.shape, (k, 1, 7))
-        self.assertEqual(v_next.shape, (k, 1, 6))
+        self.assertEqual(dv_next.shape, (k, 1, 6))
 
 
 class TestAUVTraj(unittest.TestCase):
@@ -322,23 +255,25 @@ class TestAUVTraj(unittest.TestCase):
         self.model = AUVTraj()
 
     def test_rollout_k1(self):
-        k, h = 1, 2
-        model_input = ModelInputPypose(k, h)
+        k = 1
         tau = 10
+        pose = pp.randn_SE3(k, 1)
+        vel = torch.randn(k, 1, 6)
         U = torch.randn(k, tau, 6)
         self.model.eval()
-        traj, traj_v, traj_dv = self.model(model_input, U)
+        traj, traj_v, traj_dv = self.model(pose, vel, U)
         self.assertEqual(traj.shape, (k, tau, 7))
         self.assertEqual(traj_v.shape, (k, tau, 6))
         self.assertEqual(traj_dv.shape, (k, tau, 6))
 
     def test_rollout_k3(self):
-        k, h = 3, 2
-        model_input = ModelInputPypose(k, h)
+        k = 3
+        pose = pp.randn_SE3(k, 1)
+        vel = torch.randn(k, 1, 6)
         tau = 10
         U = torch.randn(k, tau, 6)
         self.model.eval()
-        traj, traj_v, traj_dv = self.model(model_input, U)
+        traj, traj_v, traj_dv = self.model(pose, vel, U)
         self.assertEqual(traj.shape, (k, tau, 7))
         self.assertEqual(traj_v.shape, (k, tau, 6))
         self.assertEqual(traj_dv.shape, (k, tau, 6))

@@ -1,16 +1,13 @@
 import torch
 from torch.utils.data import DataLoader
-import pypose as pp
 import numpy as np
-import pandas as pd
 import os
 import random
 from tqdm import tqdm
 import wandb
 
-from scipy.spatial.transform import Rotation as R
-from scripts.utils.utils import read_files, tdtype, npdtype, to_euler, gen_img_3D_v2, disable_tqdm, parse_param
-from scripts.training_v2.datasets import DatasetTensor
+from scripts.utils.utils import read_files, to_euler, gen_img_3D, disable_tqdm, parse_param
+from scripts.training.datasets import DatasetTensor
 
 import matplotlib.pyplot as plt
 
@@ -110,7 +107,7 @@ def traj_eval(mode, dataset, model, loss, tau, step, device, plot=False):
         "gt": dvs_target[0]
     }
 
-    p_img, v_img, dv_img = gen_img_3D_v2(p_dict, v_dict, dv_dict, tau=tau)
+    p_img, v_img, dv_img = gen_img_3D(p_dict, v_dict, dv_dict, tau=tau)
     images = [wandb.Image(p_img, caption=f"traj-{tau}"), wandb.Image(v_img, caption=f"vel-{tau}"),wandb.Image(dv_img, caption=f"dv-{tau}")]
     wandb.log({f"{mode}/{tau}": images})
 
@@ -159,7 +156,7 @@ def val_step(dataloader, model, loss, epoch, device):
     tau = 50
     traj_eval("traj-val", dataloader.dataset, model, loss, tau, epoch, device, True)
 
-def train_v2(dataloaders, model, loss, optim, epochs, device, ckpt_dir=None, ckpt_steps=2, val_loss=None):
+def train(dataloaders, model, loss, optim, epochs, device, ckpt_dir=None, ckpt_steps=2, val_loss=None):
     if val_loss is None:
         val_loss = loss
     size = len(dataloaders[0].dataset)*epochs

@@ -46,7 +46,12 @@ def get_device(gpu=0, cpu=False):
         cpu = not torch.cuda.is_available()
         if cpu:
             warnings.warn("Asked for GPU but torch couldn't find a Cuda capable device")
-
+    
+    nb_device = torch.cuda.device_count()
+    if gpu+1 > nb_device:
+        warnings.warn("GPU index out of range. Revert to default GPU 0")
+        gpu = 0
+    
     device = torch.device(f"cuda:{gpu}" if not cpu else "cpu")
     return device
 
@@ -130,25 +135,16 @@ def read_files(data_dir, files, type="train"):
         - image that can be plotted or send to tensorboard. Returns tuple (trajectory_img, velocity_img).
         if dv_dict is not None, returns (trajectory_img, velocity_img, delta_v_img)
 '''
-def gen_imgs_3D(t_dict, v_dict, dv_dict=None, tau=100):
+def gen_img_3D(t_dict, v_dict, dv_dict=None, tau=100):
     plotState={"x(m)":0, "y(m)": 1, "z(m)": 2, "roll(rad)": 3, "pitch(rad)":4, "yaw(rad)": 5}
     plotVels={"u(m/s)":0, "v(m/s)": 1, "w(m/s)": 2, "p(rad/s)": 3, "q(rad/s)": 4, "r(rad/s)": 5}
     plotDVels={"du(m/s)":0, "dv(m/s)": 1, "dw(m/s)": 2, "dp(rad/s)": 3, "dq(rad/s)": 4, "dr(rad/s)": 5}
-    t_imgs = []
-    v_imgs = []
-    if dv_dict is not None:
-        dv_imgs = []
 
-    t_imgs.append(plot_traj(t_dict, plotState, tau, title="State evolution"))
-    v_imgs.append(plot_traj(v_dict, plotVels, tau, title="Velcoity Profiles"))
-    if dv_dict is not None:
-        dv_imgs.append(plot_traj(dv_dict, plotDVels, tau, title="Delta V"))
+    t_img =plot_traj(t_dict, plotState, tau, title="State evolution")
+    v_img =plot_traj(v_dict, plotVels, tau, title="Velcoity Profiles")
+    dv_img =plot_traj(dv_dict, plotDVels, tau, title="Delta V")
 
-    if dv_dict is not None:
-        return t_imgs, v_imgs, dv_imgs
-
-    return t_imgs, v_imgs
-
+    return t_img, v_img, dv_img
 '''
     Plots trajectories from a dictionnary.
 
@@ -182,17 +178,17 @@ def plot_traj(traj_dict, plot_cols, tau, fig=False, title="State Evolution", sav
             axs_states[name].set_ylabel(f'{name}', fontsize=10)
             if k == 'gt':
                 if i == 0:
-                    axs_states[name].plot(t[:tau, i], marker='.', zorder=-10, label=k)
+                    axs_states[name].plot(t[:, i], marker='.', zorder=-10, label=k)
                 else:
-                    axs_states[name].plot(t[:tau, i], marker='.', zorder=-10)
-                axs_states[name].set_xlim([0, tau+1])
+                    axs_states[name].plot(t[:, i], marker='.', zorder=-10)
+                axs_states[name].set_xlim([0, tau])
             
             else:
                 if i == 0:
-                    axs_states[name].plot(np.arange(0, tau-1), t[:tau, plot_cols[name]],
+                    axs_states[name].plot(np.arange(0, tau), t[:, plot_cols[name]],
                         marker='.', label=k)
                 else:
-                    axs_states[name].plot(np.arange(0, tau-1), t[:tau, plot_cols[name]],
+                    axs_states[name].plot(np.arange(0, tau), t[:, plot_cols[name]],
                         marker='.')
     fig_state.text(x=0.5, y=0.03, s="steps", fontsize=10)
     fig_state.suptitle(title, fontsize=10)
@@ -211,6 +207,7 @@ def plot_traj(traj_dict, plot_cols, tau, fig=False, title="State Evolution", sav
     img = img.reshape(fig_state.canvas.get_width_height()[::-1] + (3,))
     plt.close('all')
     return img
+
 
 '''
     Converts a trajectory using quaternion representation to euler 'xyz' angle representation.
@@ -259,63 +256,3 @@ def parse_param(file):
 def save_param(path, params):
     with open(path, "w") as stream:
         yaml.dump(params, stream)
-
-
-##########################
-###     V2 SECTION     ###
-##########################
-
-def gen_img_3D_v2(t_dict, v_dict, dv_dict=None, tau=100):
-    plotState={"x(m)":0, "y(m)": 1, "z(m)": 2, "roll(rad)": 3, "pitch(rad)":4, "yaw(rad)": 5}
-    plotVels={"u(m/s)":0, "v(m/s)": 1, "w(m/s)": 2, "p(rad/s)": 3, "q(rad/s)": 4, "r(rad/s)": 5}
-    plotDVels={"du(m/s)":0, "dv(m/s)": 1, "dw(m/s)": 2, "dp(rad/s)": 3, "dq(rad/s)": 4, "dr(rad/s)": 5}
-
-    t_img =plot_traj_v2(t_dict, plotState, tau, title="State evolution")
-    v_img =plot_traj_v2(v_dict, plotVels, tau, title="Velcoity Profiles")
-    dv_img =plot_traj_v2(dv_dict, plotDVels, tau, title="Delta V")
-
-    return t_img, v_img, dv_img
-
-def plot_traj_v2(traj_dict, plot_cols, tau, fig=False, title="State Evolution", save=False):
-    fig_state = plt.figure(figsize=(10, 10))
-    axs_states = {}
-    for i, name in enumerate(plot_cols):
-        m, n = np.unravel_index(i, (2, 3))
-        idx = 1*m + 2*n + 1
-        axs_states[name] = fig_state.add_subplot(3, 2, idx)
-    
-    for k in traj_dict:
-        t = traj_dict[k]
-        for i, name in enumerate(plot_cols):
-            axs_states[name].set_ylabel(f'{name}', fontsize=10)
-            if k == 'gt':
-                if i == 0:
-                    axs_states[name].plot(t[:, i], marker='.', zorder=-10, label=k)
-                else:
-                    axs_states[name].plot(t[:, i], marker='.', zorder=-10)
-                axs_states[name].set_xlim([0, tau])
-            
-            else:
-                if i == 0:
-                    axs_states[name].plot(np.arange(0, tau), t[:, plot_cols[name]],
-                        marker='.', label=k)
-                else:
-                    axs_states[name].plot(np.arange(0, tau), t[:, plot_cols[name]],
-                        marker='.')
-    fig_state.text(x=0.5, y=0.03, s="steps", fontsize=10)
-    fig_state.suptitle(title, fontsize=10)
-    fig_state.legend(fontsize=5)
-    fig_state.tight_layout(rect=[0, 0.05, 1, 0.98])
-
-    if save:
-        fig_state.savefig("img/" + title + ".png")
-
-    if fig:
-        return fig_state
-
-    canvas = FigureCanvas(fig_state)
-    canvas.draw()
-    img = np.frombuffer(canvas.tostring_rgb(), dtype='uint8')
-    img = img.reshape(fig_state.canvas.get_width_height()[::-1] + (3,))
-    plt.close('all')
-    return img
